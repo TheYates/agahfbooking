@@ -1,11 +1,23 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -13,131 +25,165 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Users, Search, Filter, Download, Plus, Eye, Calendar, Phone } from "lucide-react"
+} from "@/components/ui/dialog";
+import {
+  Users,
+  Search,
+  Filter,
+  Download,
+  Plus,
+  Eye,
+  Calendar,
+  Phone,
+  Edit,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { AddClientModal } from "@/components/clients/add-client-modal";
 
 interface Client {
-  id: number
-  xNumber: string
-  name: string
-  phone: string
-  category: string
-  joinDate: string
-  totalAppointments: number
-  lastAppointment?: string
-  status: "active" | "inactive"
-  emergencyContact?: string
-  address?: string
-  medicalNotes?: string
+  id: number;
+  xNumber: string;
+  name: string;
+  phone: string;
+  category: string;
+  joinDate: string;
+  totalAppointments: number;
+  lastAppointment?: string;
+  status: "active" | "inactive";
+  emergencyContact?: string;
+  address?: string;
+  medicalNotes?: string;
 }
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([])
-  const [filteredClients, setFilteredClients] = useState<Client[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [userRole, setUserRole] = useState<string>("");
 
-  // Mock data
+  const itemsPerPage = 10;
+
+  // Get user role from session
   useEffect(() => {
-    const mockClients: Client[] = [
-      {
-        id: 1,
-        xNumber: "X12345/67",
-        name: "John Doe",
-        phone: "+1234567890",
-        category: "PRIVATE CASH",
-        joinDate: "2024-01-15",
-        totalAppointments: 15,
-        lastAppointment: "2024-12-30",
-        status: "active",
-        emergencyContact: "+1234567891",
-        address: "123 Main St, City, State 12345",
-        medicalNotes: "No known allergies",
-      },
-      {
-        id: 2,
-        xNumber: "X98765/43",
-        name: "Jane Smith",
-        phone: "+0987654321",
-        category: "PUBLIC SPONSORED(NHIA)",
-        joinDate: "2024-02-20",
-        totalAppointments: 8,
-        lastAppointment: "2024-12-30",
-        status: "active",
-        emergencyContact: "+0987654322",
-        address: "456 Oak Ave, City, State 12345",
-      },
-      {
-        id: 3,
-        xNumber: "X11111/22",
-        name: "Bob Johnson",
-        phone: "+1111222333",
-        category: "PRIVATE SPONSORED",
-        joinDate: "2024-03-10",
-        totalAppointments: 5,
-        lastAppointment: "2024-12-31",
-        status: "active",
-        medicalNotes: "Diabetic - requires special attention",
-      },
-      {
-        id: 4,
-        xNumber: "X22222/33",
-        name: "Alice Brown",
-        phone: "+2222333444",
-        category: "PRIVATE DEPENDENT",
-        joinDate: "2024-04-05",
-        totalAppointments: 3,
-        lastAppointment: "2024-12-29",
-        status: "active",
-      },
-      {
-        id: 5,
-        xNumber: "X33333/44",
-        name: "Charlie Wilson",
-        phone: "+3333444555",
-        category: "PRIVATE CASH",
-        joinDate: "2024-01-30",
-        totalAppointments: 12,
-        status: "inactive",
-      },
-    ]
+    const getSession = async () => {
+      try {
+        const response = await fetch("/api/auth/session");
+        const data = await response.json();
+        if (data.success) {
+          setUserRole(data.user?.role || "");
+        }
+      } catch (error) {
+        console.error("Error getting session:", error);
+      }
+    };
+    getSession();
+  }, []);
 
-    setClients(mockClients)
-    setFilteredClients(mockClients)
-  }, [])
+  // Fetch clients from database
+  const fetchClients = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  // Filter clients
+      const params = new URLSearchParams();
+      if (searchTerm) params.append("search", searchTerm);
+      if (categoryFilter !== "all") params.append("category", categoryFilter);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      params.append("page", currentPage.toString());
+      params.append("limit", itemsPerPage.toString());
+      params.append("sortBy", sortBy);
+      params.append("sortOrder", sortOrder);
+
+      const response = await fetch(`/api/clients/stats?${params.toString()}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch clients");
+      }
+
+      setClients(data.data);
+      setFilteredClients(data.data);
+      setTotalPages(data.pagination.totalPages);
+    } catch (err) {
+      console.error("Error fetching clients:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch clients");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load
   useEffect(() => {
-    let filtered = clients
+    fetchClients();
+  }, []);
 
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (client) =>
-          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.xNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.phone.includes(searchTerm),
-      )
+  // Refetch when filters or pagination change (with debounce for search)
+  useEffect(() => {
+    const timeoutId = setTimeout(
+      () => {
+        setCurrentPage(1); // Reset to first page when filters change
+        fetchClients();
+      },
+      searchTerm ? 500 : 0
+    ); // 500ms debounce for search, immediate for other filters
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, categoryFilter, statusFilter, sortBy, sortOrder]);
+
+  // Refetch when page changes
+  useEffect(() => {
+    fetchClients();
+  }, [currentPage]);
+
+  // Helper functions
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
     }
+  };
 
-    // Category filter
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter((client) => client.category === categoryFilter)
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((client) => client.status === statusFilter)
-    }
-
-    setFilteredClients(filtered)
-  }, [clients, searchTerm, categoryFilter, statusFilter])
+  const handleClientAdded = () => {
+    fetchClients();
+  };
 
   const exportClients = () => {
     const csvContent = [
-      ["X-Number", "Name", "Phone", "Category", "Status", "Join Date", "Total Appointments", "Last Appointment"],
+      [
+        "X-Number",
+        "Name",
+        "Phone",
+        "Category",
+        "Status",
+        "Join Date",
+        "Total Appointments",
+        "Last Appointment",
+      ],
       ...filteredClients.map((client) => [
         client.xNumber,
         client.name,
@@ -150,30 +196,32 @@ export default function ClientsPage() {
       ]),
     ]
       .map((row) => row.join(","))
-      .join("\n")
+      .join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `clients-${new Date().toISOString().split("T")[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `clients-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Clients</h1>
-          <p className="text-muted-foreground">Manage patient information and records</p>
+          <p className="text-muted-foreground">
+            Manage patient information and records
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={exportClients} variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button>
+          <Button onClick={() => setShowAddModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Client
           </Button>
@@ -229,7 +277,11 @@ export default function ClientsPage() {
               <div>
                 <p className="text-sm text-muted-foreground">NHIA</p>
                 <p className="text-2xl font-bold text-orange-600">
-                  {clients.filter((c) => c.category === "PUBLIC SPONSORED(NHIA)").length}
+                  {
+                    clients.filter(
+                      (c) => c.category === "PUBLIC SPONSORED(NHIA)"
+                    ).length
+                  }
                 </p>
               </div>
               <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
@@ -242,14 +294,8 @@ export default function ClientsPage() {
 
       {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
               <label className="text-sm font-medium mb-2 block">Search</label>
               <div className="relative">
@@ -272,8 +318,12 @@ export default function ClientsPage() {
                   <SelectItem value="all">All Categories</SelectItem>
                   <SelectItem value="PRIVATE CASH">Private Cash</SelectItem>
                   <SelectItem value="PUBLIC SPONSORED(NHIA)">NHIA</SelectItem>
-                  <SelectItem value="PRIVATE SPONSORED">Private Sponsored</SelectItem>
-                  <SelectItem value="PRIVATE DEPENDENT">Private Dependent</SelectItem>
+                  <SelectItem value="PRIVATE SPONSORED">
+                    Private Sponsored
+                  </SelectItem>
+                  <SelectItem value="PRIVATE DEPENDENT">
+                    Private Dependent
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -294,9 +344,9 @@ export default function ClientsPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSearchTerm("")
-                  setCategoryFilter("all")
-                  setStatusFilter("all")
+                  setSearchTerm("");
+                  setCategoryFilter("all");
+                  setStatusFilter("all");
                 }}
                 className="w-full"
               >
@@ -307,141 +357,412 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-      {/* Clients List */}
+      {/* Clients Table */}
       <Card>
         <CardHeader>
           <CardTitle>Clients ({filteredClients.length})</CardTitle>
           <CardDescription>
-            {filteredClients.length} client{filteredClients.length !== 1 ? "s" : ""} found
+            {filteredClients.length} client
+            {filteredClients.length !== 1 ? "s" : ""} found
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredClients.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No clients found matching your criteria</p>
-              </div>
-            ) : (
-              filteredClients.map((client) => (
-                <div
-                  key={client.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-blue-600 font-medium">
-                        {client.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">{client.name}</span>
-                        <span className="text-sm text-muted-foreground">({client.xNumber})</span>
-                        <Badge variant={client.status === "active" ? "default" : "secondary"} className="text-xs">
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p>Loading clients...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Error: {error}</p>
+              <Button variant="outline" onClick={fetchClients} className="mt-4">
+                Try Again
+              </Button>
+            </div>
+          ) : filteredClients.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No clients found matching your criteria</p>
+            </div>
+          ) : (
+            <div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("xNumber")}
+                    >
+                      <div className="flex items-center gap-1">
+                        X-Number
+                        {sortBy === "xNumber" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("name")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Name
+                        {sortBy === "name" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("phone")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Phone
+                        {sortBy === "phone" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("category")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Category
+                        {sortBy === "category" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("status")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Status
+                        {sortBy === "status" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("joinDate")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Join Date
+                        {sortBy === "joinDate" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("totalAppointments")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Appointments
+                        {sortBy === "totalAppointments" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleSort("lastAppointment")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Last Visit
+                        {sortBy === "lastAppointment" &&
+                          (sortOrder === "asc" ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          ))}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredClients.map((client) => (
+                    <TableRow
+                      key={client.id}
+                      className="hover:bg-gray-50 cursor-pointer h-12"
+                      onClick={() => {
+                        setSelectedClient(client);
+                        setShowDetailsModal(true);
+                      }}
+                    >
+                      <TableCell className="font-mono text-sm py-2">
+                        {client.xNumber}
+                      </TableCell>
+                      <TableCell className="font-medium py-2">
+                        {client.name}
+                      </TableCell>
+                      <TableCell className="py-2">{client.phone}</TableCell>
+                      <TableCell className="py-2">{client.category}</TableCell>
+                      <TableCell className="py-2">
+                        <Badge
+                          variant={
+                            client.status === "active" ? "default" : "secondary"
+                          }
+                        >
                           {client.status}
                         </Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3 w-3" />
-                          {client.phone}
-                        </span>
-                        <span>{client.category}</span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {client.totalAppointments} appointments
-                        </span>
-                      </div>
-                      {client.lastAppointment && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Last visit: {new Date(client.lastAppointment).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {new Date(client.joinDate).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell className="text-center py-2">
+                        {client.totalAppointments}
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {client.lastAppointment
+                          ? new Date(client.lastAppointment).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              }
+                            )
+                          : "Never"}
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <div className="flex items-center gap-1">
+                          <Dialog
+                            open={showDetailsModal}
+                            onOpenChange={setShowDetailsModal}
+                          >
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedClient(client);
+                                  setShowDetailsModal(true);
+                                }}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[600px]">
+                              <DialogHeader>
+                                <DialogTitle>Client Details</DialogTitle>
+                                <DialogDescription>
+                                  Complete information for {client.name}
+                                </DialogDescription>
+                              </DialogHeader>
+                              {selectedClient && (
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        X-Number
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded font-mono">
+                                        {selectedClient.xNumber}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        Category
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded">
+                                        {selectedClient.category}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        Phone
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded">
+                                        {selectedClient.phone}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        Emergency Contact
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded">
+                                        {selectedClient.emergencyContact ||
+                                          "Not provided"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">
+                                      Address
+                                    </label>
+                                    <p className="text-sm bg-gray-100 p-2 rounded">
+                                      {selectedClient.address || "Not provided"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">
+                                      Medical Notes
+                                    </label>
+                                    <p className="text-sm bg-gray-100 p-2 rounded min-h-[60px]">
+                                      {selectedClient.medicalNotes ||
+                                        "No medical notes"}
+                                    </p>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        Join Date
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded">
+                                        {new Date(
+                                          selectedClient.joinDate
+                                        ).toLocaleDateString("en-US", {
+                                          year: "numeric",
+                                          month: "long",
+                                          day: "numeric",
+                                        })}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        Total Appointments
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded">
+                                        {selectedClient.totalAppointments}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium">
+                                        Last Visit
+                                      </label>
+                                      <p className="text-sm bg-gray-100 p-2 rounded">
+                                        {selectedClient.lastAppointment
+                                          ? new Date(
+                                              selectedClient.lastAppointment
+                                            ).toLocaleDateString("en-US", {
+                                              year: "numeric",
+                                              month: "long",
+                                              day: "numeric",
+                                            })
+                                          : "Never"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // TODO: Implement edit functionality
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // TODO: Implement delete functionality
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedClient(client)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[600px]">
-                        <DialogHeader>
-                          <DialogTitle>Client Details</DialogTitle>
-                          <DialogDescription>Complete information for {client.name}</DialogDescription>
-                        </DialogHeader>
-                        {selectedClient && (
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-sm font-medium">X-Number</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded font-mono">{selectedClient.xNumber}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Category</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded">{selectedClient.category}</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-sm font-medium">Phone</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded">{selectedClient.phone}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Emergency Contact</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded">
-                                  {selectedClient.emergencyContact || "Not provided"}
-                                </p>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium">Address</label>
-                              <p className="text-sm bg-gray-100 p-2 rounded">
-                                {selectedClient.address || "Not provided"}
-                              </p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium">Medical Notes</label>
-                              <p className="text-sm bg-gray-100 p-2 rounded min-h-[60px]">
-                                {selectedClient.medicalNotes || "No medical notes"}
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4">
-                              <div>
-                                <label className="text-sm font-medium">Join Date</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded">
-                                  {new Date(selectedClient.joinDate).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Total Appointments</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded">{selectedClient.totalAppointments}</p>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Last Visit</label>
-                                <p className="text-sm bg-gray-100 p-2 rounded">
-                                  {selectedClient.lastAppointment
-                                    ? new Date(selectedClient.lastAppointment).toLocaleDateString()
-                                    : "Never"}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                  {Math.min(currentPage * itemsPerPage, filteredClients.length)}{" "}
+                  of {filteredClients.length} clients
                 </div>
-              ))
-            )}
-          </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const page = i + 1;
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage(Math.min(totalPages, currentPage + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Add Client Modal */}
+      <AddClientModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onClientAdded={handleClientAdded}
+      />
     </div>
-  )
+  );
 }

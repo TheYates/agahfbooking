@@ -7,6 +7,7 @@ import {
   Settings,
   Users,
   BarChart3,
+  Building2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -44,7 +45,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
     { title: "Clients", url: "/dashboard/clients", icon: Users },
-    { title: "Doctors", url: "/dashboard/doctors", icon: Users },
+    { title: "Departments", url: "/dashboard/departments", icon: Building2 },
   ];
 
   const adminMenuItems = [
@@ -52,7 +53,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
     { title: "Clients", url: "/dashboard/clients", icon: Users },
-    { title: "Doctors", url: "/dashboard/doctors", icon: Users },
+    { title: "Departments", url: "/dashboard/departments", icon: Building2 },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
   ];

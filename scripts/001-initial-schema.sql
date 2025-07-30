@@ -1,4 +1,4 @@
--- Users table (clients, receptionists, admins)
+ -- Users table (clients, receptionists, admins)
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     x_number VARCHAR(10) UNIQUE NOT NULL, -- Format: X12345/67
@@ -11,11 +11,24 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Doctors table
+-- Departments/Specializations table
+CREATE TABLE departments (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    slots_per_day INTEGER DEFAULT 10,
+    working_days JSONB DEFAULT '["monday", "tuesday", "wednesday", "thursday", "friday"]',
+    working_hours JSONB DEFAULT '{"start": "09:00", "end": "17:00"}',
+    color VARCHAR(7) DEFAULT '#3B82F6',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Doctors table (for reference/tracking purposes)
 CREATE TABLE doctors (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    specialization VARCHAR(255),
+    department_id INTEGER REFERENCES departments(id),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -30,14 +43,14 @@ CREATE TABLE system_settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Doctor availability table
-CREATE TABLE doctor_availability (
+-- Department availability table
+CREATE TABLE department_availability (
     id SERIAL PRIMARY KEY,
-    doctor_id INTEGER REFERENCES doctors(id),
+    department_id INTEGER REFERENCES departments(id),
     date DATE NOT NULL,
     available_slots INTEGER NOT NULL DEFAULT 10,
     is_available BOOLEAN DEFAULT true,
-    reason VARCHAR(255), -- holiday, leave, etc.
+    reason VARCHAR(255), -- holiday, reduced capacity, etc.
     created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,7 +59,8 @@ CREATE TABLE doctor_availability (
 CREATE TABLE appointments (
     id SERIAL PRIMARY KEY,
     client_id INTEGER REFERENCES users(id),
-    doctor_id INTEGER REFERENCES doctors(id),
+    department_id INTEGER REFERENCES departments(id),
+    doctor_id INTEGER REFERENCES doctors(id), -- optional: which specific doctor if assigned
     appointment_date DATE NOT NULL,
     slot_number INTEGER NOT NULL,
     status VARCHAR(50) DEFAULT 'booked', -- booked, arrived, waiting, completed, no_show, cancelled
@@ -54,7 +68,7 @@ CREATE TABLE appointments (
     booked_by INTEGER REFERENCES users(id), -- who booked it (client or receptionist)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(doctor_id, appointment_date, slot_number)
+    UNIQUE(department_id, appointment_date, slot_number)
 );
 
 -- Appointment status types (configurable by admin)
@@ -104,14 +118,29 @@ INSERT INTO users (x_number, name, phone, category, role) VALUES
 ('R00001/00', 'Mary Johnson', '+1122334455', 'STAFF', 'receptionist'),
 ('A00001/00', 'Dr. Admin', '+9988776655', 'STAFF', 'admin');
 
--- Insert sample doctors
-INSERT INTO doctors (name, specialization) VALUES
-('Dr. Sarah Wilson', 'General Medicine'),
-('Dr. Michael Brown', 'Cardiology'),
-('Dr. Emily Davis', 'Pediatrics');
+-- Insert sample departments
+INSERT INTO departments (name, description, slots_per_day, working_days, working_hours, color) VALUES
+('General Medicine', 'General medical consultations and primary care', 15, '["monday", "tuesday", "wednesday", "thursday", "friday"]', '{"start": "08:00", "end": "18:00"}', '#3B82F6'),
+('Cardiology', 'Heart and cardiovascular system specialists', 10, '["monday", "tuesday", "wednesday", "thursday", "friday"]', '{"start": "09:00", "end": "17:00"}', '#EF4444'),
+('Pediatrics', 'Medical care for infants, children, and adolescents', 12, '["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]', '{"start": "08:00", "end": "16:00"}', '#10B981'),
+('Orthopedics', 'Bone, joint, and musculoskeletal system care', 8, '["monday", "tuesday", "wednesday", "thursday", "friday"]', '{"start": "09:00", "end": "17:00"}', '#8B5CF6'),
+('Dermatology', 'Skin, hair, and nail conditions', 10, '["monday", "tuesday", "wednesday", "thursday"]', '{"start": "10:00", "end": "16:00"}', '#F59E0B'),
+('Gynecology', 'Women''s reproductive health', 10, '["monday", "tuesday", "wednesday", "thursday", "friday"]', '{"start": "09:00", "end": "17:00"}', '#EC4899'),
+('Ophthalmology', 'Eye and vision care', 12, '["monday", "tuesday", "wednesday", "thursday", "friday"]', '{"start": "08:30", "end": "17:30"}', '#06B6D4'),
+('ENT', 'Ear, nose, and throat specialists', 8, '["monday", "tuesday", "wednesday", "thursday", "friday"]', '{"start": "09:00", "end": "16:00"}', '#84CC16');
+
+-- Insert sample doctors (linked to departments)
+INSERT INTO doctors (name, department_id) VALUES
+('Dr. Sarah Wilson', 1), -- General Medicine
+('Dr. Michael Brown', 2), -- Cardiology
+('Dr. Emily Davis', 3), -- Pediatrics
+('Dr. James Miller', 4), -- Orthopedics
+('Dr. Lisa Anderson', 5); -- Dermatology
 
 -- Create indexes for better performance
-CREATE INDEX idx_appointments_date_doctor ON appointments(appointment_date, doctor_id);
+CREATE INDEX idx_appointments_date_department ON appointments(appointment_date, department_id);
 CREATE INDEX idx_appointments_client ON appointments(client_id);
+CREATE INDEX idx_appointments_doctor ON appointments(doctor_id);
 CREATE INDEX idx_users_x_number ON users(x_number);
 CREATE INDEX idx_otp_x_number ON otp_codes(x_number, expires_at);
+CREATE INDEX idx_department_availability_date ON department_availability(department_id, date);

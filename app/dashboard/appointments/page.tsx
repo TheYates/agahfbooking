@@ -1,190 +1,190 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Search, Filter, Download, Plus, Eye } from "lucide-react"
-import { AppointmentModal } from "@/components/calendar/appointment-modal"
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Calendar,
+  Search,
+  Filter,
+  Download,
+  Plus,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { AppointmentModal } from "@/components/calendar/appointment-modal";
 
 interface Appointment {
-  id: number
-  clientId: number
-  clientName: string
-  clientXNumber: string
-  doctorId: number
-  doctorName: string
-  date: string
-  slotNumber: number
-  status: string
-  statusColor: string
-  notes?: string
-  phone: string
-  category: string
+  id: number;
+  clientId: number;
+  clientName: string;
+  clientXNumber: string;
+  doctorId: number;
+  doctorName: string;
+  date: string;
+  slotNumber: number;
+  status: string;
+  statusColor: string;
+  notes?: string;
+  phone: string;
+  category: string;
 }
 
 export default function AppointmentsPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [dateFilter, setDateFilter] = useState("all")
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [filteredAppointments, setFilteredAppointments] = useState<
+    Appointment[]
+  >([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<Appointment | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
-  // Mock data
-  useEffect(() => {
-    const mockAppointments: Appointment[] = [
-      {
-        id: 1,
-        clientId: 1,
-        clientName: "John Doe",
-        clientXNumber: "X12345/67",
-        doctorId: 1,
-        doctorName: "Dr. Sarah Wilson",
-        date: "2024-12-30",
-        slotNumber: 3,
-        status: "booked",
-        statusColor: "#3B82F6",
-        phone: "+1234567890",
-        category: "PRIVATE CASH",
-        notes: "Regular checkup",
-      },
-      {
-        id: 2,
-        clientId: 2,
-        clientName: "Jane Smith",
-        clientXNumber: "X98765/43",
-        doctorId: 1,
-        doctorName: "Dr. Sarah Wilson",
-        date: "2024-12-30",
-        slotNumber: 5,
-        status: "completed",
-        statusColor: "#059669",
-        phone: "+0987654321",
-        category: "PUBLIC SPONSORED(NHIA)",
-      },
-      {
-        id: 3,
-        clientId: 1,
-        clientName: "John Doe",
-        clientXNumber: "X12345/67",
-        doctorId: 2,
-        doctorName: "Dr. Michael Brown",
-        date: "2025-01-02",
-        slotNumber: 1,
-        status: "booked",
-        statusColor: "#3B82F6",
-        phone: "+1234567890",
-        category: "PRIVATE CASH",
-      },
-      {
-        id: 4,
-        clientId: 3,
-        clientName: "Bob Johnson",
-        clientXNumber: "X11111/22",
-        doctorId: 1,
-        doctorName: "Dr. Sarah Wilson",
-        date: "2024-12-31",
-        slotNumber: 2,
-        status: "arrived",
-        statusColor: "#10B981",
-        phone: "+1111222333",
-        category: "PRIVATE SPONSORED",
-      },
-      {
-        id: 5,
-        clientId: 2,
-        clientName: "Jane Smith",
-        clientXNumber: "X98765/43",
-        doctorId: 3,
-        doctorName: "Dr. Emily Davis",
-        date: "2025-01-01",
-        slotNumber: 4,
-        status: "waiting",
-        statusColor: "#F59E0B",
-        phone: "+0987654321",
-        category: "PUBLIC SPONSORED(NHIA)",
-        notes: "Follow-up appointment",
-      },
-      {
-        id: 6,
-        clientId: 4,
-        clientName: "Alice Brown",
-        clientXNumber: "X22222/33",
-        doctorId: 2,
-        doctorName: "Dr. Michael Brown",
-        date: "2024-12-29",
-        slotNumber: 3,
-        status: "no_show",
-        statusColor: "#EF4444",
-        phone: "+2222333444",
-        category: "PRIVATE DEPENDENT",
-      },
-    ]
+  // Fetch appointments from API
+  const fetchAppointments = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    setAppointments(mockAppointments)
-    setFilteredAppointments(mockAppointments)
-  }, [])
+      const params = new URLSearchParams();
+      if (searchTerm) params.append("search", searchTerm);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (dateFilter !== "all") params.append("dateFilter", dateFilter);
 
-  // Filter appointments
-  useEffect(() => {
-    let filtered = appointments
+      const response = await fetch(
+        `/api/appointments/list?${params.toString()}`
+      );
+      const data = await response.json();
 
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (apt) =>
-          apt.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          apt.clientXNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          apt.doctorName.toLowerCase().includes(searchTerm.toLowerCase()),
-      )
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((apt) => apt.status === statusFilter)
-    }
-
-    // Date filter
-    if (dateFilter !== "all") {
-      const today = new Date()
-      const todayStr = today.toISOString().split("T")[0]
-
-      switch (dateFilter) {
-        case "today":
-          filtered = filtered.filter((apt) => apt.date === todayStr)
-          break
-        case "upcoming":
-          filtered = filtered.filter((apt) => apt.date >= todayStr)
-          break
-        case "past":
-          filtered = filtered.filter((apt) => apt.date < todayStr)
-          break
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch appointments");
       }
-    }
 
-    setFilteredAppointments(filtered)
-  }, [appointments, searchTerm, statusFilter, dateFilter])
+      setAppointments(data.data);
+      setFilteredAppointments(data.data);
+    } catch (err) {
+      console.error("Error fetching appointments:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch appointments"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch appointments on component mount and when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(
+      () => {
+        fetchAppointments();
+      },
+      searchTerm ? 500 : 0
+    ); // 500ms debounce for search, immediate for other filters
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, statusFilter, dateFilter]);
 
   const handleAppointmentClick = (appointment: Appointment) => {
-    setSelectedAppointment(appointment)
-    setIsModalOpen(true)
-  }
+    setSelectedAppointment(appointment);
+    setIsModalOpen(true);
+  };
 
-  const handleAppointmentUpdate = (updatedAppointment: Appointment) => {
-    setAppointments((prev) => prev.map((apt) => (apt.id === updatedAppointment.id ? updatedAppointment : apt)))
-  }
+  const handleAppointmentUpdate = async (updatedAppointment: Appointment) => {
+    try {
+      const response = await fetch("/api/appointments", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: updatedAppointment.id,
+          status: updatedAppointment.status,
+          notes: updatedAppointment.notes,
+        }),
+      });
 
-  const handleAppointmentDelete = (appointmentId: number) => {
-    setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId))
-  }
+      if (response.ok) {
+        setAppointments((prev) =>
+          prev.map((apt) =>
+            apt.id === updatedAppointment.id ? updatedAppointment : apt
+          )
+        );
+        setFilteredAppointments((prev) =>
+          prev.map((apt) =>
+            apt.id === updatedAppointment.id ? updatedAppointment : apt
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error updating appointment:", error);
+    }
+  };
+
+  const handleAppointmentDelete = async (appointmentId: number) => {
+    try {
+      const response = await fetch(`/api/appointments?id=${appointmentId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setAppointments((prev) =>
+          prev.filter((apt) => apt.id !== appointmentId)
+        );
+        setFilteredAppointments((prev) =>
+          prev.filter((apt) => apt.id !== appointmentId)
+        );
+      }
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+    }
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentAppointments = filteredAppointments.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, dateFilter]);
 
   const exportAppointments = () => {
     const csvContent = [
-      ["Date", "Time Slot", "Patient", "X-Number", "Doctor", "Status", "Category", "Phone", "Notes"],
+      [
+        "Date",
+        "Time Slot",
+        "Patient",
+        "X-Number",
+        "Doctor",
+        "Status",
+        "Category",
+        "Phone",
+        "Notes",
+      ],
       ...filteredAppointments.map((apt) => [
         apt.date,
         `Slot ${apt.slotNumber}`,
@@ -198,23 +198,25 @@ export default function AppointmentsPage() {
       ]),
     ]
       .map((row) => row.join(","))
-      .join("\n")
+      .join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `appointments-${new Date().toISOString().split("T")[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `appointments-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Appointments</h1>
-          <p className="text-muted-foreground">Manage all patient appointments</p>
+          <p className="text-muted-foreground">
+            Manage all patient appointments
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={exportAppointments} variant="outline">
@@ -286,9 +288,9 @@ export default function AppointmentsPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSearchTerm("")
-                  setStatusFilter("all")
-                  setDateFilter("all")
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setDateFilter("all");
                 }}
                 className="w-full"
               >
@@ -301,60 +303,123 @@ export default function AppointmentsPage() {
 
       {/* Appointments List */}
       <Card>
-        <CardHeader>
-          <CardTitle>Appointments ({filteredAppointments.length})</CardTitle>
-          <CardDescription>
-            {filteredAppointments.length} appointment{filteredAppointments.length !== 1 ? "s" : ""} found
-          </CardDescription>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                Appointments ({filteredAppointments.length})
+              </CardTitle>
+              <CardDescription>
+                Showing {startIndex + 1}-
+                {Math.min(endIndex, filteredAppointments.length)} of{" "}
+                {filteredAppointments.length} appointments
+              </CardDescription>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredAppointments.length === 0 ? (
+          <div className="space-y-2">
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p>Loading appointments...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8 text-red-600">
+                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Error: {error}</p>
+                <Button
+                  variant="outline"
+                  onClick={fetchAppointments}
+                  className="mt-4"
+                >
+                  Try Again
+                </Button>
+              </div>
+            ) : filteredAppointments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No appointments found matching your criteria</p>
               </div>
             ) : (
-              filteredAppointments.map((appointment) => (
+              currentAppointments.map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => handleAppointmentClick(appointment)}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
+                  <div className="flex items-center gap-3">
+                    <div className="text-center min-w-[60px]">
                       <div className="text-sm font-medium">
-                        {new Date(appointment.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
+                        {new Date(appointment.date).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                          }
+                        )}
                       </div>
-                      <div className="text-xs text-muted-foreground">Slot {appointment.slotNumber}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Slot {appointment.slotNumber}
+                      </div>
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">{appointment.clientName}</span>
-                        <span className="text-sm text-muted-foreground">({appointment.clientXNumber})</span>
-                        <Badge variant="outline" className="text-xs">
+                        <span className="font-medium truncate">
+                          {appointment.clientName}
+                        </span>
+                        <span className="text-sm text-muted-foreground shrink-0">
+                          ({appointment.clientXNumber})
+                        </span>
+                        <Badge variant="outline" className="text-xs shrink-0">
                           {appointment.category}
                         </Badge>
                       </div>
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground truncate">
                         {appointment.doctorName} • {appointment.phone}
                       </div>
                       {appointment.notes && (
-                        <div className="text-xs text-muted-foreground mt-1">{appointment.notes}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {appointment.notes}
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Badge
                       style={{
                         backgroundColor: appointment.statusColor + "20",
                         color: appointment.statusColor,
                         borderColor: appointment.statusColor + "40",
                       }}
-                      className="capitalize"
+                      className="capitalize text-xs"
                     >
                       {appointment.status.replace("_", " ")}
                     </Badge>
@@ -378,5 +443,5 @@ export default function AppointmentsPage() {
         onAppointmentDelete={handleAppointmentDelete}
       />
     </div>
-  )
+  );
 }

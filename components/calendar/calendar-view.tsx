@@ -1,296 +1,391 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
-import { BookingModal } from "./booking-modal"
-import { ViewSwitcher } from "./view-switcher"
-import { AppointmentModal } from "./appointment-modal"
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+import { cn } from "@/lib/utils";
+import { BookingModal } from "./booking-modal";
+import { ViewSwitcher } from "./view-switcher";
+import { AppointmentModal } from "./appointment-modal";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { DayAppointmentsPopover } from "./day-appointments-popover";
 
 interface Appointment {
-  id: number
-  clientId: number
-  clientName: string
-  clientXNumber: string
-  doctorId: number
-  doctorName: string
-  date: string
-  slotNumber: number
-  status: string
-  statusColor: string
-  notes?: string
+  id: number;
+  clientId: number;
+  clientName: string;
+  clientXNumber: string;
+  doctorId: number;
+  doctorName: string;
+  departmentId: number;
+  departmentName: string;
+  date: string;
+  slotNumber: number;
+  status: string;
+  statusColor: string;
+  notes?: string;
 }
 
 interface Doctor {
-  id: number
-  name: string
-  specialization: string
+  id: number;
+  name: string;
+  specialization: string;
+  departmentId?: number;
+}
+
+interface Department {
+  id: number;
+  name: string;
+  description: string;
+  slots_per_day: number;
+  working_days: string[];
+  working_hours: { start: string; end: string };
+  is_active: boolean;
 }
 
 interface CalendarViewProps {
-  userRole: "client" | "receptionist" | "admin"
-  currentUserId?: number
+  userRole: "client" | "receptionist" | "admin";
+  currentUserId?: number;
 }
 
 export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [view, setView] = useState<"month" | "week" | "day">("month")
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [doctors, setDoctors] = useState<Doctor[]>([])
-  const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null)
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<"month" | "week" | "day">("month");
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [draggedAppointment, setDraggedAppointment] =
+    useState<Appointment | null>(null);
   const [bookingModal, setBookingModal] = useState({
     isOpen: false,
     selectedDate: null as Date | null,
     selectedSlot: null as number | null,
-  })
+  });
   const [appointmentModal, setAppointmentModal] = useState({
     isOpen: false,
     appointment: null as Appointment | null,
-  })
+  });
 
-  // Mock data
+  // Fetch data from API
   useEffect(() => {
-    const mockDoctors: Doctor[] = [
-      { id: 1, name: "Dr. Sarah Wilson", specialization: "General Medicine" },
-      { id: 2, name: "Dr. Michael Brown", specialization: "Cardiology" },
-      { id: 3, name: "Dr. Emily Davis", specialization: "Pediatrics" },
-      { id: 4, name: "Dr. James Miller", specialization: "Orthopedics" },
-      { id: 5, name: "Dr. Lisa Anderson", specialization: "Dermatology" },
-    ]
+    fetchDepartments();
+    fetchDoctors();
+    fetchAppointments();
+  }, [currentDate, view]);
 
-    const mockAppointments: Appointment[] = [
-      {
-        id: 1,
-        clientId: 1,
-        clientName: "John Doe",
-        clientXNumber: "X12345/67",
-        doctorId: 1,
-        doctorName: "Dr. Sarah Wilson",
-        date: "2024-12-30",
-        slotNumber: 3,
-        status: "booked",
-        statusColor: "#3B82F6",
-      },
-      {
-        id: 2,
-        clientId: 2,
-        clientName: "Jane Smith",
-        clientXNumber: "X98765/43",
-        doctorId: 1,
-        doctorName: "Dr. Sarah Wilson",
-        date: "2024-12-30",
-        slotNumber: 5,
-        status: "completed",
-        statusColor: "#059669",
-      },
-      {
-        id: 3,
-        clientId: 1,
-        clientName: "John Doe",
-        clientXNumber: "X12345/67",
-        doctorId: 2,
-        doctorName: "Dr. Michael Brown",
-        date: "2025-01-02",
-        slotNumber: 1,
-        status: "booked",
-        statusColor: "#3B82F6",
-      },
-      {
-        id: 4,
-        clientId: 3,
-        clientName: "Bob Johnson",
-        clientXNumber: "X11111/22",
-        doctorId: 1,
-        doctorName: "Dr. Sarah Wilson",
-        date: "2024-12-31",
-        slotNumber: 2,
-        status: "arrived",
-        statusColor: "#10B981",
-      },
-      {
-        id: 5,
-        clientId: 2,
-        clientName: "Jane Smith",
-        clientXNumber: "X98765/43",
-        doctorId: 3,
-        doctorName: "Dr. Emily Davis",
-        date: "2025-01-01",
-        slotNumber: 4,
-        status: "waiting",
-        statusColor: "#F59E0B",
-      },
-    ]
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch("/api/departments");
+      const data = await response.json();
+      if (data.success) {
+        setDepartments(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+    }
+  };
 
-    setDoctors(mockDoctors)
-    setAppointments(mockAppointments)
-  }, [])
+  const fetchDoctors = async () => {
+    try {
+      const response = await fetch("/api/doctors");
+      const data = await response.json();
+      if (data.success) {
+        // Transform the data to match the expected interface
+        const transformedDoctors = data.data.map((doctor: any) => ({
+          id: doctor.id,
+          name: doctor.name,
+          specialization: doctor.department_name || "General",
+          departmentId: doctor.department_id,
+        }));
+        setDoctors(transformedDoctors);
+      }
+    } catch (error) {
+      console.error("Error fetching doctors:", error);
+    }
+  };
+
+  const fetchAppointments = async () => {
+    try {
+      // Calculate date range based on current view
+      let startDate: string;
+      let endDate: string;
+
+      if (view === "month") {
+        const firstDay = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          1
+        );
+        const lastDay = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 1,
+          0
+        );
+        startDate = firstDay.toISOString().split("T")[0];
+        endDate = lastDay.toISOString().split("T")[0];
+      } else if (view === "week") {
+        const startOfWeek = new Date(currentDate);
+        startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        startDate = startOfWeek.toISOString().split("T")[0];
+        endDate = endOfWeek.toISOString().split("T")[0];
+      } else {
+        // day view
+        startDate = currentDate.toISOString().split("T")[0];
+        endDate = startDate;
+      }
+
+      const response = await fetch(
+        `/api/appointments?startDate=${startDate}&endDate=${endDate}`
+      );
+      const data = await response.json();
+      if (data.success) {
+        // Transform the data to match the expected interface
+        const transformedAppointments = data.data.map((appointment: any) => ({
+          id: appointment.id,
+          clientId: appointment.client_id,
+          clientName: appointment.client_name,
+          clientXNumber:
+            appointment.client_x_number ||
+            `X${appointment.client_id.toString().padStart(5, "0")}/00`,
+          doctorId: appointment.doctor_id,
+          doctorName: appointment.doctor_name || "Unassigned",
+          departmentId: appointment.department_id,
+          departmentName: appointment.department_name,
+          date: appointment.appointment_date.split("T")[0], // Convert to YYYY-MM-DD
+          slotNumber: appointment.slot_number,
+          status: appointment.status,
+          statusColor: getStatusColor(appointment.status),
+          notes: appointment.notes,
+        }));
+        setAppointments(transformedAppointments);
+      }
+    } catch (error) {
+      console.error("Error fetching appointments:", error);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    const statusColors: { [key: string]: string } = {
+      booked: "#3B82F6",
+      arrived: "#10B981",
+      waiting: "#F59E0B",
+      completed: "#059669",
+      no_show: "#EF4444",
+      cancelled: "#6B7280",
+      rescheduled: "#8B5CF6",
+    };
+    return statusColors[status] || "#6B7280";
+  };
+
+  const isPastDate = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+
+  const isPastAppointment = (appointment: Appointment) => {
+    return isPastDate(new Date(appointment.date));
+  };
 
   const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
 
-    const days = []
+    const days = [];
 
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null)
+      days.push(null);
     }
 
     // Add all days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day))
+      days.push(new Date(year, month, day));
     }
 
-    return days
-  }
+    return days;
+  };
 
   const getWeekDays = (date: Date) => {
-    const startOfWeek = new Date(date)
-    const day = startOfWeek.getDay()
-    const diff = startOfWeek.getDate() - day
-    startOfWeek.setDate(diff)
+    const startOfWeek = new Date(date);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day;
+    startOfWeek.setDate(diff);
 
-    const weekDays = []
+    const weekDays = [];
     for (let i = 0; i < 7; i++) {
-      const day = new Date(startOfWeek)
-      day.setDate(startOfWeek.getDate() + i)
-      weekDays.push(day)
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + i);
+      weekDays.push(day);
     }
 
-    return weekDays
-  }
+    return weekDays;
+  };
 
   const getAppointmentsForDate = (date: Date) => {
-    const dateString = date.toISOString().split("T")[0]
-    let dayAppointments = appointments.filter((apt) => apt.date === dateString)
+    const dateString = date.toISOString().split("T")[0];
+    let dayAppointments = appointments.filter((apt) => apt.date === dateString);
 
     // Filter appointments based on user role
     if (userRole === "client" && currentUserId) {
-      dayAppointments = dayAppointments.filter((apt) => apt.clientId === currentUserId)
+      dayAppointments = dayAppointments.filter(
+        (apt) => apt.clientId === currentUserId
+      );
     }
 
-    return dayAppointments
-  }
+    return dayAppointments;
+  };
+
+  // Get maximum slots across all departments for calendar display
+  const getMaxSlots = () => {
+    if (departments.length === 0) return 10; // fallback
+    return Math.max(...departments.map((d) => d.slots_per_day));
+  };
+
+  // Check if a slot is valid for a specific department
+  const isSlotValidForDepartment = (
+    slotNumber: number,
+    departmentId: number
+  ) => {
+    const department = departments.find((d) => d.id === departmentId);
+    return department ? slotNumber <= department.slots_per_day : false;
+  };
+
+  // Get department color for visual coding
+  const getDepartmentColor = (departmentId: number) => {
+    const colors: { [key: number]: string } = {
+      1: "#3B82F6", // General Medicine - Blue
+      2: "#EF4444", // Cardiology - Red
+      3: "#10B981", // Pediatrics - Green
+      4: "#8B5CF6", // Orthopedics - Purple
+      5: "#F59E0B", // Dermatology - Orange
+    };
+    return colors[departmentId] || "#6B7280"; // Default gray
+  };
 
   const maskXNumber = (xNumber: string, isOwnAppointment: boolean) => {
     if (userRole !== "client" || isOwnAppointment) {
-      return xNumber
+      return xNumber;
     }
-    return xNumber.substring(0, 4) + "**/**"
-  }
+    return xNumber.substring(0, 4) + "**/**";
+  };
 
   const navigateMonth = (direction: "prev" | "next") => {
     setCurrentDate((prev) => {
-      const newDate = new Date(prev)
+      const newDate = new Date(prev);
       if (direction === "prev") {
-        newDate.setMonth(prev.getMonth() - 1)
+        newDate.setMonth(prev.getMonth() - 1);
       } else {
-        newDate.setMonth(prev.getMonth() + 1)
+        newDate.setMonth(prev.getMonth() + 1);
       }
-      return newDate
-    })
-  }
+      return newDate;
+    });
+  };
 
   const navigateWeek = (direction: "prev" | "next") => {
     setCurrentDate((prev) => {
-      const newDate = new Date(prev)
+      const newDate = new Date(prev);
       if (direction === "prev") {
-        newDate.setDate(prev.getDate() - 7)
+        newDate.setDate(prev.getDate() - 7);
       } else {
-        newDate.setDate(prev.getDate() + 7)
+        newDate.setDate(prev.getDate() + 7);
       }
-      return newDate
-    })
-  }
+      return newDate;
+    });
+  };
 
   const navigateDay = (direction: "prev" | "next") => {
     setCurrentDate((prev) => {
-      const newDate = new Date(prev)
+      const newDate = new Date(prev);
       if (direction === "prev") {
-        newDate.setDate(prev.getDate() - 1)
+        newDate.setDate(prev.getDate() - 1);
       } else {
-        newDate.setDate(prev.getDate() + 1)
+        newDate.setDate(prev.getDate() + 1);
       }
-      return newDate
-    })
-  }
+      return newDate;
+    });
+  };
 
   const handleBookSlot = (date: Date, slotNumber: number) => {
+    // Check if the date is in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      // Don't open booking modal for past dates
+      return;
+    }
+
     setBookingModal({
       isOpen: true,
       selectedDate: date,
       selectedSlot: slotNumber,
-    })
-  }
+    });
+  };
 
   const handleAppointmentClick = (appointment: Appointment) => {
     setAppointmentModal({
       isOpen: true,
       appointment,
-    })
-  }
+    });
+  };
 
-  const handleAppointmentBooked = (appointmentData: {
-    date: string
-    slotNumber: number
-    doctorId: number
-    clientId: number
-    clientName: string
-    clientXNumber: string
-    notes?: string
-  }) => {
-    const doctor = doctors.find((d) => d.id === appointmentData.doctorId)
-    if (!doctor) return
-
-    const newAppointment: Appointment = {
-      id: Date.now(),
-      clientId: appointmentData.clientId,
-      clientName: appointmentData.clientName,
-      clientXNumber: appointmentData.clientXNumber,
-      doctorId: appointmentData.doctorId,
-      doctorName: doctor.name,
-      date: appointmentData.date,
-      slotNumber: appointmentData.slotNumber,
-      status: "booked",
-      statusColor: "#3B82F6",
-      notes: appointmentData.notes,
-    }
-
-    setAppointments((prev) => [...prev, newAppointment])
-  }
+  const handleAppointmentBooked = () => {
+    // Refresh appointments from database after booking
+    fetchAppointments();
+  };
 
   const handleAppointmentUpdate = (updatedAppointment: Appointment) => {
-    setAppointments((prev) => prev.map((apt) => (apt.id === updatedAppointment.id ? updatedAppointment : apt)))
-  }
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === updatedAppointment.id ? updatedAppointment : apt
+      )
+    );
+  };
 
   const handleAppointmentDelete = (appointmentId: number) => {
-    setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId))
-  }
+    setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId));
+  };
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, appointment: Appointment) => {
-    setDraggedAppointment(appointment)
-    e.dataTransfer.effectAllowed = "move"
-  }
+    // Prevent dragging past appointments
+    if (isPastAppointment(appointment)) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedAppointment(appointment);
+    e.dataTransfer.effectAllowed = "move";
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-  }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
 
-  const handleDrop = (e: React.DragEvent, targetDate: Date, targetSlot: number, targetDoctorId?: number) => {
-    e.preventDefault()
-    if (!draggedAppointment) return
+  const handleDrop = (
+    e: React.DragEvent,
+    targetDate: Date,
+    targetSlot: number,
+    targetDoctorId?: number
+  ) => {
+    e.preventDefault();
+    if (!draggedAppointment) return;
 
-    const dateString = targetDate.toISOString().split("T")[0]
+    const dateString = targetDate.toISOString().split("T")[0];
 
     // Check if slot is already occupied
     const existingAppointment = appointments.find(
@@ -298,13 +393,13 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         apt.date === dateString &&
         apt.slotNumber === targetSlot &&
         (targetDoctorId ? apt.doctorId === targetDoctorId : true) &&
-        apt.id !== draggedAppointment.id,
-    )
+        apt.id !== draggedAppointment.id
+    );
 
     if (existingAppointment) {
-      alert("This slot is already occupied!")
-      setDraggedAppointment(null)
-      return
+      alert("This slot is already occupied!");
+      setDraggedAppointment(null);
+      return;
     }
 
     // Update appointment
@@ -313,105 +408,166 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
       date: dateString,
       slotNumber: targetSlot,
       ...(targetDoctorId && { doctorId: targetDoctorId }),
-    }
+    };
 
     if (targetDoctorId) {
-      const doctor = doctors.find((d) => d.id === targetDoctorId)
+      const doctor = doctors.find((d) => d.id === targetDoctorId);
       if (doctor) {
-        updatedAppointment.doctorName = doctor.name
+        updatedAppointment.doctorName = doctor.name;
       }
     }
 
-    setAppointments((prev) => prev.map((apt) => (apt.id === draggedAppointment.id ? updatedAppointment : apt)))
-    setDraggedAppointment(null)
-  }
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === draggedAppointment.id ? updatedAppointment : apt
+      )
+    );
+    setDraggedAppointment(null);
+  };
 
   const renderMonthView = () => {
-    const days = getDaysInMonth(currentDate)
-    const monthName = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    const days = getDaysInMonth(currentDate);
+    const monthName = currentDate.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">{monthName}</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigateMonth("next")}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h2 className="text-xl sm:text-2xl font-bold">{monthName}</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateMonth("prev")}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateMonth("next")}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(new Date())}
+              >
+                Today
+              </Button>
+            </div>
             <ViewSwitcher currentView={view} onViewChange={setView} />
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1">
+        <div
+          className="grid grid-cols-7 gap-1 h-[calc(100vh-6rem)]"
+          style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
+        >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div key={day} className="p-2 text-center font-medium text-sm text-muted-foreground">
+            <div
+              key={day}
+              className="p-2 text-center font-medium text-sm text-muted-foreground h-8"
+            >
               {day}
             </div>
           ))}
 
           {days.map((day, index) => {
             if (!day) {
-              return <div key={index} className="p-2 h-24" />
+              return <div key={index} className="p-2 h-full" />;
             }
 
-            const dayAppointments = getAppointmentsForDate(day)
-            const isToday = new Date().toDateString() === day.toDateString()
+            const dayAppointments = getAppointmentsForDate(day);
+            const isToday = new Date().toDateString() === day.toDateString();
+            const isPast = isPastDate(day);
 
             return (
               <div
                 key={index}
                 className={cn(
-                  "p-2 h-24 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors",
-                  isToday && "bg-blue-50",
+                  "p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
+                  isPast
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-red-100 hover:text-red-500 hover:border-red-300"
+                    : "cursor-pointer hover:bg-green-50 hover:border-green-300",
+                  isToday && !isPast && "bg-blue-50"
                 )}
-                onClick={() => handleBookSlot(day, 1)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, day, 1)}
+                onClick={() => !isPast && handleBookSlot(day, 1)}
+                onDragOver={!isPast ? handleDragOver : undefined}
+                onDrop={!isPast ? (e) => handleDrop(e, day, 1) : undefined}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <span className={cn("text-sm", isToday && "font-bold text-blue-600")}>{day.getDate()}</span>
-                  {dayAppointments.length > 0 && (
-                    <Badge variant="secondary" className="text-xs">
-                      {dayAppointments.length}
-                    </Badge>
-                  )}
+                  <span
+                    className={cn(
+                      "text-sm",
+                      isToday && "font-bold text-blue-600"
+                    )}
+                  >
+                    {day.getDate()}
+                  </span>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1 overflow-hidden">
                   {dayAppointments.slice(0, 2).map((apt) => (
                     <div
                       key={apt.id}
-                      className="text-xs p-1 rounded truncate cursor-pointer"
-                      style={{ backgroundColor: apt.statusColor + "20", color: apt.statusColor }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleAppointmentClick(apt)
+                      className="text-xs p-1 rounded truncate cursor-pointer border-l-2"
+                      style={{
+                        backgroundColor:
+                          getDepartmentColor(apt.departmentId) + "20",
+                        color: getDepartmentColor(apt.departmentId),
+                        borderLeftColor: getDepartmentColor(apt.departmentId),
                       }}
-                      draggable
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAppointmentClick(apt);
+                      }}
+                      draggable={!isPastAppointment(apt)}
                       onDragStart={(e) => handleDragStart(e, apt)}
                     >
-                      Slot {apt.slotNumber} - {apt.doctorName.split(" ")[1]}
+                      <div className="font-medium text-xs truncate">
+                        {userRole === "client" && apt.clientId !== currentUserId
+                          ? `${maskXNumber(apt.clientXNumber, false)} - ***`
+                          : `${apt.clientXNumber} - ${apt.clientName}`}
+                      </div>
+                      <div className="opacity-60 text-xs truncate">
+                        {apt.departmentName}
+                      </div>
                     </div>
                   ))}
                   {dayAppointments.length > 2 && (
-                    <div className="text-xs text-muted-foreground">+{dayAppointments.length - 2} more</div>
+                    <DayAppointmentsPopover
+                      appointments={dayAppointments}
+                      date={day}
+                      getDepartmentColor={getDepartmentColor}
+                      maskXNumber={maskXNumber}
+                      currentUserId={currentUserId}
+                      userRole={userRole}
+                      onAppointmentClick={handleAppointmentClick}
+                      onDragStart={handleDragStart}
+                    >
+                      <div className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 transition-colors">
+                        +{dayAppointments.length - 2} more
+                      </div>
+                    </DayAppointmentsPopover>
                   )}
                 </div>
               </div>
-            )
+            );
           })}
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   const renderWeekView = () => {
-    const weekDays = getWeekDays(currentDate)
-    const weekStart = weekDays[0]
-    const weekEnd = weekDays[6]
+    const weekDays = getWeekDays(currentDate);
+    const weekStart = weekDays[0];
+    const weekEnd = weekDays[6];
     const weekRange = `${weekStart.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -419,214 +575,411 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
       month: "short",
       day: "numeric",
       year: "numeric",
-    })}`
+    })}`;
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">{weekRange}</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigateWeek("prev")}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigateWeek("next")}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h2 className="text-xl sm:text-2xl font-bold">{weekRange}</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("prev")}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("next")}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(new Date())}
+              >
+                Today
+              </Button>
+            </div>
             <ViewSwitcher currentView={view} onViewChange={setView} />
           </div>
         </div>
 
-        <div className="grid grid-cols-8 gap-2">
-          <div className="space-y-2">
-            <div className="h-16 flex items-center justify-center font-medium text-sm text-muted-foreground">Slots</div>
-            {Array.from({ length: 10 }, (_, i) => (
-              <div key={i} className="h-12 flex items-center justify-center text-sm font-medium bg-gray-50 rounded">
-                {i + 1}
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-col">
+          {/* Headers */}
+          <div className="grid grid-cols-8 gap-2 mb-2">
+            <div className="h-16 flex items-center justify-center font-medium text-sm text-muted-foreground">
+              Slots
+            </div>
+            {weekDays.map((day, dayIndex) => {
+              const isToday = new Date().toDateString() === day.toDateString();
+              const isPast = isPastDate(day);
 
-          {weekDays.map((day, dayIndex) => {
-            const dayAppointments = getAppointmentsForDate(day)
-            const isToday = new Date().toDateString() === day.toDateString()
-
-            return (
-              <div key={dayIndex} className="space-y-2">
+              return (
                 <div
+                  key={dayIndex}
                   className={cn(
-                    "h-16 p-2 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors flex flex-col items-center justify-center",
-                    isToday && "bg-blue-50",
+                    "h-16 p-2 border rounded-lg transition-colors flex flex-col items-center justify-center",
+                    isPast
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-red-100 hover:text-red-500 hover:border-red-300"
+                      : "cursor-pointer hover:bg-green-50 hover:border-green-300",
+                    isToday && !isPast && "bg-blue-50"
                   )}
-                  onClick={() => handleBookSlot(day, 1)}
+                  onClick={() => !isPast && handleBookSlot(day, 1)}
                 >
                   <div className="text-xs text-muted-foreground">
                     {day.toLocaleDateString("en-US", { weekday: "short" })}
                   </div>
-                  <div className={cn("text-lg font-semibold", isToday && "text-blue-600")}>{day.getDate()}</div>
-                  {dayAppointments.length > 0 && (
-                    <Badge variant="secondary" className="text-xs mt-1">
-                      {dayAppointments.length}
-                    </Badge>
-                  )}
+                  <div
+                    className={cn(
+                      "text-lg font-semibold",
+                      isToday && "text-blue-600"
+                    )}
+                  >
+                    {day.getDate()}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
 
-                {Array.from({ length: 10 }, (_, slotIndex) => {
-                  const slotNumber = slotIndex + 1
-                  const appointment = dayAppointments.find((apt) => apt.slotNumber === slotNumber)
-
-                  return (
-                    <div
-                      key={slotIndex}
-                      className={cn(
-                        "h-12 p-1 border rounded cursor-pointer transition-colors",
-                        appointment ? "border-l-4" : "hover:bg-gray-50",
-                      )}
-                      style={appointment ? { borderLeftColor: appointment.statusColor } : {}}
-                      onClick={() =>
-                        appointment ? handleAppointmentClick(appointment) : handleBookSlot(day, slotNumber)
-                      }
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, day, slotNumber)}
-                    >
-                      {appointment ? (
-                        <div
-                          className="h-full flex flex-col justify-center"
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, appointment)}
-                        >
-                          <div className="text-xs font-medium truncate">
-                            {maskXNumber(appointment.clientXNumber, appointment.clientId === currentUserId)}
-                          </div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {appointment.doctorName.split(" ")[1]}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                          Available
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+          {/* Scrollable Content */}
+          <ScrollArea className="h-[calc(100vh-20rem)]">
+            <div className="grid grid-cols-8 gap-2">
+              {/* Slot Numbers Column */}
+              <div className="space-y-2">
+                {Array.from({ length: getMaxSlots() }, (_, i) => (
+                  <div
+                    key={i}
+                    className="h-16 flex items-center justify-center text-sm font-medium bg-gray-50 rounded"
+                  >
+                    {i + 1}
+                  </div>
+                ))}
               </div>
-            )
-          })}
+
+              {/* Day Columns */}
+              {weekDays.map((day, dayIndex) => {
+                const dayAppointments = getAppointmentsForDate(day);
+                const isPast = isPastDate(day);
+
+                return (
+                  <div key={dayIndex} className="space-y-2">
+                    {Array.from({ length: getMaxSlots() }, (_, slotIndex) => {
+                      const slotNumber = slotIndex + 1;
+                      const slotAppointments = dayAppointments.filter(
+                        (apt) => apt.slotNumber === slotNumber
+                      );
+                      const appointment = slotAppointments[0]; // Show first appointment in the slot
+
+                      // Check if this slot is valid for the appointment's department
+                      const isSlotDisabled =
+                        appointment &&
+                        !isSlotValidForDepartment(
+                          slotNumber,
+                          appointment.departmentId
+                        );
+
+                      return (
+                        <div
+                          key={slotIndex}
+                          className={cn(
+                            "h-16 p-2 border rounded transition-colors",
+                            appointment
+                              ? "border-l-4 cursor-pointer"
+                              : isPast
+                              ? "cursor-not-allowed hover:bg-red-100 hover:border-red-300"
+                              : "cursor-pointer hover:bg-green-50 hover:border-green-300",
+                            isSlotDisabled && "opacity-50 cursor-not-allowed"
+                          )}
+                          style={
+                            appointment
+                              ? {
+                                  borderLeftColor: getDepartmentColor(
+                                    appointment.departmentId
+                                  ),
+                                  backgroundColor:
+                                    getDepartmentColor(
+                                      appointment.departmentId
+                                    ) + "10",
+                                }
+                              : {}
+                          }
+                          onClick={() => {
+                            if (isSlotDisabled || isPast) return;
+                            if (appointment && slotAppointments.length === 1) {
+                              handleAppointmentClick(appointment);
+                            } else if (!appointment) {
+                              handleBookSlot(day, slotNumber);
+                            }
+                            // Multiple appointments are handled by the popover
+                          }}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, day, slotNumber)}
+                        >
+                          {appointment ? (
+                            slotAppointments.length > 1 ? (
+                              <DayAppointmentsPopover
+                                appointments={slotAppointments}
+                                date={day}
+                                getDepartmentColor={getDepartmentColor}
+                                maskXNumber={maskXNumber}
+                                currentUserId={currentUserId}
+                                userRole={userRole}
+                                onAppointmentClick={handleAppointmentClick}
+                                onDragStart={handleDragStart}
+                              >
+                                <div className="h-full flex flex-col justify-center relative cursor-pointer">
+                                  <div className="text-xs font-medium truncate">
+                                    {maskXNumber(
+                                      appointment.clientXNumber,
+                                      appointment.clientId === currentUserId
+                                    )}
+                                  </div>
+                                  <div
+                                    className="text-xs truncate"
+                                    style={{
+                                      color: getDepartmentColor(
+                                        appointment.departmentId
+                                      ),
+                                    }}
+                                  >
+                                    {appointment.departmentName}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {appointment.doctorName.split(" ")[1]}
+                                  </div>
+                                  <div className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                                    {slotAppointments.length}
+                                  </div>
+                                </div>
+                              </DayAppointmentsPopover>
+                            ) : (
+                              <div
+                                className="h-full flex flex-col justify-center"
+                                draggable={!isPastAppointment(appointment)}
+                                onDragStart={(e) =>
+                                  handleDragStart(e, appointment)
+                                }
+                              >
+                                <div className="text-xs font-medium truncate">
+                                  {maskXNumber(
+                                    appointment.clientXNumber,
+                                    appointment.clientId === currentUserId
+                                  )}
+                                </div>
+                                <div
+                                  className="text-xs truncate"
+                                  style={{
+                                    color: getDepartmentColor(
+                                      appointment.departmentId
+                                    ),
+                                  }}
+                                >
+                                  {appointment.departmentName}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {appointment.doctorName.split(" ")[1]}
+                                </div>
+                              </div>
+                            )
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                              Available
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
         </div>
       </div>
-    )
-  }
+    );
+  };
+
+  // Generate time slots for day view
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let i = 1; i <= getMaxSlots(); i++) {
+      slots.push(`Slot ${i}`);
+    }
+    return slots;
+  };
+
+  // Format time slot for display
+  const formatTimeSlot = (slot: string) => {
+    return slot; // For now, just return the slot name
+  };
+
+  // Get appointments for a specific time slot
+  const getAppointmentsForTimeSlot = (date: Date, timeSlot: string) => {
+    const dateStr = date.toISOString().split("T")[0];
+    const slotNumber = parseInt(timeSlot.replace("Slot ", ""));
+
+    return appointments.filter(
+      (apt) => apt.date === dateStr && apt.slotNumber === slotNumber
+    );
+  };
 
   const renderDayView = () => {
-    const dayAppointments = getAppointmentsForDate(currentDate)
+    const dayAppointments = getAppointmentsForDate(currentDate);
     const dateString = currentDate.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
-    })
+    });
+    const timeSlots = generateTimeSlots();
+    const isPast = isPastDate(currentDate);
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">{dateString}</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigateDay("prev")}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigateDay("next")}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <ViewSwitcher currentView={view} onViewChange={setView} />
-            {(userRole === "receptionist" || userRole === "admin") && (
-              <Button onClick={() => handleBookSlot(currentDate, 1)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Book Appointment
-              </Button>
+        {/* Navigation header - matching month/week view pattern */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div
+            className={cn(
+              "text-center p-4 bg-gray-50 dark:bg-gray-900 rounded-lg",
+              isPast && "opacity-60"
             )}
+          >
+            <div className="text-lg font-semibold dark:text-white">
+              {dateString}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {dayAppointments.length} appointments
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateDay("prev")}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateDay("next")}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(new Date())}
+              >
+                Today
+              </Button>
+            </div>
+            <ViewSwitcher currentView={view} onViewChange={setView} />
           </div>
         </div>
 
-        <div className="border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <div className="min-w-[800px]">
-              {/* Header row */}
-              <div className="grid grid-cols-11 bg-gray-50 border-b">
-                <div className="p-3 font-medium text-sm border-r min-w-[200px]">Doctor</div>
-                {Array.from({ length: 10 }, (_, i) => (
-                  <div key={i} className="p-3 text-center font-medium text-sm border-r last:border-r-0 min-w-[100px]">
-                    Slot {i + 1}
-                  </div>
-                ))}
-              </div>
+        {/* Time slots container */}
+        <div className="space-y-2 h-[600px] overflow-y-auto pr-2">
+          {timeSlots.map((timeSlot) => {
+            const slotAppointments = getAppointmentsForTimeSlot(
+              currentDate,
+              timeSlot
+            );
 
-              {/* Doctor rows */}
-              {doctors.map((doctor) => {
-                const doctorAppointments = dayAppointments.filter((apt) => apt.doctorId === doctor.id)
-
-                return (
-                  <div key={doctor.id} className="grid grid-cols-11 border-b last:border-b-0">
-                    <div className="p-4 border-r bg-gray-25 min-w-[200px]">
-                      <div className="font-medium text-sm whitespace-nowrap overflow-hidden text-ellipsis">
-                        {doctor.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-                        {doctor.specialization}
-                      </div>
+            return (
+              <div key={timeSlot} className="flex items-start gap-4">
+                <div className="w-16 text-sm text-gray-500 dark:text-gray-400 text-right pt-2">
+                  {formatTimeSlot(timeSlot)}
+                </div>
+                <div
+                  className={cn(
+                    "flex-1 p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[60px]",
+                    isPast && "opacity-60",
+                    !isPast && "cursor-pointer",
+                    isPast && "cursor-not-allowed",
+                    !isPast && "hover:bg-gray-50 dark:hover:bg-gray-900"
+                  )}
+                  onClick={() => {
+                    if (!isPast) {
+                      const slotNumber = parseInt(
+                        timeSlot.replace("Slot ", "")
+                      );
+                      handleBookSlot(currentDate, slotNumber);
+                    }
+                  }}
+                  onDragOver={!isPast ? handleDragOver : undefined}
+                  onDrop={
+                    !isPast
+                      ? (e) => {
+                          const slotNumber = parseInt(
+                            timeSlot.replace("Slot ", "")
+                          );
+                          handleDrop(e, currentDate, slotNumber);
+                        }
+                      : undefined
+                  }
+                >
+                  {slotAppointments.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-600">
+                      <Plus className="w-4 h-4 mr-2" />
+                      {isPast ? "Past time slot" : "Click to book appointment"}
                     </div>
-
-                    {Array.from({ length: 10 }, (_, slotIndex) => {
-                      const slotNumber = slotIndex + 1
-                      const appointment = doctorAppointments.find((apt) => apt.slotNumber === slotNumber)
-
-                      return (
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {slotAppointments.map((appointment) => (
                         <div
-                          key={slotIndex}
-                          className="border-r last:border-r-0 min-h-[80px] min-w-[100px] relative group"
-                          style={{ backgroundColor: appointment ? appointment.statusColor + "10" : "transparent" }}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, currentDate, slotNumber, doctor.id)}
+                          key={appointment.id}
+                          className="p-2 rounded-lg text-white cursor-pointer flex-1 min-w-[160px] max-w-[220px]"
+                          style={{
+                            backgroundColor: getDepartmentColor(
+                              appointment.departmentId
+                            ),
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAppointmentClick(appointment);
+                          }}
+                          draggable={!isPastAppointment(appointment)}
+                          onDragStart={(e) => handleDragStart(e, appointment)}
                         >
-                          {appointment ? (
-                            <div className="p-2 h-full">
-                              <div
-                                className="h-full rounded p-2 text-white text-xs relative cursor-pointer"
-                                style={{ backgroundColor: appointment.statusColor }}
-                                onClick={() => handleAppointmentClick(appointment)}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, appointment)}
-                              >
-                                <div className="font-medium">
-                                  {maskXNumber(appointment.clientXNumber, appointment.clientId === currentUserId)}
-                                </div>
-                                <div className="opacity-90">{appointment.clientName}</div>
-                                {appointment.notes && (
-                                  <div className="opacity-75 text-xs mt-1 truncate">{appointment.notes}</div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div
-                              className="h-full flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors group"
-                              onClick={() => handleBookSlot(currentDate, slotNumber)}
-                            >
-                              <div className="border-2 border-dashed border-gray-300 rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Plus className="h-4 w-4 text-gray-400" />
-                              </div>
+                          <div className="font-medium text-sm flex items-center gap-1">
+                            <span className="opacity-75">
+                              {maskXNumber(
+                                appointment.clientXNumber,
+                                appointment.clientId === currentUserId
+                              )}
+                            </span>
+                            <span className="opacity-75 text-xs">
+                              {appointment.departmentName}
+                            </span>
+                          </div>
+                          <div className="truncate text-sm mt-1">
+                            {appointment.clientName}
+                          </div>
+                          {appointment.notes && (
+                            <div className="opacity-75 text-xs mt-1 truncate">
+                              {appointment.notes}
                             </div>
                           )}
                         </div>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -636,7 +989,13 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
       <BookingModal
         isOpen={bookingModal.isOpen}
-        onClose={() => setBookingModal({ isOpen: false, selectedDate: null, selectedSlot: null })}
+        onClose={() =>
+          setBookingModal({
+            isOpen: false,
+            selectedDate: null,
+            selectedSlot: null,
+          })
+        }
         selectedDate={bookingModal.selectedDate}
         selectedSlot={bookingModal.selectedSlot}
         userRole={userRole}
@@ -646,7 +1005,9 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
       <AppointmentModal
         isOpen={appointmentModal.isOpen}
-        onClose={() => setAppointmentModal({ isOpen: false, appointment: null })}
+        onClose={() =>
+          setAppointmentModal({ isOpen: false, appointment: null })
+        }
         appointment={appointmentModal.appointment}
         userRole={userRole}
         currentUserId={currentUserId}
@@ -654,5 +1015,5 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         onAppointmentDelete={handleAppointmentDelete}
       />
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,37 +8,45 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Trash2, Edit } from "lucide-react"
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Edit } from "lucide-react";
 
 interface Appointment {
-  id: number
-  clientId: number
-  clientName: string
-  clientXNumber: string
-  doctorId: number
-  doctorName: string
-  date: string
-  slotNumber: number
-  status: string
-  statusColor: string
-  notes?: string
+  id: number;
+  clientId: number;
+  clientName: string;
+  clientXNumber: string;
+  doctorId: number;
+  doctorName: string;
+  departmentId: number;
+  departmentName: string;
+  date: string;
+  slotNumber: number;
+  status: string;
+  statusColor: string;
+  notes?: string;
 }
 
 interface AppointmentModalProps {
-  isOpen: boolean
-  onClose: () => void
-  appointment: Appointment | null
-  userRole: "client" | "receptionist" | "admin"
-  currentUserId?: number
-  onAppointmentUpdate: (appointment: Appointment) => void
-  onAppointmentDelete: (appointmentId: number) => void
+  isOpen: boolean;
+  onClose: () => void;
+  appointment: Appointment | null;
+  userRole: "client" | "receptionist" | "admin";
+  currentUserId?: number;
+  onAppointmentUpdate: (appointment: Appointment) => void;
+  onAppointmentDelete: (appointmentId: number) => void;
 }
 
 const statusOptions = [
@@ -50,7 +58,7 @@ const statusOptions = [
   { value: "completed", label: "Completed", color: "#059669" },
   { value: "no_show", label: "No Show", color: "#EF4444" },
   { value: "cancelled", label: "Cancelled", color: "#6B7280" },
-]
+];
 
 export function AppointmentModal({
   isOpen,
@@ -61,71 +69,89 @@ export function AppointmentModal({
   onAppointmentUpdate,
   onAppointmentDelete,
 }: AppointmentModalProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [status, setStatus] = useState("")
-  const [notes, setNotes] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (appointment) {
-      setStatus(appointment.status)
-      setNotes(appointment.notes || "")
-      setIsEditing(false)
-      setError("")
+      setStatus(appointment.status);
+      setNotes(appointment.notes || "");
+      setIsEditing(false);
+      setError("");
     }
-  }, [appointment])
+  }, [appointment]);
 
-  if (!appointment) return null
+  if (!appointment) return null;
 
-  const canEdit = userRole === "receptionist" || userRole === "admin" || appointment.clientId === currentUserId
-  const canDelete = userRole === "receptionist" || userRole === "admin"
+  // Check if appointment is in the past
+  const isPastAppointment = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(appointment.date);
+    appointmentDate.setHours(0, 0, 0, 0);
+    return appointmentDate < today;
+  };
+
+  const canEdit =
+    !isPastAppointment() &&
+    (userRole === "receptionist" ||
+      userRole === "admin" ||
+      appointment.clientId === currentUserId);
+  const canDelete =
+    !isPastAppointment() &&
+    (userRole === "receptionist" || userRole === "admin");
 
   const handleSave = async () => {
-    setLoading(true)
-    setError("")
+    setLoading(true);
+    setError("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const statusOption = statusOptions.find((s) => s.value === status)
+      const statusOption = statusOptions.find((s) => s.value === status);
       const updatedAppointment = {
         ...appointment,
         status,
         statusColor: statusOption?.color || appointment.statusColor,
         notes,
-      }
+      };
 
-      onAppointmentUpdate(updatedAppointment)
-      setIsEditing(false)
+      onAppointmentUpdate(updatedAppointment);
+      setIsEditing(false);
     } catch (err) {
-      setError("Failed to update appointment")
+      setError("Failed to update appointment");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this appointment?")) return
+    if (!confirm("Are you sure you want to delete this appointment?")) return;
 
-    setLoading(true)
+    setLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      onAppointmentDelete(appointment.id)
-      onClose()
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      onAppointmentDelete(appointment.id);
+      onClose();
     } catch (err) {
-      setError("Failed to delete appointment")
+      setError("Failed to delete appointment");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const appointmentDate = new Date(appointment.date).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
+  const appointmentDate = new Date(appointment.date).toLocaleDateString(
+    "en-US",
+    {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -135,12 +161,22 @@ export function AppointmentModal({
             <span>Appointment Details</span>
             <div className="flex items-center gap-2">
               {canEdit && (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(!isEditing)} disabled={loading}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(!isEditing)}
+                  disabled={loading}
+                >
                   <Edit className="h-4 w-4" />
                 </Button>
               )}
               {canDelete && (
-                <Button variant="outline" size="sm" onClick={handleDelete} disabled={loading}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={loading}
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               )}
@@ -150,6 +186,14 @@ export function AppointmentModal({
             {appointmentDate} - Slot {appointment.slotNumber}
           </DialogDescription>
         </DialogHeader>
+
+        {isPastAppointment() && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              This appointment is in the past and cannot be modified.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {error && (
           <Alert variant="destructive">
@@ -163,12 +207,23 @@ export function AppointmentModal({
               <Label>Patient</Label>
               <div className="text-sm">
                 <div className="font-medium">{appointment.clientName}</div>
-                <div className="text-muted-foreground">{appointment.clientXNumber}</div>
+                <div className="text-muted-foreground">
+                  {appointment.clientXNumber}
+                </div>
               </div>
             </div>
             <div>
               <Label>Doctor</Label>
-              <div className="text-sm font-medium">{appointment.doctorName}</div>
+              <div className="text-sm font-medium">
+                {appointment.doctorName}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Label>Department</Label>
+            <div className="text-sm font-medium">
+              {appointment.departmentName}
             </div>
           </div>
 
@@ -183,7 +238,10 @@ export function AppointmentModal({
                   {statusOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: option.color }} />
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: option.color }}
+                        />
                         {option.label}
                       </div>
                     </SelectItem>
@@ -192,7 +250,14 @@ export function AppointmentModal({
               </Select>
             ) : (
               <div>
-                <Badge style={{ backgroundColor: appointment.statusColor, color: "white" }}>{appointment.status}</Badge>
+                <Badge
+                  style={{
+                    backgroundColor: appointment.statusColor,
+                    color: "white",
+                  }}
+                >
+                  {appointment.status}
+                </Badge>
               </div>
             )}
           </div>
@@ -226,5 +291,5 @@ export function AppointmentModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

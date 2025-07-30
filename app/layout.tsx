@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   title: "AGAHF Booking",
   description: "AGAHF Booking System",
   generator: "AGAHF Booking System",
+  icons: {
+    icon: "/agahflogo white.svg",
+  },
 };
 
 export default function RootLayout({

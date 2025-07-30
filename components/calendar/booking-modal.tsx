@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,44 +10,44 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Combobox } from "@/components/ui/combobox";
 
 interface Doctor {
-  id: number
-  name: string
-  specialization: string
+  id: number;
+  name: string;
+  specialization: string;
+  departmentId?: number;
 }
 
 interface Client {
-  id: number
-  xNumber: string
-  name: string
-  phone: string
-  category: string
+  id: number;
+  xNumber: string;
+  name: string;
+  phone: string;
+  category: string;
 }
 
 interface BookingModalProps {
-  isOpen: boolean
-  onClose: () => void
-  selectedDate: Date | null
-  selectedSlot: number | null
-  userRole: "client" | "receptionist" | "admin"
-  currentUserId?: number
-  onAppointmentBooked: (appointmentData: {
-    date: string
-    slotNumber: number
-    doctorId: number
-    clientId: number
-    clientName: string
-    clientXNumber: string
-    notes?: string
-  }) => void
+  isOpen: boolean;
+  onClose: () => void;
+  selectedDate: Date | null;
+  selectedSlot: number | null;
+  userRole: "client" | "receptionist" | "admin";
+  currentUserId?: number;
+  onAppointmentBooked: () => void;
 }
 
 export function BookingModal({
@@ -59,112 +59,167 @@ export function BookingModal({
   currentUserId,
   onAppointmentBooked,
 }: BookingModalProps) {
-  const [doctors, setDoctors] = useState<Doctor[]>([])
-  const [clients, setClients] = useState<Client[]>([])
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("")
-  const [selectedClientId, setSelectedClientId] = useState<string>("")
-  const [clientSearch, setClientSearch] = useState("")
-  const [notes, setNotes] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  // Mock data
+  // Fetch data from API
   useEffect(() => {
-    const mockDoctors: Doctor[] = [
-      { id: 1, name: "Dr. Sarah Wilson", specialization: "General Medicine" },
-      { id: 2, name: "Dr. Michael Brown", specialization: "Cardiology" },
-      { id: 3, name: "Dr. Emily Davis", specialization: "Pediatrics" },
-      { id: 4, name: "Dr. James Miller", specialization: "Orthopedics" },
-      { id: 5, name: "Dr. Lisa Anderson", specialization: "Dermatology" },
-    ]
-
-    const mockClients: Client[] = [
-      { id: 1, xNumber: "X12345/67", name: "John Doe", phone: "+1234567890", category: "PRIVATE CASH" },
-      { id: 2, xNumber: "X98765/43", name: "Jane Smith", phone: "+0987654321", category: "PUBLIC SPONSORED(NHIA)" },
-      { id: 3, xNumber: "X11111/22", name: "Bob Johnson", phone: "+1111222333", category: "PRIVATE SPONSORED" },
-      { id: 4, xNumber: "X22222/33", name: "Alice Brown", phone: "+2222333444", category: "PRIVATE DEPENDENT" },
-    ]
-
-    setDoctors(mockDoctors)
-    setClients(mockClients)
-
-    // For clients, pre-select themselves
-    if (userRole === "client" && currentUserId) {
-      setSelectedClientId(currentUserId.toString())
+    if (isOpen) {
+      fetchDoctors();
+      if (userRole === "receptionist" || userRole === "admin") {
+        fetchClients();
+      } else if (userRole === "client" && currentUserId) {
+        setSelectedClientId(currentUserId.toString());
+      }
     }
-  }, [userRole, currentUserId])
+  }, [isOpen, userRole, currentUserId]);
+
+  const fetchDoctors = async () => {
+    try {
+      const response = await fetch("/api/doctors");
+      const data = await response.json();
+      if (data.success) {
+        const transformedDoctors = data.data.map((doctor: any) => ({
+          id: doctor.id,
+          name: doctor.name,
+          specialization: doctor.department_name || "General",
+          departmentId: doctor.department_id,
+        }));
+        setDoctors(transformedDoctors);
+      }
+    } catch (error) {
+      console.error("Error fetching doctors:", error);
+    }
+  };
+
+  const fetchClients = async (search?: string) => {
+    try {
+      const url = search
+        ? `/api/clients?search=${encodeURIComponent(search)}`
+        : "/api/clients";
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.success) {
+        const transformedClients = data.data.map((client: any) => ({
+          id: client.id,
+          xNumber: client.x_number,
+          name: client.name,
+          phone: client.phone,
+          category: client.category,
+        }));
+        setClients(transformedClients);
+      }
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+    }
+  };
 
   // Reset form when modal opens/closes
   useEffect(() => {
     if (!isOpen) {
-      setSelectedDoctorId("")
+      setSelectedDoctorId("");
       if (userRole !== "client") {
-        setSelectedClientId("")
+        setSelectedClientId("");
       }
-      setClientSearch("")
-      setNotes("")
-      setError("")
+      setNotes("");
+      setError("");
     }
-  }, [isOpen, userRole])
+  }, [isOpen, userRole]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     try {
       if (!selectedDoctorId) {
-        throw new Error("Please select a doctor")
+        throw new Error("Please select a doctor");
       }
 
       if (!selectedClientId) {
-        throw new Error("Please select a client")
+        throw new Error("Please select a client");
       }
 
       if (!selectedDate || selectedSlot === null) {
-        throw new Error("Invalid date or slot")
+        throw new Error("Invalid date or slot");
       }
 
-      // Find client data
-      const client = clients.find((c) => c.id === Number.parseInt(selectedClientId))
-      if (!client) {
-        throw new Error("Client not found")
+      // Check if the selected date is in the past
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day
+      const appointmentDate = new Date(selectedDate);
+      appointmentDate.setHours(0, 0, 0, 0);
+
+      if (appointmentDate < today) {
+        throw new Error("Cannot book appointments in the past");
       }
 
-      // Mock API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      const appointmentData = {
-        date: selectedDate.toISOString().split("T")[0],
-        slotNumber: selectedSlot,
-        doctorId: Number.parseInt(selectedDoctorId),
-        clientId: Number.parseInt(selectedClientId),
-        clientName: client.name,
-        clientXNumber: client.xNumber,
-        notes,
+      // Find doctor data to get department_id
+      const doctor = doctors.find(
+        (d) => d.id === Number.parseInt(selectedDoctorId)
+      );
+      if (!doctor) {
+        throw new Error("Doctor not found");
       }
 
-      console.log("Booking appointment:", appointmentData)
+      // For client role, use currentUserId; for staff roles, use selectedClientId
+      const clientId =
+        userRole === "client"
+          ? currentUserId
+          : Number.parseInt(selectedClientId);
+      const bookedBy = currentUserId || 1; // Default to 1 if no currentUserId
 
-      // Call the callback to update the appointments list
-      onAppointmentBooked(appointmentData)
+      // Create appointment via API
+      const response = await fetch("/api/appointments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          department_id: doctor.departmentId || 1, // Use doctor's department or default to 1
+          doctor_id: Number.parseInt(selectedDoctorId),
+          appointment_date: selectedDate.toISOString().split("T")[0],
+          slot_number: selectedSlot,
+          notes: notes || null,
+          booked_by: bookedBy,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to book appointment");
+      }
+
+      console.log("Appointment booked successfully:", data.data);
+
+      // Call the callback to refresh appointments list
+      onAppointmentBooked();
 
       // Close modal
-      onClose()
+      onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to book appointment")
+      setError(
+        err instanceof Error ? err.message : "Failed to book appointment"
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
-      client.xNumber.toLowerCase().includes(clientSearch.toLowerCase()),
-  )
+  // Prepare client options for combobox
+  const clientOptions = clients.map((client) => ({
+    value: client.id.toString(),
+    label: `${client.xNumber} - ${client.name}`,
+  }));
 
-  if (!selectedDate || selectedSlot === null) return null
+  if (!selectedDate || selectedSlot === null) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -192,7 +247,11 @@ export function BookingModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="doctor">Doctor *</Label>
-            <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId} required>
+            <Select
+              value={selectedDoctorId}
+              onValueChange={setSelectedDoctorId}
+              required
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a doctor" />
               </SelectTrigger>
@@ -209,25 +268,15 @@ export function BookingModal({
           {(userRole === "receptionist" || userRole === "admin") && (
             <div>
               <Label htmlFor="client">Client *</Label>
-              <div className="space-y-2">
-                <Input
-                  placeholder="Search by name or X-number..."
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                />
-                <Select value={selectedClientId} onValueChange={setSelectedClientId} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredClients.map((client) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.xNumber} - {client.name} ({client.category})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Combobox
+                options={clientOptions}
+                value={selectedClientId}
+                onValueChange={setSelectedClientId}
+                placeholder="Select a client..."
+                searchPlaceholder="Search by X-number or name..."
+                emptyText="No clients found."
+                className="w-full"
+              />
             </div>
           )}
 
@@ -243,7 +292,12 @@ export function BookingModal({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={loading}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
@@ -253,5 +307,5 @@ export function BookingModal({
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
