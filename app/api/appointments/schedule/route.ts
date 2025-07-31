@@ -22,23 +22,57 @@ export async function GET(request: Request) {
     for (let i = 0; i < 7; i++) {
       const currentDate = new Date(start);
       currentDate.setDate(start.getDate() + i);
-      
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      
-      const dayName = i === 0 ? "Today" : dayNames[currentDate.getDay()];
-      const dateString = `${months[currentDate.getMonth()]} ${currentDate.getDate()}`;
-      
+
+      const dayNames = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+      const months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      // Check if current date is actually today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const currentDateCopy = new Date(currentDate);
+      currentDateCopy.setHours(0, 0, 0, 0);
+
+      const dayName =
+        currentDateCopy.getTime() === today.getTime()
+          ? "Today"
+          : dayNames[currentDate.getDay()];
+      const dateString = `${
+        months[currentDate.getMonth()]
+      } ${currentDate.getDate()}`;
+      const isoDateString = currentDate.toISOString().split("T")[0]; // YYYY-MM-DD format
+
       // Get department info to determine slots per day
       const deptResult = await query(
         "SELECT slots_per_day FROM departments WHERE id = $1",
         [departmentId]
       );
-      
+
       const slotsPerDay = deptResult.rows[0]?.slots_per_day || 10;
-      
+
       // Get existing appointments for this date and department
-      const appointmentsResult = await query(`
+      const appointmentsResult = await query(
+        `
         SELECT 
           a.id,
           a.slot_number,
@@ -49,7 +83,9 @@ export async function GET(request: Request) {
         AND DATE(a.appointment_date) = DATE($2)
         AND a.status != 'cancelled'
         ORDER BY a.slot_number
-      `, [departmentId, currentDate.toISOString().split('T')[0]]);
+      `,
+        [departmentId, currentDate.toISOString().split("T")[0]]
+      );
 
       const bookedSlots = new Map();
       appointmentsResult.rows.forEach((apt: any) => {
@@ -68,11 +104,12 @@ export async function GET(request: Request) {
       }
 
       schedule.push({
-        date: dateString,
+        date: isoDateString, // Use ISO format for proper date parsing
+        displayDate: dateString, // Keep display format for UI
         dayName,
         dayNumber: currentDate.getDate(),
         slots,
-        hasAvailability: slots.some(slot => slot.available),
+        hasAvailability: slots.some((slot) => slot.available),
       });
     }
 
@@ -80,7 +117,6 @@ export async function GET(request: Request) {
       success: true,
       data: schedule,
     });
-
   } catch (error) {
     console.error("Error fetching schedule:", error);
     return NextResponse.json(

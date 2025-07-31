@@ -24,17 +24,13 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Users,
   Search,
-  Filter,
   Download,
   Plus,
   Eye,
-  Calendar,
-  Phone,
   Edit,
   Trash2,
   ChevronUp,
@@ -51,6 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddClientModal } from "@/components/clients/add-client-modal";
+import { EditClientForm } from "@/components/clients/edit-client-form";
 
 interface Client {
   id: number;
@@ -82,25 +79,11 @@ export default function ClientsPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [userRole, setUserRole] = useState<string>("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
 
   const itemsPerPage = 10;
-
-  // Get user role from session
-  useEffect(() => {
-    const getSession = async () => {
-      try {
-        const response = await fetch("/api/auth/session");
-        const data = await response.json();
-        if (data.success) {
-          setUserRole(data.user?.role || "");
-        }
-      } catch (error) {
-        console.error("Error getting session:", error);
-      }
-    };
-    getSession();
-  }, []);
 
   // Fetch clients from database
   const fetchClients = async () => {
@@ -170,6 +153,29 @@ export default function ClientsPage() {
 
   const handleClientAdded = () => {
     fetchClients();
+  };
+
+  const handleDeleteClient = async () => {
+    if (!clientToDelete) return;
+
+    try {
+      const response = await fetch(`/api/clients/${clientToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete client");
+      }
+
+      fetchClients();
+      setShowDeleteModal(false);
+      setClientToDelete(null);
+    } catch (err) {
+      console.error("Error deleting client:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete client");
+    }
   };
 
   const exportClients = () => {
@@ -556,136 +562,24 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell className="py-2">
                         <div className="flex items-center gap-1">
-                          <Dialog
-                            open={showDetailsModal}
-                            onOpenChange={setShowDetailsModal}
-                          >
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedClient(client);
-                                  setShowDetailsModal(true);
-                                }}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[600px]">
-                              <DialogHeader>
-                                <DialogTitle>Client Details</DialogTitle>
-                                <DialogDescription>
-                                  Complete information for {client.name}
-                                </DialogDescription>
-                              </DialogHeader>
-                              {selectedClient && (
-                                <div className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        X-Number
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded font-mono">
-                                        {selectedClient.xNumber}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        Category
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded">
-                                        {selectedClient.category}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        Phone
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded">
-                                        {selectedClient.phone}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        Emergency Contact
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded">
-                                        {selectedClient.emergencyContact ||
-                                          "Not provided"}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">
-                                      Address
-                                    </label>
-                                    <p className="text-sm bg-gray-100 p-2 rounded">
-                                      {selectedClient.address || "Not provided"}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">
-                                      Medical Notes
-                                    </label>
-                                    <p className="text-sm bg-gray-100 p-2 rounded min-h-[60px]">
-                                      {selectedClient.medicalNotes ||
-                                        "No medical notes"}
-                                    </p>
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        Join Date
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded">
-                                        {new Date(
-                                          selectedClient.joinDate
-                                        ).toLocaleDateString("en-US", {
-                                          year: "numeric",
-                                          month: "long",
-                                          day: "numeric",
-                                        })}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        Total Appointments
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded">
-                                        {selectedClient.totalAppointments}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">
-                                        Last Visit
-                                      </label>
-                                      <p className="text-sm bg-gray-100 p-2 rounded">
-                                        {selectedClient.lastAppointment
-                                          ? new Date(
-                                              selectedClient.lastAppointment
-                                            ).toLocaleDateString("en-US", {
-                                              year: "numeric",
-                                              month: "long",
-                                              day: "numeric",
-                                            })
-                                          : "Never"}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // TODO: Implement edit functionality
+                              setSelectedClient(client);
+                              setShowDetailsModal(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedClient(client);
+                              setShowEditModal(true);
                             }}
                           >
                             <Edit className="h-4 w-4" />
@@ -695,7 +589,8 @@ export default function ClientsPage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // TODO: Implement delete functionality
+                              setClientToDelete(client);
+                              setShowDeleteModal(true);
                             }}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -763,6 +658,153 @@ export default function ClientsPage() {
         onClose={() => setShowAddModal(false)}
         onClientAdded={handleClientAdded}
       />
+
+      {/* Client Details Modal */}
+      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Client Details</DialogTitle>
+            <DialogDescription>
+              Complete information for {selectedClient?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedClient && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">X-Number</label>
+                  <p className="text-sm bg-gray-100 p-2 rounded font-mono">
+                    {selectedClient.xNumber}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Category</label>
+                  <p className="text-sm bg-gray-100 p-2 rounded">
+                    {selectedClient.category}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Phone</label>
+                  <p className="text-sm bg-gray-100 p-2 rounded">
+                    {selectedClient.phone}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">
+                    Emergency Contact
+                  </label>
+                  <p className="text-sm bg-gray-100 p-2 rounded">
+                    {selectedClient.emergencyContact || "Not provided"}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Address</label>
+                <p className="text-sm bg-gray-100 p-2 rounded">
+                  {selectedClient.address || "Not provided"}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Medical Notes</label>
+                <p className="text-sm bg-gray-100 p-2 rounded min-h-[60px]">
+                  {selectedClient.medicalNotes || "No medical notes"}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Join Date</label>
+                  <p className="text-sm bg-gray-100 p-2 rounded">
+                    {new Date(selectedClient.joinDate).toLocaleDateString(
+                      "en-US",
+                      {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      }
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">
+                    Total Appointments
+                  </label>
+                  <p className="text-sm bg-gray-100 p-2 rounded">
+                    {selectedClient.totalAppointments}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Last Visit</label>
+                  <p className="text-sm bg-gray-100 p-2 rounded">
+                    {selectedClient.lastAppointment
+                      ? new Date(
+                          selectedClient.lastAppointment
+                        ).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
+                      : "Never"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+            <DialogDescription>
+              Update information for {selectedClient?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedClient && (
+            <EditClientForm
+              client={selectedClient}
+              onClose={() => setShowEditModal(false)}
+              onClientUpdated={handleClientAdded}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Client</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {clientToDelete?.name}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This action cannot be undone. If the client has existing
+              appointments, they will be marked as inactive instead of being
+              deleted.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setClientToDelete(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteClient}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

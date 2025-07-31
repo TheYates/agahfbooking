@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -25,6 +30,8 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [maskedPhone, setMaskedPhone] = useState("");
+  const [mockOtp, setMockOtp] = useState("");
 
   const handleXNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^0-9]/g, ""); // Only allow numbers
@@ -78,6 +85,16 @@ export default function LoginPage() {
         throw new Error(data.error || "Failed to send OTP");
       }
 
+      // Store the masked phone number for display
+      if (data.maskedPhone) {
+        setMaskedPhone(data.maskedPhone);
+      }
+
+      // Store mock OTP for display (when in mock mode)
+      if (data.otp) {
+        setMockOtp(data.otp);
+      }
+
       setStep("otp");
     } catch (err) {
       setError(
@@ -90,8 +107,11 @@ export default function LoginPage() {
     }
   };
 
-  const handleOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const verifyOtp = async (otpValue: string) => {
+    if (otpValue.length !== 6 || loading) {
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -101,7 +121,7 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ xNumber, otp }),
+        body: JSON.stringify({ xNumber, otp: otpValue }),
       });
 
       const data = await response.json();
@@ -119,9 +139,27 @@ export default function LoginPage() {
           ? err.message
           : "Failed to verify OTP. Please try again."
       );
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleOtpChange = (value: string) => {
+    setOtp(value);
+    // Auto-verify when 6 digits are entered with a small delay
+    if (value.length === 6) {
+      setTimeout(() => {
+        verifyOtp(value);
+      }, 500); // 500ms delay for better UX
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      setError("Please enter a 6-digit OTP");
+      return;
+    }
+    await verifyOtp(otp);
   };
 
   return (
@@ -134,6 +172,8 @@ export default function LoginPage() {
           <CardDescription>
             {step === "xnumber"
               ? "Enter your X-number to continue"
+              : maskedPhone
+              ? `Enter the OTP sent to ${maskedPhone}`
               : "Enter the OTP sent to your phone"}
           </CardDescription>
         </CardHeader>
@@ -165,29 +205,63 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="otp">OTP Code</Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  placeholder="123456"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  maxLength={6}
-                  required
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Enter the 6-digit code sent to your phone
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={otp}
+                    onChange={handleOtpChange}
+                    disabled={loading}
+                  >
+                    <InputOTPGroup className="gap-3">
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <p className="text-sm text-gray-500 mt-2 text-center">
+                  {loading && otp.length === 6
+                    ? "Verifying OTP..."
+                    : maskedPhone
+                    ? `Enter the 6-digit code sent to ${maskedPhone}`
+                    : "Enter the 6-digit code sent to your phone"}
                 </p>
+                {mockOtp && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800 text-center">
+                      🧪 <strong>Mock Mode:</strong> Your OTP is{" "}
+                      <span className="font-mono font-bold text-lg">
+                        {mockOtp}
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Verifying..." : "Verify OTP"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || otp.length !== 6}
+              >
+                {loading
+                  ? "Verifying..."
+                  : otp.length === 6
+                  ? "Auto-verifying..."
+                  : "Verify OTP"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 className="w-full bg-transparent"
-                onClick={() => setStep("xnumber")}
+                onClick={() => {
+                  setStep("xnumber");
+                  setMockOtp("");
+                  setOtp("");
+                }}
               >
                 Back to X-Number
               </Button>
@@ -195,8 +269,7 @@ export default function LoginPage() {
           )}
 
           <div className="mt-6 text-center text-sm text-gray-500">
-            <p>Demo OTP: 123456</p>
-            <p>Demo X-Numbers: X12345/67, X98765/43, R00001/00, A00001/00</p>
+            <p>Enter your registered X-number to receive an OTP via SMS</p>
           </div>
 
           {/* Staff Login Link */}

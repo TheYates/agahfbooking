@@ -206,9 +206,17 @@ export function AppointmentModal({
             <div>
               <Label>Patient</Label>
               <div className="text-sm">
-                <div className="font-medium">{appointment.clientName}</div>
+                <div className="font-medium">
+                  {userRole === "client" &&
+                  appointment.clientId !== currentUserId
+                    ? "*** ***"
+                    : appointment.clientName}
+                </div>
                 <div className="text-muted-foreground">
-                  {appointment.clientXNumber}
+                  {userRole === "client" &&
+                  appointment.clientId !== currentUserId
+                    ? appointment.clientXNumber.substring(0, 4) + "**/**"
+                    : appointment.clientXNumber}
                 </div>
               </div>
             </div>
@@ -273,7 +281,9 @@ export function AppointmentModal({
               />
             ) : (
               <div className="text-sm text-muted-foreground min-h-[60px] p-2 border rounded">
-                {appointment.notes || "No notes"}
+                {userRole === "client" && appointment.clientId !== currentUserId
+                  ? "***"
+                  : appointment.notes || "No notes"}
               </div>
             )}
           </div>

@@ -237,12 +237,8 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     const dateString = date.toISOString().split("T")[0];
     let dayAppointments = appointments.filter((apt) => apt.date === dateString);
 
-    // Filter appointments based on user role
-    if (userRole === "client" && currentUserId) {
-      dayAppointments = dayAppointments.filter(
-        (apt) => apt.clientId === currentUserId
-      );
-    }
+    // For clients, show all appointments but we'll mask the non-client ones in the display
+    // No filtering needed here - masking is handled in the display components
 
     return dayAppointments;
   };
@@ -961,11 +957,17 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                             </span>
                           </div>
                           <div className="truncate text-sm mt-1">
-                            {appointment.clientName}
+                            {userRole === "client" &&
+                            appointment.clientId !== currentUserId
+                              ? "*** ***"
+                              : appointment.clientName}
                           </div>
                           {appointment.notes && (
                             <div className="opacity-75 text-xs mt-1 truncate">
-                              {appointment.notes}
+                              {userRole === "client" &&
+                              appointment.clientId !== currentUserId
+                                ? "***"
+                                : appointment.notes}
                             </div>
                           )}
                         </div>

@@ -22,6 +22,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search");
     const category = searchParams.get("category");
     const status = searchParams.get("status");
+    const clientId = searchParams.get("clientId");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const sortBy = searchParams.get("sortBy") || "name";
@@ -33,6 +34,12 @@ export async function GET(request: Request) {
     let whereConditions = ["c.is_active = true"];
     const queryParams: any[] = [];
     let paramCount = 1;
+
+    if (clientId) {
+      whereConditions.push(`c.id = $${paramCount}`);
+      queryParams.push(parseInt(clientId));
+      paramCount++;
+    }
 
     if (search) {
       whereConditions.push(

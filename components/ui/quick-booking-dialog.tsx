@@ -35,7 +35,8 @@ interface TimeSlot {
 }
 
 interface DaySchedule {
-  date: string;
+  date: string; // ISO format (YYYY-MM-DD) for date parsing
+  displayDate: string; // Display format (e.g., "Aug 3") for UI
   dayName: string;
   dayNumber: number;
   slots: TimeSlot[];
@@ -65,6 +66,8 @@ interface QuickBookingDialogProps {
   onTimeSlotSelect?: (day: string, time: string, departmentId: number) => void;
   onWeekChange?: (direction: "prev" | "next") => void;
   enableAnimations?: boolean;
+  userRole?: "client" | "receptionist" | "admin";
+  currentUserId?: number;
 }
 
 // Client Selector Component with search functionality
@@ -165,8 +168,31 @@ const fetchDepartments = async (): Promise<Department[]> => {
 };
 
 // Helper function to fetch clients from API
-const fetchClients = async (searchTerm: string = ""): Promise<Client[]> => {
+const fetchClients = async (
+  searchTerm: string = "",
+  userRole: string = "receptionist",
+  currentUserId?: number
+): Promise<Client[]> => {
   try {
+    // For clients, only return their own information
+    if (userRole === "client" && currentUserId) {
+      const response = await fetch(
+        `/api/clients/stats?clientId=${currentUserId}`
+      );
+      const data = await response.json();
+      if (data.success && data.data.length > 0) {
+        return data.data.map((client: any) => ({
+          id: client.id,
+          name: client.name,
+          x_number: client.xNumber,
+          phone: client.phone,
+          category: client.category,
+        }));
+      }
+      return [];
+    }
+
+    // For staff, fetch all clients with search
     const params = new URLSearchParams();
     if (searchTerm) params.append("search", searchTerm);
     params.append("limit", "20"); // Limit to 20 results for dropdown
@@ -253,6 +279,8 @@ export function QuickBookingDialog({
   onTimeSlotSelect,
   onWeekChange,
   enableAnimations = true,
+  userRole = "receptionist",
+  currentUserId,
 }: QuickBookingDialogProps) {
   const [selectedDepartment, setSelectedDepartment] =
     useState<Department | null>(null);
@@ -298,16 +326,27 @@ export function QuickBookingDialog({
     loadDepartments();
   }, [isOpen]); // Only depend on isOpen
 
-  // Fetch clients when search term changes
+  // Fetch clients when search term changes or dialog opens
   useEffect(() => {
+    if (!isOpen) return;
+
     const loadClients = async () => {
-      const fetchedClients = await fetchClients(clientSearchTerm);
+      const fetchedClients = await fetchClients(
+        clientSearchTerm,
+        userRole,
+        currentUserId
+      );
       setClients(fetchedClients);
+
+      // Auto-select client if user is a client and only one client is returned
+      if (userRole === "client" && fetchedClients.length === 1) {
+        setSelectedClient(fetchedClients[0]);
+      }
     };
 
     const timeoutId = setTimeout(loadClients, clientSearchTerm ? 300 : 0);
     return () => clearTimeout(timeoutId);
-  }, [clientSearchTerm]);
+  }, [clientSearchTerm, isOpen, userRole, currentUserId]);
 
   // Fetch schedule when department or week changes
   useEffect(() => {
@@ -526,15 +565,34 @@ export function QuickBookingDialog({
           {/* Client Selector */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-foreground">
-              Select Client *
+              {userRole === "client" ? "Booking For" : "Select Client *"}
             </label>
-            <ClientSelector
-              clients={clients}
-              selectedClient={selectedClient}
-              onClientChange={handleClientChange}
-              onSearchChange={setClientSearchTerm}
-              searchTerm={clientSearchTerm}
-            />
+            {userRole === "client" ? (
+              // Read-only display for clients
+              <div className="w-full p-3 border border-border rounded-md bg-muted/50">
+                {selectedClient ? (
+                  <div className="flex flex-col">
+                    <span className="font-medium">{selectedClient.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {selectedClient.x_number} • {selectedClient.category}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Loading your information...
+                  </span>
+                )}
+              </div>
+            ) : (
+              // Dropdown selector for staff
+              <ClientSelector
+                clients={clients}
+                selectedClient={selectedClient}
+                onClientChange={handleClientChange}
+                onSearchChange={setClientSearchTerm}
+                searchTerm={clientSearchTerm}
+              />
+            )}
           </div>
         </DialogHeader>
 
@@ -646,12 +704,12 @@ export function QuickBookingDialog({
                           className="space-y-3"
                         >
                           {/* Day Header */}
-                          <div className="flex items-center justify-center">
-                            <h4 className="font-medium text-foreground">
-                              {day.dayName}, {day.date}
+                          <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+                            <h4 className="font-medium text-sm sm:text-base text-foreground">
+                              {day.dayName}, {day.displayDate || day.date}
                             </h4>
                             {!day.hasAvailability && (
-                              <span className="text-sm text-muted-foreground ml-2">
+                              <span className="text-xs sm:text-sm text-muted-foreground">
                                 - No Availability
                               </span>
                             )}
@@ -661,61 +719,90 @@ export function QuickBookingDialog({
                           {day.hasAvailability && (
                             <motion.div
                               variants={shouldAnimate ? containerVariants : {}}
-                              className="grid grid-cols-5 gap-2 px-2"
+                              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 px-2"
                             >
-                              {day.slots.map((slot: TimeSlot) => (
-                                <motion.button
-                                  key={`${day.date}-${slot.time}`}
-                                  variants={
-                                    shouldAnimate ? timeSlotVariants : {}
-                                  }
-                                  whileHover={
-                                    shouldAnimate && slot.available
-                                      ? {
-                                          scale: 1.05,
-                                          y: -2,
-                                          transition: {
-                                            type: "spring",
-                                            stiffness: 400,
-                                            damping: 25,
-                                          },
-                                        }
-                                      : {}
-                                  }
-                                  whileTap={
-                                    shouldAnimate && slot.available
-                                      ? { scale: 0.98 }
-                                      : {}
-                                  }
-                                  onClick={() =>
-                                    slot.available &&
-                                    handleTimeSlotClick(day.date, slot.time)
-                                  }
-                                  disabled={!slot.available}
-                                  aria-label={`${
-                                    slot.available ? "Book" : "Occupied"
-                                  } time slot ${slot.time} on ${day.dayName}, ${
-                                    day.date
-                                  }`}
-                                  className={cn(
-                                    "px-3 py-2 text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[100px]",
-                                    slot.available
-                                      ? "bg-background border-border/50 hover:border-border hover:bg-muted text-foreground cursor-pointer"
-                                      : "bg-red-50 border-red-200 text-red-700 cursor-not-allowed"
-                                  )}
-                                >
-                                  <div className="text-center">
-                                    <div className="font-medium">
-                                      {slot.time}
+                              {day.slots.map((slot: TimeSlot) => {
+                                // Check if this day is in the past
+                                const slotDate = new Date(day.date);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const isPastDate = slotDate < today;
+
+                                return (
+                                  <motion.button
+                                    key={`${day.date}-${slot.time}`}
+                                    variants={
+                                      shouldAnimate ? timeSlotVariants : {}
+                                    }
+                                    whileHover={
+                                      shouldAnimate &&
+                                      slot.available &&
+                                      !isPastDate
+                                        ? {
+                                            scale: 1.05,
+                                            y: -2,
+                                            transition: {
+                                              type: "spring",
+                                              stiffness: 400,
+                                              damping: 25,
+                                            },
+                                          }
+                                        : {}
+                                    }
+                                    whileTap={
+                                      shouldAnimate &&
+                                      slot.available &&
+                                      !isPastDate
+                                        ? { scale: 0.98 }
+                                        : {}
+                                    }
+                                    onClick={() =>
+                                      slot.available &&
+                                      !isPastDate &&
+                                      handleTimeSlotClick(day.date, slot.time)
+                                    }
+                                    disabled={
+                                      isPastDate
+                                        ? slot.available
+                                        : !slot.available
+                                    }
+                                    aria-label={`${
+                                      isPastDate
+                                        ? "Past date"
+                                        : slot.available
+                                        ? "Book"
+                                        : "Occupied"
+                                    } time slot ${slot.time} on ${
+                                      day.dayName
+                                    }, ${day.displayDate || day.date}`}
+                                    className={cn(
+                                      "px-2 sm:px-3 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 w-full",
+                                      isPastDate && slot.available
+                                        ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                                        : isPastDate && !slot.available
+                                        ? "bg-red-100 border-red-300 text-red-600 cursor-not-allowed"
+                                        : slot.available
+                                        ? "bg-background border-border/50 hover:border-border hover:bg-muted text-foreground cursor-pointer"
+                                        : "bg-red-50 border-red-200 text-red-700 cursor-not-allowed"
+                                    )}
+                                  >
+                                    <div className="text-center">
+                                      <div className="font-medium">
+                                        {slot.time}
+                                      </div>
+                                      <div className="text-xs">
+                                        {slot.available
+                                          ? isPastDate
+                                            ? ""
+                                            : "Empty Slot"
+                                          : maskXNumber(
+                                              slot.clientXNumber || ""
+                                            )}
+                                      </div>
                                     </div>
-                                    <div className="text-xs">
-                                      {slot.available
-                                        ? "Empty Slot"
-                                        : maskXNumber(slot.clientXNumber || "")}
-                                    </div>
-                                  </div>
-                                </motion.button>
-                              ))}
+                                  </motion.button>
+                                );
+                              })}
                             </motion.div>
                           )}
                         </motion.div>
