@@ -67,16 +67,26 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
 
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
-      booked: "bg-blue-100 text-blue-800",
-      confirmed: "bg-green-100 text-green-800",
-      arrived: "bg-yellow-100 text-yellow-800",
-      waiting: "bg-purple-100 text-purple-800",
-      completed: "bg-emerald-100 text-emerald-800",
-      no_show: "bg-red-100 text-red-800",
-      cancelled: "bg-gray-100 text-gray-800",
-      rescheduled: "bg-orange-100 text-orange-800",
+      booked:
+        "bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300",
+      confirmed:
+        "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300",
+      arrived:
+        "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300",
+      waiting:
+        "bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300",
+      completed:
+        "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300",
+      no_show: "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300",
+      cancelled:
+        "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300",
+      rescheduled:
+        "bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300",
     };
-    return colors[status] || "bg-gray-100 text-gray-800";
+    return (
+      colors[status] ||
+      "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300"
+    );
   };
 
   const handleCancelAppointment = async (appointmentId: number) => {

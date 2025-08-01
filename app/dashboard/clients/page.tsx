@@ -405,7 +405,7 @@ export default function ClientsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("xNumber")}
                     >
                       <div className="flex items-center gap-1">
@@ -419,7 +419,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("name")}
                     >
                       <div className="flex items-center gap-1">
@@ -433,7 +433,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("phone")}
                     >
                       <div className="flex items-center gap-1">
@@ -447,7 +447,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("category")}
                     >
                       <div className="flex items-center gap-1">
@@ -461,7 +461,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("status")}
                     >
                       <div className="flex items-center gap-1">
@@ -475,7 +475,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("joinDate")}
                     >
                       <div className="flex items-center gap-1">
@@ -489,7 +489,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("totalAppointments")}
                     >
                       <div className="flex items-center gap-1">
@@ -503,7 +503,7 @@ export default function ClientsPage() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       onClick={() => handleSort("lastAppointment")}
                     >
                       <div className="flex items-center gap-1">
@@ -523,7 +523,7 @@ export default function ClientsPage() {
                   {filteredClients.map((client) => (
                     <TableRow
                       key={client.id}
-                      className="hover:bg-gray-50 cursor-pointer h-12"
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer h-12"
                       onClick={() => {
                         setSelectedClient(client);
                         setShowDetailsModal(true);

@@ -460,15 +460,16 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         <div
-          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
+          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)] sm:h-[calc(100vh-11rem)] min-h-[400px]"
           style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
         >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
-              className="p-2 text-center font-medium text-sm text-muted-foreground h-8"
+              className="p-1 sm:p-2 text-center font-medium text-xs sm:text-sm text-muted-foreground h-6 sm:h-8"
             >
-              {day}
+              <span className="hidden sm:inline">{day}</span>
+              <span className="sm:hidden">{day.slice(0, 1)}</span>
             </div>
           ))}
 
@@ -491,13 +492,16 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
               <div
                 key={index}
                 className={cn(
-                  "p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
+                  "p-1 sm:p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
                   isPast
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-red-100 hover:text-red-500 hover:border-red-300"
+                    ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-600"
                     : !isWorkingDay
-                    ? "bg-gray-50 text-gray-500 cursor-not-allowed opacity-60"
-                    : "cursor-pointer hover:bg-green-50 hover:border-green-300",
-                  isToday && !isPast && isWorkingDay && "bg-blue-50"
+                    ? "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60"
+                    : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600",
+                  isToday &&
+                    !isPast &&
+                    isWorkingDay &&
+                    "bg-blue-50 dark:bg-blue-900/20"
                 )}
                 onClick={() => isValidForBooking && handleBookSlot(day, 1)}
                 onDragOver={isValidForBooking ? handleDragOver : undefined}
@@ -508,19 +512,20 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 <div className="flex justify-between items-start mb-1">
                   <span
                     className={cn(
-                      "text-sm",
-                      isToday && "font-bold text-blue-600"
+                      "text-xs sm:text-sm font-medium text-foreground",
+                      isToday && "font-bold text-blue-600 dark:text-blue-400",
+                      isPast && "text-gray-400 dark:text-gray-500"
                     )}
                   >
                     {day.getDate()}
                   </span>
                 </div>
 
-                <div className="space-y-1 flex-1 overflow-hidden">
+                <div className="space-y-0.5 sm:space-y-1 flex-1 overflow-hidden">
                   {dayAppointments.slice(0, 2).map((apt) => (
                     <div
                       key={apt.id}
-                      className="text-xs p-1 rounded truncate cursor-pointer border-l-2"
+                      className="text-xs p-0.5 sm:p-1 rounded truncate cursor-pointer border-l-2"
                       style={{
                         backgroundColor:
                           getDepartmentColor(apt.departmentId) + "20",
@@ -536,11 +541,13 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                     >
                       <div className="font-medium text-xs truncate">
                         {userRole === "client" && apt.clientId !== currentUserId
-                          ? `${maskXNumber(apt.clientXNumber, false)} - ***`
-                          : `${apt.clientXNumber} - ${apt.clientName}`}
+                          ? maskXNumber(apt.clientXNumber, false)
+                          : apt.clientXNumber}
                       </div>
-                      <div className="opacity-60 text-xs truncate">
-                        {apt.departmentName}
+                      <div className="opacity-60 text-xs truncate hidden sm:block">
+                        {userRole === "client" && apt.clientId !== currentUserId
+                          ? "***"
+                          : apt.clientName}
                       </div>
                     </div>
                   ))}
@@ -555,7 +562,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                       onAppointmentClick={handleAppointmentClick}
                       onDragStart={handleDragStart}
                     >
-                      <div className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 transition-colors">
+                      <div className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                         +{dayAppointments.length - 2} more
                       </div>
                     </DayAppointmentsPopover>
@@ -639,21 +646,32 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                   className={cn(
                     "h-16 p-2 border rounded-lg transition-colors flex flex-col items-center justify-center",
                     isPast
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-red-100 hover:text-red-500 hover:border-red-300"
+                      ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-600"
                       : !isWorkingDay
-                      ? "bg-gray-50 text-gray-500 cursor-not-allowed opacity-60"
-                      : "cursor-pointer hover:bg-green-50 hover:border-green-300",
-                    isToday && !isPast && isWorkingDay && "bg-blue-50"
+                      ? "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60"
+                      : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600",
+                    isToday &&
+                      !isPast &&
+                      isWorkingDay &&
+                      "bg-blue-50 dark:bg-blue-900/20"
                   )}
                   onClick={() => isValidForBooking && handleBookSlot(day, 1)}
                 >
                   <div className="text-xs text-muted-foreground">
-                    {day.toLocaleDateString("en-US", { weekday: "short" })}
+                    <span className="hidden sm:inline">
+                      {day.toLocaleDateString("en-US", { weekday: "short" })}
+                    </span>
+                    <span className="sm:hidden">
+                      {day
+                        .toLocaleDateString("en-US", { weekday: "short" })
+                        .slice(0, 1)}
+                    </span>
                   </div>
                   <div
                     className={cn(
-                      "text-lg font-semibold",
-                      isToday && "text-blue-600"
+                      "text-sm sm:text-lg font-semibold text-foreground",
+                      isToday && "text-blue-600 dark:text-blue-400",
+                      isPast && "text-gray-400 dark:text-gray-500"
                     )}
                   >
                     {day.getDate()}
@@ -664,14 +682,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           </div>
 
           {/* Scrollable Content */}
-          <ScrollArea className="h-[calc(100vh-20rem)]">
-            <div className="grid grid-cols-8 gap-2">
+          <ScrollArea className="h-[calc(100vh-20rem)] sm:h-[calc(100vh-20rem)] min-h-[400px]">
+            <div className="grid grid-cols-8 gap-1 sm:gap-2">
               {/* Slot Numbers Column */}
-              <div className="space-y-2">
+              <div className="space-y-1 sm:space-y-2">
                 {Array.from({ length: getMaxSlots() }, (_, i) => (
                   <div
                     key={i}
-                    className="h-16 flex items-center justify-center text-sm font-medium bg-gray-50 rounded"
+                    className="h-12 sm:h-16 flex items-center justify-center text-xs sm:text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded"
                   >
                     {i + 1}
                   </div>
@@ -693,7 +711,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 );
 
                 return (
-                  <div key={dayIndex} className="space-y-2">
+                  <div key={dayIndex} className="space-y-1 sm:space-y-2">
                     {Array.from({ length: getMaxSlots() }, (_, slotIndex) => {
                       const slotNumber = slotIndex + 1;
                       const slotAppointments = dayAppointments.filter(
@@ -713,14 +731,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                         <div
                           key={slotIndex}
                           className={cn(
-                            "h-16 p-2 border rounded transition-colors",
+                            "h-12 sm:h-16 p-1 sm:p-2 border rounded transition-colors",
                             appointment
                               ? "border-l-4 cursor-pointer"
                               : isPast
-                              ? "cursor-not-allowed hover:bg-red-100 hover:border-red-300"
+                              ? "cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-600"
                               : !isWorkingDay
-                              ? "cursor-not-allowed bg-gray-50 opacity-60"
-                              : "cursor-pointer hover:bg-green-50 hover:border-green-300",
+                              ? "cursor-not-allowed bg-gray-50 dark:bg-gray-800 opacity-60"
+                              : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600",
                             isSlotDisabled && "opacity-50 cursor-not-allowed"
                           )}
                           style={
@@ -768,7 +786,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                     )}
                                   </div>
                                   <div
-                                    className="text-xs truncate"
+                                    className="text-xs truncate hidden sm:block"
                                     style={{
                                       color: getDepartmentColor(
                                         appointment.departmentId
@@ -777,10 +795,10 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   >
                                     {appointment.departmentName}
                                   </div>
-                                  <div className="text-xs text-muted-foreground truncate">
+                                  <div className="text-xs text-muted-foreground truncate hidden sm:block">
                                     {appointment.doctorName.split(" ")[1]}
                                   </div>
-                                  <div className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                                  <div className="absolute top-0.5 sm:top-1 right-0.5 sm:right-1 bg-red-500 text-white text-xs rounded-full w-3 h-3 sm:w-4 sm:h-4 flex items-center justify-center font-bold">
                                     {slotAppointments.length}
                                   </div>
                                 </div>
@@ -800,7 +818,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   )}
                                 </div>
                                 <div
-                                  className="text-xs truncate"
+                                  className="text-xs truncate hidden sm:block"
                                   style={{
                                     color: getDepartmentColor(
                                       appointment.departmentId
@@ -809,14 +827,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                 >
                                   {appointment.departmentName}
                                 </div>
-                                <div className="text-xs text-muted-foreground truncate">
+                                <div className="text-xs text-muted-foreground truncate hidden sm:block">
                                   {appointment.doctorName.split(" ")[1]}
                                 </div>
                               </div>
                             )
                           ) : (
                             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                              Available
+                              {isPast ? "Empty" : "Available"}
                             </div>
                           )}
                         </div>
@@ -857,7 +875,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   };
 
   const renderDayView = () => {
-    const dayAppointments = getAppointmentsForDate(currentDate);
     const dateString = currentDate.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -907,7 +924,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         {/* Time slots container */}
-        <div className="space-y-2 h-[600px] overflow-y-auto pr-2">
+        <div className="space-y-1 sm:space-y-2 h-[400px] sm:h-[600px] overflow-y-auto pr-1 sm:pr-2">
           {timeSlots.map((timeSlot) => {
             const slotAppointments = getAppointmentsForTimeSlot(
               currentDate,
@@ -915,19 +932,20 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
             );
 
             return (
-              <div key={timeSlot} className="flex items-start gap-4">
-                <div className="w-16 text-sm text-gray-500 dark:text-gray-400 text-right pt-2">
+              <div key={timeSlot} className="flex items-start gap-2 sm:gap-4">
+                <div className="w-12 sm:w-16 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-right pt-1 sm:pt-2">
                   {formatTimeSlot(timeSlot)}
                 </div>
                 <div
                   className={cn(
-                    "flex-1 p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[60px]",
+                    "flex-1 p-2 sm:p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[50px] sm:min-h-[60px]",
                     isPast && "opacity-60",
-                    !isWorkingDay && "bg-gray-50 opacity-60 cursor-not-allowed",
+                    !isWorkingDay &&
+                      "bg-gray-50 dark:bg-gray-800 opacity-60 cursor-not-allowed",
                     isValidForBooking && "cursor-pointer",
                     !isValidForBooking && "cursor-not-allowed",
                     isValidForBooking &&
-                      "hover:bg-gray-50 dark:hover:bg-gray-900"
+                      "hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600"
                   )}
                   onClick={() => {
                     if (isValidForBooking) {
@@ -952,7 +970,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                   {slotAppointments.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-600">
                       <Plus className="w-4 h-4 mr-2" />
-                      {isPast ? "Past time slot" : "Click to book appointment"}
+                      {isPast ? "Empty" : "Available"}
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">

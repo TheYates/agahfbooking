@@ -568,21 +568,21 @@ export function QuickBookingDialog({
 
     // Non-working day styling
     if (isNonWorkingDay) {
-      return "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60";
+      return "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-60";
     }
 
     if (slot.available) {
       return isPast
-        ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+        ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
         : "bg-background border-border/50 hover:border-border hover:bg-muted text-foreground cursor-pointer";
     } else if (isOwn) {
       return isPast
-        ? "bg-green-100 border-green-200 text-green-600 cursor-not-allowed"
-        : "bg-green-100 border-green-300 text-green-700 hover:bg-green-200 cursor-pointer";
+        ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 cursor-not-allowed"
+        : "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/30 cursor-pointer";
     } else {
       return isPast
-        ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-        : "bg-red-50 border-red-200 text-red-700 cursor-not-allowed";
+        ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+        : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 cursor-not-allowed";
     }
   };
 

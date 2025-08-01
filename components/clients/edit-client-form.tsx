@@ -34,7 +34,11 @@ interface EditClientFormProps {
   onClientUpdated: () => void;
 }
 
-export function EditClientForm({ client, onClose, onClientUpdated }: EditClientFormProps) {
+export function EditClientForm({
+  client,
+  onClose,
+  onClientUpdated,
+}: EditClientFormProps) {
   const [formData, setFormData] = useState({
     name: client.name,
     phone: client.phone,
@@ -78,16 +82,16 @@ export function EditClientForm({ client, onClose, onClientUpdated }: EditClientF
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -99,9 +103,11 @@ export function EditClientForm({ client, onClose, onClientUpdated }: EditClientF
             id="xNumber"
             value={client.xNumber}
             disabled
-            className="bg-gray-100"
+            className="bg-gray-100 dark:bg-gray-800"
           />
-          <p className="text-xs text-gray-500 mt-1">X-Number cannot be changed</p>
+          <p className="text-xs text-gray-500 mt-1">
+            X-Number cannot be changed
+          </p>
         </div>
         <div>
           <Label htmlFor="name">Full Name *</Label>
@@ -131,7 +137,9 @@ export function EditClientForm({ client, onClose, onClientUpdated }: EditClientF
             id="emergencyContact"
             type="tel"
             value={formData.emergencyContact}
-            onChange={(e) => handleInputChange("emergencyContact", e.target.value)}
+            onChange={(e) =>
+              handleInputChange("emergencyContact", e.target.value)
+            }
           />
         </div>
       </div>
@@ -149,8 +157,12 @@ export function EditClientForm({ client, onClose, onClientUpdated }: EditClientF
             <SelectContent>
               <SelectItem value="PRIVATE CASH">Private Cash</SelectItem>
               <SelectItem value="PUBLIC SPONSORED(NHIA)">NHIA</SelectItem>
-              <SelectItem value="PRIVATE SPONSORED">Private Sponsored</SelectItem>
-              <SelectItem value="PRIVATE DEPENDENT">Private Dependent</SelectItem>
+              <SelectItem value="PRIVATE SPONSORED">
+                Private Sponsored
+              </SelectItem>
+              <SelectItem value="PRIVATE DEPENDENT">
+                Private Dependent
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -158,7 +170,9 @@ export function EditClientForm({ client, onClose, onClientUpdated }: EditClientF
           <Label htmlFor="status">Status *</Label>
           <Select
             value={formData.status}
-            onValueChange={(value) => handleInputChange("status", value as "active" | "inactive")}
+            onValueChange={(value) =>
+              handleInputChange("status", value as "active" | "inactive")
+            }
           >
             <SelectTrigger>
               <SelectValue />

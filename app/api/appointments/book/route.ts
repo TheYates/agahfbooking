@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         slot_number, 
         status,
         created_at
-      ) VALUES ($1, $2, $3, $4, 'scheduled', NOW())
+      ) VALUES ($1, $2, $3, $4, 'booked', NOW())
       RETURNING *
     `,
       [finalClientId, departmentId, date, slotNumber]

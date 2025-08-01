@@ -29,6 +29,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { AppointmentModal } from "@/components/calendar/appointment-modal";
+import { QuickBookingDialog } from "@/components/ui/quick-booking-dialog";
 
 interface Appointment {
   id: number;
@@ -57,6 +58,7 @@ export default function AppointmentsPage() {
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isQuickBookingOpen, setIsQuickBookingOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -223,7 +225,7 @@ export default function AppointmentsPage() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button>
+          <Button onClick={() => setIsQuickBookingOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             New Appointment
           </Button>
@@ -372,7 +374,7 @@ export default function AppointmentsPage() {
               currentAppointments.map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                   onClick={() => handleAppointmentClick(appointment)}
                 >
                   <div className="flex items-center gap-3">
@@ -441,6 +443,16 @@ export default function AppointmentsPage() {
         userRole="admin"
         onAppointmentUpdate={handleAppointmentUpdate}
         onAppointmentDelete={handleAppointmentDelete}
+      />
+
+      <QuickBookingDialog
+        isOpen={isQuickBookingOpen}
+        onClose={() => setIsQuickBookingOpen(false)}
+        onBookingSuccess={() => {
+          setIsQuickBookingOpen(false);
+          fetchAppointments(); // Refresh the appointments list
+        }}
+        userRole="admin"
       />
     </div>
   );
