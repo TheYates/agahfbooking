@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import * as React from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -12,27 +12,27 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command"
+} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
+} from "@/components/ui/popover";
 
 interface ComboboxOption {
-  value: string
-  label: string
+  value: string;
+  label: string;
 }
 
 interface ComboboxProps {
-  options: ComboboxOption[]
-  value?: string
-  onValueChange?: (value: string) => void
-  placeholder?: string
-  searchPlaceholder?: string
-  emptyText?: string
-  className?: string
-  disabled?: boolean
+  options: ComboboxOption[];
+  value?: string;
+  onValueChange?: (value: string) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  emptyText?: string;
+  className?: string;
+  disabled?: boolean;
 }
 
 export function Combobox({
@@ -45,9 +45,9 @@ export function Combobox({
   className,
   disabled = false,
 }: ComboboxProps) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(false);
 
-  const selectedOption = options.find((option) => option.value === value)
+  const selectedOption = options.find((option) => option.value === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -63,7 +63,12 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent
+        className="p-0"
+        align="start"
+        sideOffset={4}
+        style={{ width: "var(--radix-popover-trigger-width)" }}
+      >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -74,8 +79,8 @@ export function Combobox({
                   key={option.value}
                   value={option.value}
                   onSelect={(currentValue) => {
-                    onValueChange?.(currentValue === value ? "" : currentValue)
-                    setOpen(false)
+                    onValueChange?.(currentValue === value ? "" : currentValue);
+                    setOpen(false);
                   }}
                 >
                   <Check
@@ -92,5 +97,5 @@ export function Combobox({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }

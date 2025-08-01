@@ -494,6 +494,12 @@ export class AppointmentService {
     departmentId: number,
     date: string
   ): Promise<number[]> {
+    // First check if the date is a working day for the department
+    const isWorkingDay = await this.isWorkingDay(departmentId, date);
+    if (!isWorkingDay) {
+      return []; // Return empty array for non-working days
+    }
+
     const result = await query(
       `
       SELECT slot_number
@@ -520,6 +526,38 @@ export class AppointmentService {
     }
 
     return availableSlots;
+  }
+
+  static async isWorkingDay(
+    departmentId: number,
+    date: string
+  ): Promise<boolean> {
+    const result = await query(
+      "SELECT working_days FROM departments WHERE id = $1",
+      [departmentId]
+    );
+
+    if (result.rows.length === 0) {
+      return false; // Department not found
+    }
+
+    const workingDays = result.rows[0].working_days;
+    const dateObj = new Date(date);
+    const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+    // Convert day number to day name
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    const dayName = dayNames[dayOfWeek];
+
+    return workingDays.includes(dayName);
   }
 }
 

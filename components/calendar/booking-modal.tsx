@@ -24,6 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
+import { isWorkingDay } from "@/lib/working-days-utils";
 
 interface Doctor {
   id: number;
@@ -165,6 +166,24 @@ export function BookingModal({
       );
       if (!doctor) {
         throw new Error("Doctor not found");
+      }
+
+      // Check if the selected date is a working day for the department
+      if (doctor.departmentId) {
+        const departmentResponse = await fetch(
+          `/api/departments/${doctor.departmentId}`
+        );
+        if (departmentResponse.ok) {
+          const departmentData = await departmentResponse.json();
+          if (departmentData.success && departmentData.data) {
+            const department = departmentData.data;
+            if (!isWorkingDay(department, selectedDate)) {
+              throw new Error(
+                "Selected date is not a working day for this department"
+              );
+            }
+          }
+        }
       }
 
       // For client role, use currentUserId; for staff roles, use selectedClientId

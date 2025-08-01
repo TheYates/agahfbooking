@@ -1,7 +1,6 @@
 "use client";
 
-import type React from "react";
-
+import React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,13 +11,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield } from "lucide-react";
 import Link from "next/link";
@@ -34,13 +27,12 @@ export default function LoginPage() {
   const [mockOtp, setMockOtp] = useState("");
 
   const handleXNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/[^0-9]/g, ""); // Only allow numbers
+    let value = e.target.value.replace(/[^0-9]/g, "");
 
     if (value.length > 7) {
-      value = value.slice(0, 7); // Limit to 7 digits
+      value = value.slice(0, 7);
     }
 
-    // Format as X12345/67
     let formatted = "X";
     if (value.length > 0) {
       formatted += value.slice(0, 5);
@@ -51,7 +43,6 @@ export default function LoginPage() {
 
     setXNumber(formatted);
 
-    // Clear error when user starts typing
     if (error) {
       setError("");
     }
@@ -62,7 +53,6 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // Validate X-number format
     const digitsOnly = xNumber.replace(/[^0-9]/g, "");
     if (digitsOnly.length !== 7 || !xNumber.match(/^X\d{5}\/\d{2}$/)) {
       setError("Please enter a complete X-number (7 digits required)");
@@ -85,12 +75,10 @@ export default function LoginPage() {
         throw new Error(data.error || "Failed to send OTP");
       }
 
-      // Store the masked phone number for display
       if (data.maskedPhone) {
         setMaskedPhone(data.maskedPhone);
       }
 
-      // Store mock OTP for display (when in mock mode)
       if (data.otp) {
         setMockOtp(data.otp);
       }
@@ -130,9 +118,8 @@ export default function LoginPage() {
         throw new Error(data.error || "Failed to verify OTP");
       }
 
-      // Redirect to dashboard
       router.push(data.redirectUrl || "/dashboard");
-      router.refresh(); // Force a refresh to update the auth state
+      router.refresh();
     } catch (err) {
       setError(
         err instanceof Error
@@ -145,11 +132,10 @@ export default function LoginPage() {
 
   const handleOtpChange = (value: string) => {
     setOtp(value);
-    // Auto-verify when 6 digits are entered with a small delay
     if (value.length === 6) {
       setTimeout(() => {
         verifyOtp(value);
-      }, 500); // 500ms delay for better UX
+      }, 500);
     }
   };
 
@@ -163,126 +149,187 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">
-            Hospital Appointment System
-          </CardTitle>
-          <CardDescription>
-            {step === "xnumber"
-              ? "Enter your X-number to continue"
-              : maskedPhone
-              ? `Enter the OTP sent to ${maskedPhone}`
-              : "Enter the OTP sent to your phone"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert className="mb-4" variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {step === "xnumber" ? (
-            <form onSubmit={handleXNumberSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="xnumber">X-Number</Label>
-                <Input
-                  id="xnumber"
-                  type="text"
-                  placeholder="X12345/67"
-                  value={xNumber}
-                  onChange={handleXNumberChange}
-                  maxLength={10}
-                  required
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-4xl">
+        <div className="flex flex-col gap-6">
+          <Card className="overflow-hidden p-0">
+            <CardContent className="grid p-0 md:grid-cols-2">
+              <div className="bg-muted relative hidden md:block">
+                <img
+                  src="https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&h=600&fit=crop&crop=center"
+                  alt="Hospital Interior"
+                  className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.6] dark:grayscale"
                 />
-                <p className="text-sm text-gray-500 mt-1">Format: X12345/67</p>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Sending OTP..." : "Send OTP"}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="otp">OTP Code</Label>
-                <div className="flex justify-center">
-                  <InputOTP
-                    maxLength={6}
-                    value={otp}
-                    onChange={handleOtpChange}
-                    disabled={loading}
-                  >
-                    <InputOTPGroup className="gap-3">
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-                <p className="text-sm text-gray-500 mt-2 text-center">
-                  {loading && otp.length === 6
-                    ? "Verifying OTP..."
-                    : maskedPhone
-                    ? `Enter the 6-digit code sent to ${maskedPhone}`
-                    : "Enter the 6-digit code sent to your phone"}
-                </p>
-                {mockOtp && (
-                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <p className="text-sm text-yellow-800 text-center">
-                      🧪 <strong>Mock Mode:</strong> Your OTP is{" "}
-                      <span className="font-mono font-bold text-lg">
-                        {mockOtp}
-                      </span>
+              <form
+                className="p-8 md:p-12"
+                onSubmit={
+                  step === "xnumber" ? handleXNumberSubmit : handleOtpSubmit
+                }
+              >
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="mb-2 flex justify-center">
+                      <img
+                        src="/agahflogo.svg"
+                        alt="AGAHF Logo"
+                        className="h-24 w-24 object-contain dark:hidden"
+                      />
+                      <img
+                        src="/agahflogo white.svg"
+                        alt="AGAHF Logo"
+                        className="h-24 w-24 object-contain hidden dark:block"
+                      />
+                    </div>
+                    <h1 className="text-2xl font-bold">
+                      {step === "xnumber" ? "Welcome back" : "Verify OTP"}
+                    </h1>
+                    <p className="text-muted-foreground text-balance">
+                      {step === "xnumber"
+                        ? "Login to your AGAHF account"
+                        : maskedPhone
+                        ? `Enter the OTP sent to ${maskedPhone}`
+                        : "Enter the OTP sent to your phone"}
                     </p>
                   </div>
-                )}
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loading || otp.length !== 6}
-              >
-                {loading
-                  ? "Verifying..."
-                  : otp.length === 6
-                  ? "Auto-verifying..."
-                  : "Verify OTP"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full bg-transparent"
-                onClick={() => {
-                  setStep("xnumber");
-                  setMockOtp("");
-                  setOtp("");
-                }}
-              >
-                Back to X-Number
-              </Button>
-            </form>
-          )}
 
-          <div className="mt-6 text-center text-sm text-gray-500">
-            <p>Enter your registered X-number to receive an OTP via SMS</p>
-          </div>
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
 
-          {/* Staff Login Link */}
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <Link href="/staff-login">
-              <Button variant="outline" className="w-full bg-transparent">
-                <Shield className="h-4 w-4 mr-2" />
-                Staff Login
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+                  {step === "xnumber" ? (
+                    <>
+                      <div className="grid gap-3">
+                        <Label htmlFor="xnumber">X-Number</Label>
+                        <Input
+                          id="xnumber"
+                          type="text"
+                          placeholder="X12345/67"
+                          value={xNumber}
+                          onChange={handleXNumberChange}
+                          maxLength={10}
+                          required
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={loading}
+                      >
+                        <Shield className="mr-2 h-4 w-4" />
+                        {loading ? "Sending OTP..." : "Send OTP"}
+                      </Button>
+                      <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
+                        <span className="relative z-10 bg-card px-2 text-muted-foreground">
+                          Or continue as
+                        </span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="w-full"
+                        asChild
+                      >
+                        <Link href="/staff-login">
+                          <Shield className="h-4 w-4 mr-2" />
+                          Staff Login
+                        </Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid gap-3">
+                        <Label htmlFor="otp">OTP Code</Label>
+                        <div className="flex justify-center">
+                          <InputOTP
+                            maxLength={6}
+                            value={otp}
+                            onChange={handleOtpChange}
+                            disabled={loading}
+                          >
+                            <InputOTPGroup className="gap-3">
+                              <InputOTPSlot index={0} />
+                              <InputOTPSlot index={1} />
+                              <InputOTPSlot index={2} />
+                              <InputOTPSlot index={3} />
+                              <InputOTPSlot index={4} />
+                              <InputOTPSlot index={5} />
+                            </InputOTPGroup>
+                          </InputOTP>
+                        </div>
+                        <p className="text-sm text-muted-foreground text-center">
+                          {loading && otp.length === 6
+                            ? "Verifying OTP..."
+                            : "Enter the 6-digit code sent to your phone"}
+                        </p>
+                        {mockOtp && (
+                          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                            <p className="text-sm text-yellow-800 text-center">
+                              🧪 <strong>Mock Mode:</strong> Your OTP is{" "}
+                              <span className="font-mono font-bold text-lg">
+                                {mockOtp}
+                              </span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={loading || otp.length !== 6}
+                      >
+                        {loading
+                          ? "Verifying..."
+                          : otp.length === 6
+                          ? "Auto-verifying..."
+                          : "Verify OTP"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setStep("xnumber");
+                          setMockOtp("");
+                          setOtp("");
+                        }}
+                      >
+                        Back to X-Number
+                      </Button>
+                    </>
+                  )}
+
+                  <div className="text-center text-sm">
+                    Need help?{" "}
+                    <a href="#" className="underline underline-offset-4">
+                      Contact support
+                    </a>
+                  </div>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+          {/* <div className="text-muted-foreground text-center text-xs text-balance">
+            By clicking continue, you agree to our{" "}
+            <a
+              href="#"
+              className="underline underline-offset-4 hover:text-primary"
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="#"
+              className="underline underline-offset-4 hover:text-primary"
+            >
+              Privacy Policy
+            </a>
+            .
+          </div> */}
+        </div>
+      </div>
     </div>
   );
 }

@@ -12,6 +12,10 @@ import { ViewSwitcher } from "./view-switcher";
 import { AppointmentModal } from "./appointment-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DayAppointmentsPopover } from "./day-appointments-popover";
+import {
+  isValidBookingDate,
+  isWorkingDayForAnyDepartment,
+} from "@/lib/working-days-utils";
 
 interface Appointment {
   id: number;
@@ -314,14 +318,9 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   };
 
   const handleBookSlot = (date: Date, slotNumber: number) => {
-    // Check if the date is in the past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(date);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    if (selectedDate < today) {
-      // Don't open booking modal for past dates
+    // Check if the date is valid for booking (not in past and is a working day)
+    if (!isValidBookingDate(date, undefined, departments)) {
+      // Don't open booking modal for invalid dates
       return;
     }
 
@@ -461,7 +460,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         <div
-          className="grid grid-cols-7 gap-1 h-[calc(100vh-6rem)]"
+          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
           style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
         >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -481,6 +480,12 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
             const dayAppointments = getAppointmentsForDate(day);
             const isToday = new Date().toDateString() === day.toDateString();
             const isPast = isPastDate(day);
+            const isWorkingDay = isWorkingDayForAnyDepartment(departments, day);
+            const isValidForBooking = isValidBookingDate(
+              day,
+              undefined,
+              departments
+            );
 
             return (
               <div
@@ -489,12 +494,16 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                   "p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
                   isPast
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-red-100 hover:text-red-500 hover:border-red-300"
+                    : !isWorkingDay
+                    ? "bg-gray-50 text-gray-500 cursor-not-allowed opacity-60"
                     : "cursor-pointer hover:bg-green-50 hover:border-green-300",
-                  isToday && !isPast && "bg-blue-50"
+                  isToday && !isPast && isWorkingDay && "bg-blue-50"
                 )}
-                onClick={() => !isPast && handleBookSlot(day, 1)}
-                onDragOver={!isPast ? handleDragOver : undefined}
-                onDrop={!isPast ? (e) => handleDrop(e, day, 1) : undefined}
+                onClick={() => isValidForBooking && handleBookSlot(day, 1)}
+                onDragOver={isValidForBooking ? handleDragOver : undefined}
+                onDrop={
+                  isValidForBooking ? (e) => handleDrop(e, day, 1) : undefined
+                }
               >
                 <div className="flex justify-between items-start mb-1">
                   <span
@@ -614,6 +623,15 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
             {weekDays.map((day, dayIndex) => {
               const isToday = new Date().toDateString() === day.toDateString();
               const isPast = isPastDate(day);
+              const isWorkingDay = isWorkingDayForAnyDepartment(
+                departments,
+                day
+              );
+              const isValidForBooking = isValidBookingDate(
+                day,
+                undefined,
+                departments
+              );
 
               return (
                 <div
@@ -622,10 +640,12 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                     "h-16 p-2 border rounded-lg transition-colors flex flex-col items-center justify-center",
                     isPast
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed hover:bg-red-100 hover:text-red-500 hover:border-red-300"
+                      : !isWorkingDay
+                      ? "bg-gray-50 text-gray-500 cursor-not-allowed opacity-60"
                       : "cursor-pointer hover:bg-green-50 hover:border-green-300",
-                    isToday && !isPast && "bg-blue-50"
+                    isToday && !isPast && isWorkingDay && "bg-blue-50"
                   )}
-                  onClick={() => !isPast && handleBookSlot(day, 1)}
+                  onClick={() => isValidForBooking && handleBookSlot(day, 1)}
                 >
                   <div className="text-xs text-muted-foreground">
                     {day.toLocaleDateString("en-US", { weekday: "short" })}
@@ -662,6 +682,15 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
               {weekDays.map((day, dayIndex) => {
                 const dayAppointments = getAppointmentsForDate(day);
                 const isPast = isPastDate(day);
+                const isWorkingDay = isWorkingDayForAnyDepartment(
+                  departments,
+                  day
+                );
+                const isValidForBooking = isValidBookingDate(
+                  day,
+                  undefined,
+                  departments
+                );
 
                 return (
                   <div key={dayIndex} className="space-y-2">
@@ -689,6 +718,8 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                               ? "border-l-4 cursor-pointer"
                               : isPast
                               ? "cursor-not-allowed hover:bg-red-100 hover:border-red-300"
+                              : !isWorkingDay
+                              ? "cursor-not-allowed bg-gray-50 opacity-60"
                               : "cursor-pointer hover:bg-green-50 hover:border-green-300",
                             isSlotDisabled && "opacity-50 cursor-not-allowed"
                           )}
@@ -706,7 +737,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                               : {}
                           }
                           onClick={() => {
-                            if (isSlotDisabled || isPast) return;
+                            if (isSlotDisabled || !isValidForBooking) return;
                             if (appointment && slotAppointments.length === 1) {
                               handleAppointmentClick(appointment);
                             } else if (!appointment) {
@@ -835,24 +866,18 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     });
     const timeSlots = generateTimeSlots();
     const isPast = isPastDate(currentDate);
+    const isWorkingDay = isWorkingDayForAnyDepartment(departments, currentDate);
+    const isValidForBooking = isValidBookingDate(
+      currentDate,
+      undefined,
+      departments
+    );
 
     return (
       <div className="space-y-4">
         {/* Navigation header - matching month/week view pattern */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div
-            className={cn(
-              "text-center p-4 bg-gray-50 dark:bg-gray-900 rounded-lg",
-              isPast && "opacity-60"
-            )}
-          >
-            <div className="text-lg font-semibold dark:text-white">
-              {dateString}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {dayAppointments.length} appointments
-            </div>
-          </div>
+          <h2 className="text-xl sm:text-2xl font-bold">{dateString}</h2>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
             <div className="flex items-center gap-1">
               <Button
@@ -898,21 +923,23 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                   className={cn(
                     "flex-1 p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[60px]",
                     isPast && "opacity-60",
-                    !isPast && "cursor-pointer",
-                    isPast && "cursor-not-allowed",
-                    !isPast && "hover:bg-gray-50 dark:hover:bg-gray-900"
+                    !isWorkingDay && "bg-gray-50 opacity-60 cursor-not-allowed",
+                    isValidForBooking && "cursor-pointer",
+                    !isValidForBooking && "cursor-not-allowed",
+                    isValidForBooking &&
+                      "hover:bg-gray-50 dark:hover:bg-gray-900"
                   )}
                   onClick={() => {
-                    if (!isPast) {
+                    if (isValidForBooking) {
                       const slotNumber = parseInt(
                         timeSlot.replace("Slot ", "")
                       );
                       handleBookSlot(currentDate, slotNumber);
                     }
                   }}
-                  onDragOver={!isPast ? handleDragOver : undefined}
+                  onDragOver={isValidForBooking ? handleDragOver : undefined}
                   onDrop={
-                    !isPast
+                    isValidForBooking
                       ? (e) => {
                           const slotNumber = parseInt(
                             timeSlot.replace("Slot ", "")

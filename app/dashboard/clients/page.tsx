@@ -235,54 +235,62 @@ export default function ClientsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Clients</p>
-                <p className="text-2xl font-bold">{clients.length}</p>
+                <p className="text-xs lg:text-sm text-muted-foreground">
+                  Total Clients
+                </p>
+                <p className="text-xl lg:text-2xl font-bold">
+                  {clients.length}
+                </p>
               </div>
-              <Users className="h-8 w-8 text-blue-500" />
+              <Users className="h-6 w-6 lg:h-8 lg:w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Active</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-xs lg:text-sm text-muted-foreground">
+                  Active
+                </p>
+                <p className="text-xl lg:text-2xl font-bold text-green-600">
                   {clients.filter((c) => c.status === "active").length}
                 </p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-                <div className="h-3 w-3 rounded-full bg-green-500" />
+              <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-green-100 flex items-center justify-center">
+                <div className="h-2 w-2 lg:h-3 lg:w-3 rounded-full bg-green-500" />
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Private Cash</p>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-xs lg:text-sm text-muted-foreground">
+                  Private Cash
+                </p>
+                <p className="text-xl lg:text-2xl font-bold text-purple-600">
                   {clients.filter((c) => c.category === "PRIVATE CASH").length}
                 </p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
-                <div className="h-3 w-3 rounded-full bg-purple-500" />
+              <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-purple-100 flex items-center justify-center">
+                <div className="h-2 w-2 lg:h-3 lg:w-3 rounded-full bg-purple-500" />
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">NHIA</p>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-xs lg:text-sm text-muted-foreground">NHIA</p>
+                <p className="text-xl lg:text-2xl font-bold text-orange-600">
                   {
                     clients.filter(
                       (c) => c.category === "PUBLIC SPONSORED(NHIA)"
@@ -290,8 +298,8 @@ export default function ClientsPage() {
                   }
                 </p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center">
-                <div className="h-3 w-3 rounded-full bg-orange-500" />
+              <div className="h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-orange-100 flex items-center justify-center">
+                <div className="h-2 w-2 lg:h-3 lg:w-3 rounded-full bg-orange-500" />
               </div>
             </div>
           </CardContent>
