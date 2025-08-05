@@ -1,8 +1,9 @@
 import type React from "react";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-server";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { ClientHeaderNav } from "@/components/client-header-nav";
+import { MobileLayout } from "@/components/mobile-layout";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
 export default async function DashboardLayout({
@@ -12,15 +13,23 @@ export default async function DashboardLayout({
 }) {
   const user = await requireAuth();
 
-  // Use header navigation for clients, sidebar for staff
+  // Use mobile layout for clients, header navigation for desktop
   if (user.role === "client") {
     return (
-      <div className="min-h-screen bg-background">
-        <ClientHeaderNav user={user} />
-        <main className="container mx-auto max-w-7xl px-6 py-6">
-          {children}
-        </main>
-      </div>
+      <>
+        {/* Desktop layout */}
+        <div className="hidden md:block min-h-screen bg-background">
+          <ClientHeaderNav user={user} />
+          <main className="container mx-auto max-w-7xl px-6 py-6">
+            {children}
+          </main>
+        </div>
+
+        {/* Mobile layout */}
+        <div className="md:hidden">
+          <MobileLayout user={user}>{children}</MobileLayout>
+        </div>
+      </>
     );
   }
 

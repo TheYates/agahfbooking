@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
@@ -11,6 +11,14 @@ export const metadata: Metadata = {
   icons: {
     icon: "/agahflogo white.svg",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -29,7 +37,7 @@ html {
 }
         `}</style>
       </head>
-      <body>
+      <body className="safe-area-inset">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -19,6 +19,7 @@ interface Appointment {
   slotNumber: number;
   status: string;
   doctorName: string;
+  departmentId: number;
   departmentName: string;
   departmentColor: string;
   notes?: string;
@@ -103,7 +104,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
 
     try {
       const response = await fetch(
-        `/api/appointments/cancel?departmentId=1&date=${appointment.date}&slotNumber=${appointment.slotNumber}&clientId=${currentUserId}`,
+        `/api/appointments/cancel?departmentId=${appointment.departmentId}&date=${appointment.date}&slotNumber=${appointment.slotNumber}&clientId=${currentUserId}`,
         {
           method: "DELETE",
         }

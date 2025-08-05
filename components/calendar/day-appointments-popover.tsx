@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export function DayAppointmentsPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent className="w-64 sm:w-48 p-0" align="start">
+      <PopoverContent className="w-48 p-0" align="start">
         <div className="p-3 border-b">
           <h3 className="font-semibold text-sm">{dateString}</h3>
           <p className="text-xs text-muted-foreground">

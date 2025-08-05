@@ -460,16 +460,15 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         <div
-          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)] sm:h-[calc(100vh-11rem)] min-h-[400px]"
+          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
           style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
         >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
-              className="p-1 sm:p-2 text-center font-medium text-xs sm:text-sm text-muted-foreground h-6 sm:h-8"
+              className="p-2 text-center font-medium text-sm text-muted-foreground h-8"
             >
-              <span className="hidden sm:inline">{day}</span>
-              <span className="sm:hidden">{day.slice(0, 1)}</span>
+              {day}
             </div>
           ))}
 
@@ -492,7 +491,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
               <div
                 key={index}
                 className={cn(
-                  "p-1 sm:p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
+                  "p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
                   isPast
                     ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-600"
                     : !isWorkingDay
@@ -512,7 +511,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 <div className="flex justify-between items-start mb-1">
                   <span
                     className={cn(
-                      "text-xs sm:text-sm font-medium text-foreground",
+                      "text-sm font-medium text-foreground",
                       isToday && "font-bold text-blue-600 dark:text-blue-400",
                       isPast && "text-gray-400 dark:text-gray-500"
                     )}
@@ -521,11 +520,11 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                   </span>
                 </div>
 
-                <div className="space-y-0.5 sm:space-y-1 flex-1 overflow-hidden">
+                <div className="space-y-1 flex-1 overflow-hidden">
                   {dayAppointments.slice(0, 2).map((apt) => (
                     <div
                       key={apt.id}
-                      className="text-xs p-0.5 sm:p-1 rounded truncate cursor-pointer border-l-2"
+                      className="text-xs p-1 rounded truncate cursor-pointer border-l-2"
                       style={{
                         backgroundColor:
                           getDepartmentColor(apt.departmentId) + "20",
@@ -541,13 +540,11 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                     >
                       <div className="font-medium text-xs truncate">
                         {userRole === "client" && apt.clientId !== currentUserId
-                          ? maskXNumber(apt.clientXNumber, false)
-                          : apt.clientXNumber}
+                          ? `${maskXNumber(apt.clientXNumber, false)} - ***`
+                          : `${apt.clientXNumber} - ${apt.clientName}`}
                       </div>
-                      <div className="opacity-60 text-xs truncate hidden sm:block">
-                        {userRole === "client" && apt.clientId !== currentUserId
-                          ? "***"
-                          : apt.clientName}
+                      <div className="opacity-60 text-xs truncate">
+                        {apt.departmentName}
                       </div>
                     </div>
                   ))}
@@ -658,18 +655,11 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                   onClick={() => isValidForBooking && handleBookSlot(day, 1)}
                 >
                   <div className="text-xs text-muted-foreground">
-                    <span className="hidden sm:inline">
-                      {day.toLocaleDateString("en-US", { weekday: "short" })}
-                    </span>
-                    <span className="sm:hidden">
-                      {day
-                        .toLocaleDateString("en-US", { weekday: "short" })
-                        .slice(0, 1)}
-                    </span>
+                    {day.toLocaleDateString("en-US", { weekday: "short" })}
                   </div>
                   <div
                     className={cn(
-                      "text-sm sm:text-lg font-semibold text-foreground",
+                      "text-lg font-semibold text-foreground",
                       isToday && "text-blue-600 dark:text-blue-400",
                       isPast && "text-gray-400 dark:text-gray-500"
                     )}
@@ -682,14 +672,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           </div>
 
           {/* Scrollable Content */}
-          <ScrollArea className="h-[calc(100vh-20rem)] sm:h-[calc(100vh-20rem)] min-h-[400px]">
-            <div className="grid grid-cols-8 gap-1 sm:gap-2">
+          <ScrollArea className="h-[calc(100vh-20rem)]">
+            <div className="grid grid-cols-8 gap-2">
               {/* Slot Numbers Column */}
-              <div className="space-y-1 sm:space-y-2">
+              <div className="space-y-2">
                 {Array.from({ length: getMaxSlots() }, (_, i) => (
                   <div
                     key={i}
-                    className="h-12 sm:h-16 flex items-center justify-center text-xs sm:text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded"
+                    className="h-16 flex items-center justify-center text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded"
                   >
                     {i + 1}
                   </div>
@@ -711,7 +701,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 );
 
                 return (
-                  <div key={dayIndex} className="space-y-1 sm:space-y-2">
+                  <div key={dayIndex} className="space-y-2">
                     {Array.from({ length: getMaxSlots() }, (_, slotIndex) => {
                       const slotNumber = slotIndex + 1;
                       const slotAppointments = dayAppointments.filter(
@@ -731,7 +721,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                         <div
                           key={slotIndex}
                           className={cn(
-                            "h-12 sm:h-16 p-1 sm:p-2 border rounded transition-colors",
+                            "h-16 p-2 border rounded transition-colors",
                             appointment
                               ? "border-l-4 cursor-pointer"
                               : isPast
@@ -786,7 +776,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                     )}
                                   </div>
                                   <div
-                                    className="text-xs truncate hidden sm:block"
+                                    className="text-xs truncate"
                                     style={{
                                       color: getDepartmentColor(
                                         appointment.departmentId
@@ -795,10 +785,10 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   >
                                     {appointment.departmentName}
                                   </div>
-                                  <div className="text-xs text-muted-foreground truncate hidden sm:block">
+                                  <div className="text-xs text-muted-foreground truncate">
                                     {appointment.doctorName.split(" ")[1]}
                                   </div>
-                                  <div className="absolute top-0.5 sm:top-1 right-0.5 sm:right-1 bg-red-500 text-white text-xs rounded-full w-3 h-3 sm:w-4 sm:h-4 flex items-center justify-center font-bold">
+                                  <div className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
                                     {slotAppointments.length}
                                   </div>
                                 </div>
@@ -818,7 +808,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   )}
                                 </div>
                                 <div
-                                  className="text-xs truncate hidden sm:block"
+                                  className="text-xs truncate"
                                   style={{
                                     color: getDepartmentColor(
                                       appointment.departmentId
@@ -827,7 +817,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                 >
                                   {appointment.departmentName}
                                 </div>
-                                <div className="text-xs text-muted-foreground truncate hidden sm:block">
+                                <div className="text-xs text-muted-foreground truncate">
                                   {appointment.doctorName.split(" ")[1]}
                                 </div>
                               </div>
@@ -875,6 +865,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   };
 
   const renderDayView = () => {
+    const dayAppointments = getAppointmentsForDate(currentDate);
     const dateString = currentDate.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -924,7 +915,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         {/* Time slots container */}
-        <div className="space-y-1 sm:space-y-2 h-[400px] sm:h-[600px] overflow-y-auto pr-1 sm:pr-2">
+        <div className="space-y-2 h-[600px] overflow-y-auto pr-2">
           {timeSlots.map((timeSlot) => {
             const slotAppointments = getAppointmentsForTimeSlot(
               currentDate,
@@ -932,13 +923,13 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
             );
 
             return (
-              <div key={timeSlot} className="flex items-start gap-2 sm:gap-4">
-                <div className="w-12 sm:w-16 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-right pt-1 sm:pt-2">
+              <div key={timeSlot} className="flex items-start gap-4">
+                <div className="w-16 text-sm text-gray-500 dark:text-gray-400 text-right pt-2">
                   {formatTimeSlot(timeSlot)}
                 </div>
                 <div
                   className={cn(
-                    "flex-1 p-2 sm:p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[50px] sm:min-h-[60px]",
+                    "flex-1 p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[60px]",
                     isPast && "opacity-60",
                     !isWorkingDay &&
                       "bg-gray-50 dark:bg-gray-800 opacity-60 cursor-not-allowed",

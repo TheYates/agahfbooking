@@ -26,6 +26,7 @@ export async function GET(request: Request) {
         a.status,
         a.notes,
         a.created_at,
+        a.department_id,
         d.name as department_name,
         COALESCE(d.color, '#3B82F6') as department_color,
         COALESCE(doc.name, 'Dr. Smith') as doctor_name
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
       slotNumber: row.slot_number,
       status: row.status,
       notes: row.notes,
+      departmentId: row.department_id,
       departmentName: row.department_name,
       departmentColor: row.department_color,
       doctorName: row.doctor_name,

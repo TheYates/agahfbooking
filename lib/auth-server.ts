@@ -1,3 +1,5 @@
+"use server";
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { User } from "./types";
@@ -21,47 +23,26 @@ export async function getCurrentUser(): Promise<User | null> {
       return null;
     }
 
-    // Validate session data structure
-    if (!userData || typeof userData !== "object") {
-      console.error("Invalid session data structure");
-      // Don't delete cookie here - let middleware handle it
+    // Validate user data structure
+    if (
+      !userData ||
+      typeof userData !== "object" ||
+      !userData.id ||
+      !userData.name ||
+      !userData.role
+    ) {
+      console.error("Invalid user data structure:", userData);
       return null;
     }
 
-    // Check required fields - handle both client and staff sessions
-    const hasClientFields =
-      userData.id && userData.xNumber && userData.role && userData.name;
-    const hasStaffFields =
-      userData.id && userData.role && userData.name && userData.employee_id;
-
-    if (!hasClientFields && !hasStaffFields) {
-      console.error("Missing required session fields:", userData);
-      // Don't delete cookie here - let middleware handle it
-      return null;
-    }
-
-    // Ensure role is valid
-    if (!["client", "receptionist", "admin"].includes(userData.role)) {
-      console.error("Invalid user role:", userData.role);
-      // Don't delete cookie here - let middleware handle it
-      return null;
-    }
-
-    return {
-      id: userData.id,
-      xNumber: userData.xNumber || userData.employee_id || "", // Use employee_id for staff
-      name: userData.name,
-      phone: userData.phone || "",
-      category: userData.category || "",
-      role: userData.role,
-    };
+    return userData as User;
   } catch (error) {
     console.error("Error getting current user:", error);
     return null;
   }
 }
 
-export async function requireAuth() {
+export async function requireAuth(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
@@ -69,18 +50,44 @@ export async function requireAuth() {
   return user;
 }
 
-export async function requireRole(allowedRoles: string[]) {
-  const user = await requireAuth();
-  if (!allowedRoles.includes(user.role)) {
-    redirect("/unauthorized");
+export async function requireAdminAuth(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") {
+    redirect("/login");
   }
   return user;
 }
 
+export async function requireStaffAuth(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "receptionist"].includes(user.role)) {
+    redirect("/login");
+  }
+  return user;
+}
+
+export async function requireClientAuth(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "client") {
+    redirect("/login");
+  }
+  return user;
+}
+
+export async function redirectBasedOnRole(user: User) {
+  if (user.role === "admin") {
+    redirect("/dashboard");
+  } else if (user.role === "receptionist") {
+    redirect("/dashboard");
+  } else if (user.role === "client") {
+    redirect("/dashboard");
+  } else {
+    redirect("/login");
+  }
+}
+
 // Server Action to clear invalid session cookies
 export async function clearInvalidSession() {
-  "use server";
-
   try {
     const cookieStore = await cookies();
     cookieStore.delete("session_token");
