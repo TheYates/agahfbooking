@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { AppointmentModal } from "@/components/calendar/appointment-modal";
 import { QuickBookingDialog } from "@/components/ui/quick-booking-dialog";
+import { DataPagination } from "@/components/ui/data-pagination";
 
 interface Appointment {
   id: number;
@@ -64,10 +65,12 @@ export default function DesktopAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(20); // Increased from 10 to 20 for better UX
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
-  // Fetch appointments from API
-  const fetchAppointments = async () => {
+  // Fetch appointments from API with pagination
+  const fetchAppointments = async (page: number = currentPage) => {
     try {
       setLoading(true);
       setError("");
@@ -76,6 +79,10 @@ export default function DesktopAppointmentsPage() {
       if (searchTerm) params.append("search", searchTerm);
       if (statusFilter !== "all") params.append("status", statusFilter);
       if (dateFilter !== "all") params.append("dateFilter", dateFilter);
+
+      // Add pagination parameters
+      params.append("page", page.toString());
+      params.append("limit", itemsPerPage.toString());
 
       const response = await fetch(
         `/api/appointments/list?${params.toString()}`
@@ -88,6 +95,13 @@ export default function DesktopAppointmentsPage() {
 
       setAppointments(data.data);
       setFilteredAppointments(data.data);
+
+      // Update pagination info
+      if (data.pagination) {
+        setTotalPages(data.pagination.totalPages);
+        setTotalCount(data.pagination.totalCount);
+        setCurrentPage(data.pagination.currentPage);
+      }
     } catch (err) {
       console.error("Error fetching appointments:", err);
       setError(
@@ -102,13 +116,22 @@ export default function DesktopAppointmentsPage() {
   useEffect(() => {
     const timeoutId = setTimeout(
       () => {
-        fetchAppointments();
+        // Reset to page 1 when filters change
+        setCurrentPage(1);
+        fetchAppointments(1);
       },
       searchTerm ? 500 : 0
     ); // 500ms debounce for search, immediate for other filters
 
     return () => clearTimeout(timeoutId);
   }, [searchTerm, statusFilter, dateFilter]);
+
+  // Fetch appointments when page changes
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchAppointments(currentPage);
+    }
+  }, [currentPage]);
 
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
@@ -147,16 +170,10 @@ export default function DesktopAppointmentsPage() {
     }
   };
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentAppointments = filteredAppointments.slice(startIndex, endIndex);
-
-  // Reset to first page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, dateFilter]);
+  // Pagination handler
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const exportAppointments = () => {
     const csvContent = [
@@ -349,13 +366,13 @@ export default function DesktopAppointmentsPage() {
                   Try Again
                 </Button>
               </div>
-            ) : filteredAppointments.length === 0 ? (
+            ) : appointments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No appointments found matching your criteria</p>
               </div>
             ) : (
-              currentAppointments.map((appointment) => (
+              appointments.map((appointment) => (
                 <div
                   key={appointment.id}
                   className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
@@ -417,6 +434,15 @@ export default function DesktopAppointmentsPage() {
               ))
             )}
           </div>
+
+          {/* Pagination Controls */}
+          <DataPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+          />
         </CardContent>
       </Card>
 

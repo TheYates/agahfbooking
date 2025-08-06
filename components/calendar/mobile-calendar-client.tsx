@@ -15,6 +15,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+// Removed direct import to avoid client-side database dependency
 import {
   Card,
   CardContent,
@@ -88,12 +89,43 @@ export function MobileCalendarClient({
     try {
       setLoading(true);
 
+      // Get the appropriate appointments endpoint based on admin settings
+      const endpointResponse = await fetch(
+        `/api/calendar/endpoint?userRole=${userRole}&currentUserId=${
+          currentUserId || user.id
+        }`
+      );
+      const endpointData = await endpointResponse.json();
+
+      if (!endpointResponse.ok || !endpointData.success) {
+        throw new Error(
+          endpointData.error || "Failed to get calendar endpoint"
+        );
+      }
+
+      const appointmentsEndpoint = endpointData.data.endpoint;
+
+      // Calculate date range for current month view
+      const startOfMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
+      const endOfMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      );
+      const startDate = startOfMonth.toISOString().split("T")[0];
+      const endDate = endOfMonth.toISOString().split("T")[0];
+
+      // Properly construct URL with query parameters
+      const url = new URL(appointmentsEndpoint, window.location.origin);
+      url.searchParams.set("startDate", startDate);
+      url.searchParams.set("endDate", endDate);
+
       const [appointmentsResponse, departmentsResponse] = await Promise.all([
-        fetch(
-          userRole === "client"
-            ? `/api/appointments/client?clientId=${currentUserId}`
-            : "/api/appointments"
-        ),
+        fetch(url.toString()),
         fetch("/api/departments"),
       ]);
 
@@ -103,8 +135,37 @@ export function MobileCalendarClient({
       ]);
 
       if (appointmentsResponse.ok && appointmentsData.success) {
-        console.log("Calendar: Raw appointments data:", appointmentsData.data);
-        setAppointments(appointmentsData.data || []);
+        // Transform the data to match the expected interface
+        const transformedAppointments = (appointmentsData.data || []).map(
+          (appointment: any) => ({
+            id: appointment.id,
+            clientId: appointment.client_id || appointment.clientId,
+            clientName: appointment.client_name || appointment.clientName,
+            clientXNumber:
+              appointment.client_x_number || appointment.clientXNumber,
+            doctorId: appointment.doctor_id || appointment.doctorId,
+            doctorName:
+              appointment.doctor_name || appointment.doctorName || "Unassigned",
+            departmentId: appointment.department_id || appointment.departmentId,
+            departmentName:
+              appointment.department_name || appointment.departmentName,
+            // Handle both appointment_date (from DB) and date (from client API) fields
+            date:
+              appointment.date ||
+              (appointment.appointment_date
+                ? typeof appointment.appointment_date === "string"
+                  ? appointment.appointment_date.split("T")[0]
+                  : appointment.appointment_date.toISOString().split("T")[0]
+                : new Date().toISOString().split("T")[0]),
+            slotNumber: appointment.slot_number || appointment.slotNumber,
+            status: appointment.status,
+            statusColor:
+              appointment.statusColor || getStatusColor(appointment.status),
+            notes: appointment.notes,
+          })
+        );
+
+        setAppointments(transformedAppointments);
       }
 
       if (departmentsResponse.ok && departmentsData.success) {
@@ -184,19 +245,36 @@ export function MobileCalendarClient({
     const dateStr = date.toISOString().split("T")[0];
 
     const filteredApts = appointments.filter((apt) => {
-      // Handle different date formats
-      let aptDateStr = apt.date;
+      try {
+        // Handle different date formats
+        let aptDateStr = apt.date;
 
-      // If the appointment date is already in ISO format (YYYY-MM-DD)
-      if (typeof aptDateStr === "string" && aptDateStr.includes("-")) {
-        aptDateStr = aptDateStr.split("T")[0]; // Remove time part if present
-      } else {
-        // Convert to ISO format if it's a different format
-        const aptDate = new Date(apt.date);
-        aptDateStr = aptDate.toISOString().split("T")[0];
+        // If the appointment date is already in ISO format (YYYY-MM-DD)
+        if (typeof aptDateStr === "string" && aptDateStr.includes("-")) {
+          aptDateStr = aptDateStr.split("T")[0]; // Remove time part if present
+        } else {
+          // Convert to ISO format if it's a different format
+          const aptDate = new Date(apt.date);
+
+          // Check if the date is valid
+          if (isNaN(aptDate.getTime())) {
+            console.warn(
+              `Invalid appointment date: ${apt.date} for appointment ID: ${apt.id}`
+            );
+            return false;
+          }
+
+          aptDateStr = aptDate.toISOString().split("T")[0];
+        }
+
+        return aptDateStr === dateStr;
+      } catch (error) {
+        console.error(
+          `Error processing appointment date: ${apt.date} for appointment ID: ${apt.id}`,
+          error
+        );
+        return false;
       }
-
-      return aptDateStr === dateStr;
     });
 
     return filteredApts;

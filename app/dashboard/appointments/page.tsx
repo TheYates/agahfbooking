@@ -2,8 +2,8 @@ import { requireAuth } from "@/lib/auth-server";
 import { MobileAppointmentsClient } from "@/components/appointments/mobile-appointments-client";
 import { MobileAppointmentsWrapper } from "@/components/appointments/mobile-appointments-wrapper";
 
-// Original desktop appointments component
-import OriginalAppointmentsPage from "./original-appointments";
+// Desktop appointments component
+import DesktopAppointments from "./desktop-appointments";
 
 export default async function AppointmentsPage() {
   const user = await requireAuth();
@@ -12,7 +12,7 @@ export default async function AppointmentsPage() {
     <>
       {/* Desktop View - for staff or large screens */}
       <div className="hidden md:block">
-        <OriginalAppointmentsPage />
+        <DesktopAppointments />
       </div>
 
       {/* Mobile View - conditional based on user role */}
@@ -20,7 +20,7 @@ export default async function AppointmentsPage() {
         {user.role === "client" ? (
           <MobileAppointmentsWrapper user={user} />
         ) : (
-          <OriginalAppointmentsPage />
+          <DesktopAppointments />
         )}
       </div>
     </>

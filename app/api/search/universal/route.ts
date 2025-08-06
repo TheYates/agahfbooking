@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { pool } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const searchTerm = `%${query.trim()}%`;
 
     // Search appointments
-    const appointments = await db.query(
+    const appointments = await pool.query(
       `SELECT 
         a.id,
         a.date,
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     // Search clients (only for admin/receptionist)
     let clients = [];
     if (user.role === "admin" || user.role === "receptionist") {
-      clients = await db.query(
+      clients = await pool.query(
         `SELECT 
           id,
           name,
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Search doctors
-    const doctors = await db.query(
+    const doctors = await pool.query(
       `SELECT 
         d.id,
         d.name,
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Search departments
-    const departments = await db.query(
+    const departments = await pool.query(
       `SELECT 
         id,
         name,

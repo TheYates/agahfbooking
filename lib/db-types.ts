@@ -31,6 +31,7 @@ export interface Department {
   working_days: string[]; // ["monday", "tuesday", etc.]
   working_hours: { start: string; end: string }; // {"start": "09:00", "end": "17:00"}
   color?: string; // Hex color code for UI display
+  icon?: string; // Icon name for UI display (optional, handled in frontend)
   created_at: Date;
 }
 

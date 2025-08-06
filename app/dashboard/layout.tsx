@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/site-header";
 import { ClientHeaderNav } from "@/components/client-header-nav";
 import { MobileLayout } from "@/components/mobile-layout";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
 
 export default async function DashboardLayout({
   children,
@@ -29,6 +30,8 @@ export default async function DashboardLayout({
         <div className="md:hidden">
           <MobileLayout user={user}>{children}</MobileLayout>
         </div>
+
+        <Toaster />
       </>
     );
   }
@@ -45,6 +48,7 @@ export default async function DashboardLayout({
           </SidebarInset>
         </div>
       </SidebarProvider>
+      <Toaster />
     </div>
   );
 }

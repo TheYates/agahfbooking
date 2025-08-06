@@ -1,5 +1,6 @@
 "use client";
 
+// This component is BetterAuth-ready and uses the updated API endpoints
 import React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [maskedPhone, setMaskedPhone] = useState("");
   const [mockOtp, setMockOtp] = useState("");
+  const [otpToken, setOtpToken] = useState(""); // JWT token for OTP verification
+  const [isMockMode, setIsMockMode] = useState(false); // Track if we're in mock mode
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    remainingAttempts?: number;
+    requiresCaptcha?: boolean;
+    resetTime?: number;
+  } | null>(null);
 
   const handleXNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^0-9]/g, "");
@@ -72,6 +80,24 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle rate limiting specifically
+        if (response.status === 429 && data.rateLimited) {
+          const resetTime = data.resetTime ? new Date(data.resetTime) : null;
+          const resetTimeStr = resetTime
+            ? resetTime.toLocaleTimeString()
+            : "later";
+
+          if (data.blockDuration) {
+            throw new Error(
+              `Too many attempts. Please wait ${data.blockDuration} minutes before trying again.`
+            );
+          } else {
+            throw new Error(
+              `Rate limit exceeded. Please try again at ${resetTimeStr}.`
+            );
+          }
+        }
+
         throw new Error(data.error || "Failed to send OTP");
       }
 
@@ -79,8 +105,22 @@ export default function LoginPage() {
         setMaskedPhone(data.maskedPhone);
       }
 
+      // Store JWT token for OTP verification
+      if (data.token) {
+        setOtpToken(data.token);
+      }
+
+      // Check if we're in mock mode and store OTP for display
       if (data.otp) {
         setMockOtp(data.otp);
+        setIsMockMode(true);
+      } else {
+        setIsMockMode(false);
+      }
+
+      // Store rate limiting information
+      if (data.rateLimitInfo) {
+        setRateLimitInfo(data.rateLimitInfo);
       }
 
       setStep("otp");
@@ -109,7 +149,7 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ xNumber, otp: otpValue }),
+        body: JSON.stringify({ token: otpToken, otp: otpValue }),
       });
 
       const data = await response.json();
@@ -248,6 +288,7 @@ export default function LoginPage() {
                             value={otp}
                             onChange={handleOtpChange}
                             disabled={loading}
+                            autoFocus
                           >
                             <InputOTPGroup className="gap-3">
                               <InputOTPSlot index={0} />
@@ -264,16 +305,49 @@ export default function LoginPage() {
                             ? "Verifying OTP..."
                             : "Enter the 6-digit code sent to your phone"}
                         </p>
-                        {mockOtp && (
-                          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                            <p className="text-sm text-yellow-800 text-center">
-                              🧪 <strong>Mock Mode:</strong> Your OTP is{" "}
-                              <span className="font-mono font-bold text-lg">
-                                {mockOtp}
-                              </span>
-                            </p>
+                        {isMockMode && mockOtp && (
+                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="text-center space-y-2">
+                              <p className="text-sm text-blue-700 font-medium">
+                                🧪 Development Mode - Mock OTP
+                              </p>
+                              <div className="bg-white border border-blue-300 rounded-md p-3">
+                                <p className="text-xs text-blue-600 mb-1">
+                                  Your OTP Code:
+                                </p>
+                                <p className="font-mono font-bold text-2xl text-blue-800 tracking-wider">
+                                  {mockOtp}
+                                </p>
+                              </div>
+                              <p className="text-xs text-blue-600">
+                                This OTP is displayed because you're in mock
+                                mode
+                              </p>
+                            </div>
                           </div>
                         )}
+
+                        {rateLimitInfo &&
+                          rateLimitInfo.remainingAttempts !== undefined &&
+                          rateLimitInfo.remainingAttempts < 5 && (
+                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                              <div className="text-center">
+                                <p className="text-sm text-yellow-800">
+                                  ⚠️{" "}
+                                  <strong>
+                                    {rateLimitInfo.remainingAttempts}
+                                  </strong>{" "}
+                                  attempts remaining
+                                </p>
+                                {rateLimitInfo.requiresCaptcha && (
+                                  <p className="text-xs text-yellow-700 mt-1">
+                                    Additional verification may be required
+                                    after more failed attempts
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                       </div>
                       <Button
                         type="submit"

@@ -28,6 +28,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { toast } from "sonner";
 
 interface TimeSlot {
   time: string;
@@ -446,16 +447,27 @@ export function QuickBookingDialog({
         setShowCancelDialog(false);
         setAppointmentToCancel(null);
 
-        // Show success message (you could use a toast notification here)
-        alert("Appointment cancelled successfully!");
+        // Show success toast
+        toast.success("Appointment Cancelled! ✅", {
+          description: `Your appointment for ${slot.time} has been cancelled successfully`,
+          duration: 4000,
+        });
       } else {
-        alert(
-          "Failed to cancel appointment: " + (data.error || "Unknown error")
-        );
+        // Show error toast
+        toast.error("Cancellation Failed", {
+          description:
+            data.error || "Failed to cancel appointment. Please try again.",
+          duration: 4000,
+        });
       }
     } catch (error) {
       console.error("Error cancelling appointment:", error);
-      alert("Failed to cancel appointment. Please try again.");
+
+      // Show error toast
+      toast.error("Cancellation Error", {
+        description: "Failed to cancel appointment. Please try again.",
+        duration: 4000,
+      });
     }
   };
 
@@ -515,15 +527,35 @@ export function QuickBookingDialog({
         );
         setWeekSchedule(updatedSchedule);
 
+        // Show success toast
+        const formattedDate = appointmentDate.toLocaleDateString();
+        toast.success("Quick Booking Successful! 🎉", {
+          description: `${selectedClient.name} booked for ${selectedDepartment.name} on ${formattedDate}, ${selectedTimeSlot?.time}`,
+          duration: 5000,
+        });
+
         setShowConfirmationView(false);
         setSelectedTimeSlot(null);
         onClose();
       } else {
         console.error("Booking failed:", data.error);
-        // You could show an error message to the user here
+
+        // Show error toast
+        toast.error("Quick Booking Failed", {
+          description:
+            data.error || "Failed to book appointment. Please try again.",
+          duration: 4000,
+        });
       }
     } catch (error) {
       console.error("Error booking appointment:", error);
+
+      // Show error toast
+      toast.error("Booking Error", {
+        description:
+          "Failed to book appointment. Please check your connection and try again.",
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }

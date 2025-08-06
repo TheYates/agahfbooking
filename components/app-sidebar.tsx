@@ -9,6 +9,8 @@ import {
   BarChart3,
   Building2,
   LogOut,
+  MessageSquare,
+  UserCog,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -60,6 +62,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
     { title: "Clients", url: "/dashboard/clients", icon: Users },
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
+    { title: "Users", url: "/dashboard/users", icon: UserCog },
+    { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
   ];
@@ -78,12 +82,22 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
+
+      // Redirect based on user role
+      if (user.role === "client") {
+        router.push("/login");
+      } else {
+        router.push("/staff-login");
+      }
       router.refresh();
     } catch (error) {
       console.error("Logout error:", error);
-      // Fallback: redirect anyway
-      router.push("/login");
+      // Fallback: redirect based on role anyway
+      if (user.role === "client") {
+        router.push("/login");
+      } else {
+        router.push("/staff-login");
+      }
     }
   };
 

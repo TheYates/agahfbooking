@@ -240,15 +240,16 @@ export function DashboardClient({ user }: DashboardClientProps) {
               <div className="space-y-2">
                 <button
                   onClick={() => setIsQuickBookingOpen(true)}
-                  className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                  className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors"
                 >
-                  <p className="font-medium">Quick Booking</p>
+                  <p className="font-bold">⚡ Quick Booking</p>
+
                   <p className="text-sm text-muted-foreground">
                     Fast appointment scheduling
                   </p>
                 </button>
                 <Link href="/dashboard/calendar" className="block">
-                  <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors">
+                  <button className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors">
                     <p className="font-medium">View Calendar</p>
                     <p className="text-sm text-muted-foreground">
                       See all your appointments
@@ -256,7 +257,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
                   </button>
                 </Link>
                 <Link href="/dashboard/profile" className="block">
-                  <button className="w-full text-left p-3 rounded-lg border hover:bg-gray-50 transition-colors">
+                  <button className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors">
                     <p className="font-medium">Update Profile</p>
                     <p className="text-sm text-muted-foreground">
                       Manage your information

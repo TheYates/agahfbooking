@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
 import { isWorkingDay } from "@/lib/working-days-utils";
+import { toast } from "sonner";
 
 interface Doctor {
   id: number;
@@ -218,15 +219,35 @@ export function BookingModal({
 
       console.log("Appointment booked successfully:", data.data);
 
+      // Show success toast
+      const selectedClient = clients.find((c) => c.id === clientId);
+      const selectedDoctor = doctors.find(
+        (d) => d.id === Number.parseInt(selectedDoctorId)
+      );
+      const formattedDate = selectedDate.toLocaleDateString();
+
+      toast.success("Appointment Booked Successfully! 🎉", {
+        description: `${selectedClient?.name || "Client"} with ${
+          selectedDoctor?.name || "Doctor"
+        } on ${formattedDate}, Slot ${selectedSlot}`,
+        duration: 5000,
+      });
+
       // Call the callback to refresh appointments list
       onAppointmentBooked();
 
       // Close modal
       onClose();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to book appointment"
-      );
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to book appointment";
+      setError(errorMessage);
+
+      // Show error toast
+      toast.error("Booking Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { User } from "./types";
 
+// These functions work with BetterAuth by reading the session_token cookie
+// which is maintained for backward compatibility
+
 export async function getCurrentUser(): Promise<User | null> {
   try {
     const cookieStore = await cookies();

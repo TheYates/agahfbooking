@@ -1,5 +1,6 @@
 "use client";
 
+// This component is BetterAuth-ready and uses the updated API endpoints
 import type React from "react";
 
 import { useState } from "react";

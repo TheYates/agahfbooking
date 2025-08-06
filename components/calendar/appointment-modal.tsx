@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit } from "lucide-react";
+import { toast } from "sonner";
 
 interface Appointment {
   id: number;
@@ -121,8 +122,21 @@ export function AppointmentModal({
 
       onAppointmentUpdate(updatedAppointment);
       setIsEditing(false);
+
+      // Show success toast
+      toast.success("Appointment Updated! ✅", {
+        description: `${appointment.clientName}'s appointment has been updated successfully`,
+        duration: 3000,
+      });
     } catch (err) {
-      setError("Failed to update appointment");
+      const errorMessage = "Failed to update appointment";
+      setError(errorMessage);
+
+      // Show error toast
+      toast.error("Update Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }
@@ -136,8 +150,21 @@ export function AppointmentModal({
       await new Promise((resolve) => setTimeout(resolve, 500));
       onAppointmentDelete(appointment.id);
       onClose();
+
+      // Show success toast
+      toast.success("Appointment Deleted! 🗑️", {
+        description: `${appointment.clientName}'s appointment has been cancelled`,
+        duration: 3000,
+      });
     } catch (err) {
-      setError("Failed to delete appointment");
+      const errorMessage = "Failed to delete appointment";
+      setError(errorMessage);
+
+      // Show error toast
+      toast.error("Delete Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }

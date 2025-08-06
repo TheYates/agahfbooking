@@ -14,6 +14,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import type { User } from "@/lib/types";
+import { toast } from "sonner";
 
 interface TimeSlot {
   time: string;
@@ -324,14 +325,35 @@ export function MobileBookingSheet({
         );
         setWeekSchedule(updatedSchedule);
 
+        // Show success toast
+        const formattedDate = appointmentDate.toLocaleDateString();
+        toast.success("Mobile Booking Successful! 🎉", {
+          description: `${selectedClient.name} booked for ${selectedDepartment.name} on ${formattedDate}, ${selectedTimeSlot.time}`,
+          duration: 5000,
+        });
+
         setShowConfirmationView(false);
         setSelectedTimeSlot(null);
         onBookingSuccess?.() || onClose();
       } else {
         console.error("Booking failed:", data.error);
+
+        // Show error toast
+        toast.error("Mobile Booking Failed", {
+          description:
+            data.error || "Failed to book appointment. Please try again.",
+          duration: 4000,
+        });
       }
     } catch (error) {
       console.error("Error booking appointment:", error);
+
+      // Show error toast
+      toast.error("Booking Error", {
+        description:
+          "Failed to book appointment. Please check your connection and try again.",
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }

@@ -25,6 +25,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
+import { DataPaginationCompact } from "@/components/ui/data-pagination";
 
 interface MobileAppointmentsClientProps {
   user: User;
@@ -64,6 +65,10 @@ export function MobileAppointmentsClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "upcoming" | "completed">("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 10;
 
   // Get booking function from context
   let openBooking: ((departmentId?: number) => void) | undefined;
@@ -74,51 +79,64 @@ export function MobileAppointmentsClient({
     // Not within MobileLayout context
   }
 
-  // Fetch appointments and stats
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError("");
+  // Fetch appointments and stats with pagination
+  const fetchData = async (page: number = currentPage) => {
+    try {
+      setLoading(true);
+      setError("");
 
-        const [statsResponse, appointmentsResponse] = await Promise.all([
-          fetch(`/api/dashboard/stats?clientId=${user.id}`),
-          fetch(`/api/appointments/client?clientId=${user.id}`),
-        ]);
+      const [statsResponse, appointmentsResponse] = await Promise.all([
+        fetch(`/api/dashboard/stats?clientId=${user.id}`),
+        fetch(
+          `/api/appointments/client?clientId=${user.id}&page=${page}&limit=${itemsPerPage}`
+        ),
+      ]);
 
-        const [statsData, appointmentsData] = await Promise.all([
-          statsResponse.json(),
-          appointmentsResponse.json(),
-        ]);
+      const [statsData, appointmentsData] = await Promise.all([
+        statsResponse.json(),
+        appointmentsResponse.json(),
+      ]);
 
-        if (!statsResponse.ok) {
-          throw new Error(statsData.error || "Failed to fetch statistics");
-        }
-
-        if (!appointmentsResponse.ok) {
-          throw new Error(
-            appointmentsData.error || "Failed to fetch appointments"
-          );
-        }
-
-        setStats(statsData.data);
-        setAppointments(appointmentsData.data || []);
-      } catch (err) {
-        console.error("Error fetching appointments data:", err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load appointments data"
-        );
-      } finally {
-        setLoading(false);
+      if (!statsResponse.ok) {
+        throw new Error(statsData.error || "Failed to fetch statistics");
       }
-    };
 
+      if (!appointmentsResponse.ok) {
+        throw new Error(
+          appointmentsData.error || "Failed to fetch appointments"
+        );
+      }
+
+      setStats(statsData.data);
+      setAppointments(appointmentsData.data || []);
+
+      // Update pagination info
+      if (appointmentsData.pagination) {
+        setTotalPages(appointmentsData.pagination.totalPages);
+        setTotalCount(appointmentsData.pagination.totalCount);
+        setCurrentPage(appointmentsData.pagination.currentPage);
+      }
+    } catch (err) {
+      console.error("Error fetching appointments data:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load appointments data"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (user.id) {
-      fetchData();
+      fetchData(1); // Always start from page 1
     }
   }, [user.id]);
+
+  // Handle page changes
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    fetchData(page);
+  };
 
   // Helper function to get status colors
   const getStatusColor = (status: string) => {
@@ -448,6 +466,16 @@ export function MobileAppointmentsClient({
                   </motion.div>
                 ))}
               </div>
+            )}
+
+            {/* Pagination for mobile */}
+            {totalPages > 1 && (
+              <DataPaginationCompact
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                className="px-6 pb-4"
+              />
             )}
           </CardContent>
         </Card>

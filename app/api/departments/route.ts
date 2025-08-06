@@ -18,10 +18,20 @@ export async function GET(request: Request) {
       departments = await DepartmentService.getAll();
     }
 
-    return NextResponse.json({
+    // Add caching headers for departments (cache for 5 minutes)
+    const response = NextResponse.json({
       success: true,
       data: departments,
     });
+
+    // Cache departments for 5 minutes since they don't change often
+    response.headers.set(
+      "Cache-Control",
+      "public, max-age=300, stale-while-revalidate=600"
+    );
+    response.headers.set("ETag", `departments-${Date.now()}`);
+
+    return response;
   } catch (error) {
     console.error("Error fetching departments:", error);
     return NextResponse.json(

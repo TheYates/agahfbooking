@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { ClientService, OtpService } from "@/lib/db-services";
-import { HubtelService } from "@/lib/hubtel-service";
+import { sendOTP } from "@/lib/auth";
+import { rateLimiter } from "@/lib/rate-limiter";
+import { getClientInfo } from "@/lib/get-client-ip";
 
 /**
  * Mask phone number for display purposes
@@ -34,63 +35,99 @@ export async function POST(request: NextRequest) {
   try {
     const { xNumber } = await request.json();
 
+    // Get client information for rate limiting
+    const clientInfo = getClientInfo(request);
+
     // Validate X-number format
     const xNumberRegex = /^X\d{5}\/\d{2}$/;
     if (!xNumberRegex.test(xNumber)) {
+      // Record failed attempt for invalid format
+      rateLimiter.recordAttempt(
+        clientInfo.ip,
+        false,
+        undefined,
+        clientInfo.userAgent
+      );
+
       return NextResponse.json(
         { error: "Invalid X-number format" },
         { status: 400 }
       );
     }
 
-    // Find client by X-number
-    const client = await ClientService.findByXNumber(xNumber);
-    if (!client) {
+    // Check rate limiting before processing
+    const rateLimitResult = rateLimiter.checkRateLimit(
+      clientInfo.ip,
+      xNumber,
+      clientInfo.userAgent
+    );
+
+    if (!rateLimitResult.allowed) {
+      console.log(
+        `🚫 Rate limit exceeded for ${clientInfo.ip} (${xNumber}): ${rateLimitResult.reason}`
+      );
+
       return NextResponse.json(
-        { error: "X-number not found" },
-        { status: 404 }
+        {
+          error:
+            rateLimitResult.reason ||
+            "Too many attempts. Please try again later.",
+          rateLimited: true,
+          resetTime: rateLimitResult.resetTime,
+          blockDuration: rateLimitResult.blockDuration,
+          requiresCaptcha: rateLimitResult.requiresCaptcha,
+        },
+        { status: 429 }
       );
     }
 
-    // Generate random 6-digit OTP
-    const otp = HubtelService.generateOTP();
+    // Use BetterAuth sendOTP function
+    const result = await sendOTP(xNumber);
 
-    // Store OTP in database with 10-minute expiration
-    await OtpService.create(xNumber, otp, 10);
+    // Record successful attempt
+    rateLimiter.recordAttempt(
+      clientInfo.ip,
+      true,
+      xNumber,
+      clientInfo.userAgent
+    );
 
-    // Send OTP via SMS using Hubtel (TEMPORARILY DISABLED)
-    // if (HubtelService.isConfigured()) {
-    //   const smsSent = await HubtelService.sendOTP(client.phone, otp);
-
-    //   if (!smsSent) {
-    //     console.error(`Failed to send SMS to ${client.phone} for ${xNumber}`);
-    //     return NextResponse.json(
-    //       { error: "Failed to send OTP. Please try again." },
-    //       { status: 500 }
-    //     );
-    //   }
-
-    //   console.log(`OTP sent successfully to ${client.phone} for ${xNumber}`);
-    // } else {
-    // Mock mode: Always use development/testing mode
-    console.log(`🧪 MOCK MODE: OTP ${otp} for ${xNumber} (${client.phone})`);
-    // }
-
-    // Create masked phone number for display
-    const maskedPhone = maskPhoneNumber(client.phone);
-
+    // Include rate limiting info in response
     return NextResponse.json({
-      success: true,
-      message: "OTP sent successfully",
-      maskedPhone,
-      // Include OTP in mock mode for testing (TEMPORARILY ENABLED)
-      otp, // Always include OTP in mock mode
+      ...result,
+      rateLimitInfo: {
+        remainingAttempts: rateLimitResult.remainingAttempts,
+        requiresCaptcha: rateLimitResult.requiresCaptcha,
+        resetTime: rateLimitResult.resetTime,
+      },
     });
   } catch (error) {
     console.error("Send OTP error:", error);
+
+    // Record failed attempt for server errors
+    try {
+      const clientInfo = getClientInfo(request);
+      const { xNumber } = await request.json();
+      rateLimiter.recordAttempt(
+        clientInfo.ip,
+        false,
+        xNumber,
+        clientInfo.userAgent
+      );
+    } catch (recordError) {
+      console.error("Failed to record rate limit attempt:", recordError);
+    }
+
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      {
+        error: error instanceof Error ? error.message : "Internal server error",
+      },
+      {
+        status:
+          error instanceof Error && error.message.includes("not found")
+            ? 404
+            : 500,
+      }
     );
   }
 }

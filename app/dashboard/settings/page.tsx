@@ -31,7 +31,9 @@ import {
   Trash2,
   CheckCircle,
   Shield,
+  MessageSquare,
 } from "lucide-react";
+import { CalendarConfigurationTab } from "@/components/settings/calendar-configuration-tab";
 
 interface SystemSettings {
   maxAdvanceBookingDays: number;
@@ -39,6 +41,7 @@ interface SystemSettings {
   sameDayBookingAllowed: boolean;
   defaultSlotsPerDay: number;
   sessionDurationHours: number;
+  sessionTimeoutMinutes: number;
   recurringAppointmentsEnabled: boolean;
   waitlistEnabled: boolean;
   emergencySlotsEnabled: boolean;
@@ -66,78 +69,127 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  // Mock data
+  // Load settings from database
   useEffect(() => {
-    const mockSettings: SystemSettings = {
-      maxAdvanceBookingDays: 14,
-      multipleAppointmentsAllowed: false,
-      sameDayBookingAllowed: false,
-      defaultSlotsPerDay: 10,
-      sessionDurationHours: 24,
-      recurringAppointmentsEnabled: false,
-      waitlistEnabled: false,
-      emergencySlotsEnabled: false,
-    };
-
-    const mockStatuses: AppointmentStatus[] = [
-      { id: 1, name: "booked", color: "#3B82F6", isActive: true },
-      { id: 2, name: "confirmed", color: "#8B5CF6", isActive: true },
-      { id: 3, name: "arrived", color: "#10B981", isActive: true },
-      { id: 4, name: "waiting", color: "#F59E0B", isActive: true },
-      { id: 5, name: "in_progress", color: "#06B6D4", isActive: true },
-      { id: 6, name: "completed", color: "#059669", isActive: true },
-      { id: 7, name: "no_show", color: "#EF4444", isActive: true },
-      { id: 8, name: "cancelled", color: "#6B7280", isActive: true },
-    ];
-
-    const mockDoctors: Doctor[] = [
-      {
-        id: 1,
-        name: "Dr. Sarah Wilson",
-        specialization: "General Medicine",
-        isActive: true,
-      },
-      {
-        id: 2,
-        name: "Dr. Michael Brown",
-        specialization: "Cardiology",
-        isActive: true,
-      },
-      {
-        id: 3,
-        name: "Dr. Emily Davis",
-        specialization: "Pediatrics",
-        isActive: true,
-      },
-      {
-        id: 4,
-        name: "Dr. James Miller",
-        specialization: "Orthopedics",
-        isActive: true,
-      },
-      {
-        id: 5,
-        name: "Dr. Lisa Anderson",
-        specialization: "Dermatology",
-        isActive: false,
-      },
-    ];
-
-    setSettings(mockSettings);
-    setStatuses(mockStatuses);
-    setDoctors(mockDoctors);
+    // Check user role first
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user?.role !== "admin") {
+          setError("You must be an admin to access system settings");
+          return;
+        }
+        loadSettings();
+      })
+      .catch((err) => {
+        setError("Failed to verify user permissions");
+      });
   }, []);
 
+  const loadSettings = async () => {
+    try {
+      setLoading(true);
+
+      // Load system settings
+      const settingsResponse = await fetch("/api/settings/system");
+      const settingsData = await settingsResponse.json();
+
+      if (settingsData.success) {
+        setSettings(settingsData.data);
+      } else {
+        // Use default settings if loading fails
+        const defaultSettings: SystemSettings = {
+          maxAdvanceBookingDays: 14,
+          multipleAppointmentsAllowed: false,
+          sameDayBookingAllowed: false,
+          defaultSlotsPerDay: 10,
+          sessionDurationHours: 24,
+          sessionTimeoutMinutes: 60,
+          recurringAppointmentsEnabled: false,
+          waitlistEnabled: false,
+          emergencySlotsEnabled: false,
+        };
+        setSettings(defaultSettings);
+      }
+
+      // Mock data for statuses and doctors (these can be implemented later)
+      const mockStatuses: AppointmentStatus[] = [
+        { id: 1, name: "booked", color: "#3B82F6", isActive: true },
+        { id: 2, name: "confirmed", color: "#8B5CF6", isActive: true },
+        { id: 3, name: "arrived", color: "#10B981", isActive: true },
+        { id: 4, name: "waiting", color: "#F59E0B", isActive: true },
+        { id: 5, name: "in_progress", color: "#06B6D4", isActive: true },
+        { id: 6, name: "completed", color: "#059669", isActive: true },
+        { id: 7, name: "no_show", color: "#EF4444", isActive: true },
+        { id: 8, name: "cancelled", color: "#6B7280", isActive: true },
+      ];
+
+      const mockDoctors: Doctor[] = [
+        {
+          id: 1,
+          name: "Dr. Sarah Wilson",
+          specialization: "General Medicine",
+          isActive: true,
+        },
+        {
+          id: 2,
+          name: "Dr. Michael Brown",
+          specialization: "Cardiology",
+          isActive: true,
+        },
+        {
+          id: 3,
+          name: "Dr. Emily Davis",
+          specialization: "Pediatrics",
+          isActive: true,
+        },
+        {
+          id: 4,
+          name: "Dr. James Miller",
+          specialization: "Orthopedics",
+          isActive: true,
+        },
+        {
+          id: 5,
+          name: "Dr. Lisa Anderson",
+          specialization: "Dermatology",
+          isActive: false,
+        },
+      ];
+
+      setStatuses(mockStatuses);
+      setDoctors(mockDoctors);
+    } catch (error) {
+      console.error("Error loading settings:", error);
+      setError("Failed to load settings");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
+    if (!settings) return;
+
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSuccess("Settings saved successfully!");
+      const response = await fetch("/api/settings/system", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess("Settings saved successfully!");
+      } else {
+        throw new Error(data.error || "Failed to save settings");
+      }
     } catch (err) {
-      setError("Failed to save settings");
+      setError(err instanceof Error ? err.message : "Failed to save settings");
     } finally {
       setLoading(false);
     }
@@ -217,7 +269,7 @@ export default function SettingsPage() {
       )}
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             General
@@ -225,6 +277,10 @@ export default function SettingsPage() {
           <TabsTrigger value="appointments" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Appointments
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Calendar
           </TabsTrigger>
           <TabsTrigger value="anti-abuse" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
@@ -240,6 +296,10 @@ export default function SettingsPage() {
           >
             <Bell className="h-4 w-4" />
             Notifications
+          </TabsTrigger>
+          <TabsTrigger value="otp" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            OTP
           </TabsTrigger>
         </TabsList>
 
@@ -268,6 +328,31 @@ export default function SettingsPage() {
                     }
                   />
                 </div>
+                <div>
+                  <Label htmlFor="sessionTimeout">
+                    Auto-Logout Timeout (minutes)
+                  </Label>
+                  <Input
+                    id="sessionTimeout"
+                    type="number"
+                    min="5"
+                    max="480"
+                    value={settings.sessionTimeoutMinutes}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        sessionTimeoutMinutes:
+                          Number.parseInt(e.target.value) || 60,
+                      })
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Users will be automatically logged out after this period of
+                    inactivity (5-480 minutes)
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="defaultSlots">Default Slots Per Day</Label>
                   <Input
@@ -370,6 +455,10 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="calendar" className="space-y-6">
+          <CalendarConfigurationTab />
         </TabsContent>
 
         <TabsContent value="anti-abuse" className="space-y-6">
@@ -641,6 +730,10 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="otp" className="space-y-6">
+          <OTPConfigurationTab />
+        </TabsContent>
+
         <div className="flex justify-end">
           <Button onClick={handleSaveSettings} disabled={loading}>
             {loading ? "Saving..." : "Save Settings"}
@@ -648,5 +741,172 @@ export default function SettingsPage() {
         </div>
       </Tabs>
     </div>
+  );
+}
+
+// OTP Configuration Component
+function OTPConfigurationTab() {
+  const [config, setConfig] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
+
+  // Fetch current configuration
+  const fetchConfig = async () => {
+    try {
+      const response = await fetch("/api/settings/otp-config");
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            "Admin authentication required. Please log in as an administrator."
+          );
+        }
+        throw new Error("Failed to fetch configuration");
+      }
+      const data = await response.json();
+      setConfig(data.data);
+    } catch (error) {
+      console.error("Error fetching config:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update OTP mode
+  const updateMode = async (newMode: "hubtel" | "mock") => {
+    setUpdating(true);
+    try {
+      const response = await fetch("/api/settings/otp-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: newMode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            "Admin authentication required. Please log in as an administrator."
+          );
+        }
+        throw new Error(data.error || "Failed to update mode");
+      }
+      setConfig(data.data);
+    } catch (error) {
+      console.error("Error updating mode:", error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Test service
+  const testService = async () => {
+    if (!testPhone.trim()) return;
+    setTesting(true);
+    try {
+      const response = await fetch("/api/settings/otp-config/test", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: testPhone }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            "Admin authentication required. Please log in as an administrator."
+          );
+        }
+        throw new Error(data.error || "Failed to test service");
+      }
+      console.log("Test result:", data);
+    } catch (error) {
+      console.error("Error testing service:", error);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  if (loading || !config) {
+    return <div>Loading OTP configuration...</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>OTP Configuration</CardTitle>
+        <CardDescription>
+          Configure how OTP messages are sent to users
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Current Mode */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div>
+            <p className="font-medium">
+              Current Mode: {config.currentMode?.toUpperCase()}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {config.currentMode === "hubtel"
+                ? "Real SMS via Hubtel"
+                : "Mock SMS (Console)"}
+            </p>
+          </div>
+        </div>
+
+        {/* Mode Selection */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <Label>Hubtel SMS (Real)</Label>
+              <p className="text-sm text-muted-foreground">
+                Send real SMS messages{" "}
+                {!config.hubtelConfigured && "(Not configured)"}
+              </p>
+            </div>
+            <Switch
+              checked={config.currentMode === "hubtel"}
+              onCheckedChange={(checked) => checked && updateMode("hubtel")}
+              disabled={updating || !config.canSwitchToHubtel}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <Label>Mock SMS (Development)</Label>
+              <p className="text-sm text-muted-foreground">
+                Log messages to console
+              </p>
+            </div>
+            <Switch
+              checked={config.currentMode === "mock"}
+              onCheckedChange={(checked) => checked && updateMode("mock")}
+              disabled={updating}
+            />
+          </div>
+        </div>
+
+        {/* Test Service */}
+        <div className="space-y-4">
+          <Label>Test Current Service</Label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="+233240000000"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+            />
+            <Button
+              onClick={testService}
+              disabled={testing || !testPhone.trim()}
+            >
+              {testing ? "Testing..." : "Test"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+// Middleware works with BetterAuth by checking the session_token cookie
+// which is maintained for backward compatibility
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 

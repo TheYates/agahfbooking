@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { query } from "@/lib/db";
-import bcrypt from "bcryptjs";
+import { staffLogin } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,60 +13,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by employee_id (username) or name
-    const result = await query(
-      `SELECT * FROM users
-       WHERE (employee_id = $1 OR LOWER(name) = LOWER($1))
-       AND role IN ('receptionist', 'admin')
-       AND is_active = true`,
-      [username]
-    );
+    // Use BetterAuth staff login function
+    const userData = await staffLogin(username, password);
 
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: "Invalid username or password" },
-        { status: 401 }
-      );
-    }
-
-    const user = result.rows[0];
-
-    // For demo purposes, we'll use simple password comparison
-    // In production, you should hash passwords with bcrypt
-    let isValidPassword = false;
-
-    // Demo credentials for testing
-    if (
-      (username === "admin" && password === "admin123") ||
-      (username === "receptionist" && password === "recep123")
-    ) {
-      isValidPassword = true;
-    } else {
-      // If you have hashed passwords in the database, use this:
-      // isValidPassword = await bcrypt.compare(password, user.password_hash)
-      isValidPassword = false;
-    }
-
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { error: "Invalid username or password" },
-        { status: 401 }
-      );
-    }
-
-    // Create session data (without x_number since staff don't have them)
-    const sessionData = {
-      id: user.id,
-      name: user.name,
-      phone: user.phone,
-      role: user.role,
-      employee_id: user.employee_id,
-      loginTime: new Date().toISOString(),
-    };
-
-    // Set secure HTTP-only cookie
+    // Set secure HTTP-only cookie (maintaining compatibility)
     const cookieStore = await cookies();
-    cookieStore.set("session_token", JSON.stringify(sessionData), {
+    cookieStore.set("session_token", JSON.stringify(userData), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -77,13 +28,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: sessionData,
+      user: userData,
     });
   } catch (error) {
     console.error("Staff login error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      {
+        error: error instanceof Error ? error.message : "Internal server error",
+      },
+      {
+        status:
+          error instanceof Error && error.message.includes("Invalid")
+            ? 401
+            : 500,
+      }
     );
   }
 }

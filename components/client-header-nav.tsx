@@ -46,12 +46,22 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
+
+      // Redirect based on user role
+      if (user.role === "client") {
+        router.push("/login");
+      } else {
+        router.push("/staff-login");
+      }
       router.refresh();
     } catch (error) {
       console.error("Logout error:", error);
-      // Fallback: redirect anyway
-      router.push("/login");
+      // Fallback: redirect based on role anyway
+      if (user.role === "client") {
+        router.push("/login");
+      } else {
+        router.push("/staff-login");
+      }
     }
   };
 

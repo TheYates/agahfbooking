@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
 import {
   ArrowRight,
@@ -15,6 +15,11 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types";
+import {
+  cachedFetch,
+  departmentCache,
+  userStatsCache,
+} from "@/lib/cache-utils";
 
 interface MobileDashboardClientProps {
   user: User;
@@ -70,98 +75,106 @@ export function MobileDashboardClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Fetch dashboard statistics and departments
+  // Fetch dashboard statistics and departments with caching
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError("");
 
-        // Fetch stats and departments in parallel
-        const [statsResponse, deptResponse] = await Promise.all([
-          fetch(`/api/dashboard/stats?clientId=${user.id}`),
-          fetch("/api/departments"),
-        ]);
+        // Check cache first for departments
+        const cachedDepartments = departmentCache.get();
+        const cachedStats = userStatsCache.get(user.id);
 
-        const [statsData, deptData] = await Promise.all([
-          statsResponse.json(),
-          deptResponse.json(),
-        ]);
-
-        if (!statsResponse.ok) {
-          throw new Error(
-            statsData.error || "Failed to fetch dashboard statistics"
-          );
+        // If we have cached data, show it immediately
+        if (cachedDepartments) {
+          setDepartments(cachedDepartments.data || cachedDepartments);
+        }
+        if (cachedStats) {
+          setStats(cachedStats.data || cachedStats);
+          setLoading(false);
         }
 
-        setStats(statsData.data || statsData);
+        // Fetch fresh data in background
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        // Handle departments - don't fail if departments API is down
-        let departmentsToUse = [];
-        if (deptResponse.ok && deptData.data) {
-          departmentsToUse = deptData.data;
-        } else {
-          console.warn(
-            "Failed to fetch departments, using fallback:",
-            deptData.error
+        try {
+          // Use cached fetch for departments (5 min cache)
+          const deptPromise = cachedFetch(
+            "/api/departments",
+            "departments",
+            300000, // 5 minutes
+            { signal: controller.signal }
           );
-          // Fallback departments
-          departmentsToUse = [
-            {
-              id: 1,
-              name: "General Medicine",
-              description: "General health consultations",
-              color: "#3B82F6",
-              icon: "stethoscope",
-            },
-            {
-              id: 2,
-              name: "Cardiology",
-              description: "Heart and cardiovascular care",
-              color: "#EF4444",
-              icon: "heart",
-            },
-            {
-              id: 3,
-              name: "Pediatrics",
-              description: "Children's healthcare",
-              color: "#10B981",
-              icon: "baby",
-            },
-            {
-              id: 4,
-              name: "Emergency",
-              description: "Urgent medical care",
-              color: "#F59E0B",
-              icon: "building2",
-            },
-          ];
-        }
 
-        setDepartments(departmentsToUse);
+          // Always fetch fresh stats (1 min cache)
+          const statsPromise = cachedFetch(
+            `/api/dashboard/stats?clientId=${user.id}`,
+            `user_stats_${user.id}`,
+            60000, // 1 minute
+            {
+              signal: controller.signal,
+              headers: { "Cache-Control": "no-cache" },
+            }
+          );
+
+          const [deptData, statsData] = await Promise.all([
+            deptPromise,
+            statsPromise,
+          ]);
+
+          clearTimeout(timeoutId);
+
+          // Update stats
+          setStats((statsData as any).data || statsData);
+
+          // Update departments
+          if ((deptData as any).data) {
+            setDepartments((deptData as any).data);
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+
+          // If we have cached data, don't show error
+          if (!cachedDepartments && !cachedStats) {
+            if (
+              fetchError instanceof Error &&
+              fetchError.name === "AbortError"
+            ) {
+              setError(
+                "Request timed out. Please check your connection and try again."
+              );
+            } else {
+              setError(
+                fetchError instanceof Error
+                  ? fetchError.message
+                  : "Failed to load dashboard data"
+              );
+            }
+          }
+
+          // Provide fallback departments if no cache available
+          if (!cachedDepartments) {
+            setDepartments([
+              {
+                id: 1,
+                name: "General Medicine",
+                description: "General health consultations",
+                color: "#3B82F6",
+              },
+              {
+                id: 2,
+                name: "Emergency",
+                description: "Urgent medical care",
+                color: "#EF4444",
+              },
+            ]);
+          }
+        }
       } catch (err) {
-        console.error("Error fetching dashboard data:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load dashboard data"
-        );
-
-        // Even on error, provide fallback departments so the interface is usable
-        setDepartments([
-          {
-            id: 1,
-            name: "General Medicine",
-            description: "General health consultations",
-            color: "#3B82F6",
-            icon: "stethoscope",
-          },
-          {
-            id: 2,
-            name: "Emergency",
-            description: "Urgent medical care",
-            color: "#EF4444",
-            icon: "building2",
-          },
-        ]);
+        console.error("Error in fetchData:", err);
+        setError("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
@@ -171,21 +184,6 @@ export function MobileDashboardClient({
       fetchData();
     }
   }, [user.id]);
-
-  // Helper function to get status colors
-  const getStatusColor = (status: string) => {
-    const colors: { [key: string]: string } = {
-      booked: "#3B82F6",
-      confirmed: "#10B981",
-      arrived: "#F59E0B",
-      waiting: "#8B5CF6",
-      completed: "#059669",
-      no_show: "#EF4444",
-      cancelled: "#6B7280",
-      rescheduled: "#F97316",
-    };
-    return colors[status] || "#6B7280";
-  };
 
   // Dynamic greeting based on time and upcoming appointments
   const getDynamicGreeting = () => {
@@ -198,6 +196,14 @@ export function MobileDashboardClient({
       timeGreeting = "Good Afternoon";
     } else {
       timeGreeting = "Good Evening";
+    }
+
+    // Show time-based greeting immediately, even while loading
+    if (loading) {
+      return {
+        greeting: `${timeGreeting}, ${user.name}!`,
+        subtext: "Loading your dashboard...",
+      };
     }
 
     // Check for upcoming appointment - either from nextAppointment or first recent appointment
@@ -218,52 +224,68 @@ export function MobileDashboardClient({
       if (stats.daysUntilNext === 0) {
         return {
           greeting: `${timeGreeting}, ${user.name}!`,
-          subtext: `Your ${upcomingAppointment.departmentName} appointment is today`,
+          subtext: (
+            <>
+              Your <strong>{upcomingAppointment.departmentName}</strong>{" "}
+              appointment is <strong>today</strong>
+            </>
+          ),
         };
       } else if (stats.daysUntilNext === 1) {
         return {
           greeting: `${timeGreeting}, ${user.name}!`,
-          subtext: `Your ${upcomingAppointment.departmentName} appointment is tomorrow (${formattedDate})`,
+          subtext: (
+            <>
+              Your <strong>{upcomingAppointment.departmentName}</strong>{" "}
+              appointment is <strong>tomorrow</strong> ({formattedDate})
+            </>
+          ),
         };
       } else {
         return {
           greeting: `${timeGreeting}, ${user.name}!`,
-          subtext: `Your upcoming ${upcomingAppointment.departmentName} appointment is on ${formattedDate}`,
+          subtext: (
+            <>
+              Your upcoming{" "}
+              <strong>{upcomingAppointment.departmentName}</strong> appointment
+              is on <strong>{formattedDate}</strong>
+            </>
+          ),
         };
       }
     }
 
     return {
-      greeting: `Welcome back, ${user.name}!`,
+      greeting: `${timeGreeting}, ${user.name}!`,
       subtext: "Ready to book your next appointment?",
     };
   };
 
-  // Get department icon
-  const getDepartmentIcon = (iconName: string | undefined | null) => {
+  // Get department icon based on department name (since icon is not stored in DB)
+  const getDepartmentIcon = (departmentName: string) => {
     const iconProps = "h-6 w-6 text-primary";
+    const name = departmentName.toLowerCase();
 
-    if (!iconName || typeof iconName !== "string") {
-      return <Building2 className={iconProps} />; // Default icon
-    }
-
-    switch (iconName.toLowerCase()) {
-      case "building2":
-        return <Building2 className={iconProps} />;
-      case "stethoscope":
-        return <Stethoscope className={iconProps} />;
-      case "heart":
-        return <Heart className={iconProps} />;
-      case "brain":
-        return <Brain className={iconProps} />;
-      case "eye":
-        return <Eye className={iconProps} />;
-      case "pill":
-        return <Pill className={iconProps} />;
-      case "baby":
-        return <Baby className={iconProps} />;
-      default:
-        return <Building2 className={iconProps} />;
+    if (name.includes("cardio") || name.includes("heart")) {
+      return <Heart className={iconProps} />;
+    } else if (
+      name.includes("pediatric") ||
+      name.includes("child") ||
+      name.includes("baby")
+    ) {
+      return <Baby className={iconProps} />;
+    } else if (name.includes("general") || name.includes("medicine")) {
+      return <Stethoscope className={iconProps} />;
+    } else if (name.includes("emergency") || name.includes("urgent")) {
+      return <Building2 className={iconProps} />;
+    } else if (name.includes("neuro") || name.includes("brain")) {
+      return <Brain className={iconProps} />;
+    } else if (name.includes("eye") || name.includes("ophthal")) {
+      return <Eye className={iconProps} />;
+    } else if (name.includes("pharmacy") || name.includes("drug")) {
+      return <Pill className={iconProps} />;
+    } else {
+      return <Stethoscope className={iconProps} />; // Default to stethoscope
     }
   };
 
@@ -274,16 +296,20 @@ export function MobileDashboardClient({
   const { greeting, subtext } = getDynamicGreeting();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Dynamic Welcome Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="text-center space-y-2"
+        className="space-y-3 px-1"
       >
-        <h1 className="text-2xl font-bold text-foreground">{greeting}</h1>
-        <p className="text-muted-foreground">{subtext}</p>
+        <h1 className="text-5xl font-bold text-foreground leading-tight">
+          {greeting}
+        </h1>
+        <div className="text-muted-foreground text-base leading-relaxed">
+          {subtext}
+        </div>
       </motion.div>
 
       {/* Departments Carousel - Mobile Optimized */}
@@ -291,10 +317,10 @@ export function MobileDashboardClient({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="space-y-4"
+        className="space-y-6"
       >
         <div className="px-1">
-          <h2 className="text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-foreground mb-2">
             Book by Department
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -313,7 +339,7 @@ export function MobileDashboardClient({
         ) : (
           <div className="relative">
             {/* Horizontal scrolling container */}
-            <div className="flex gap-4 overflow-x-auto pb-4 px-1 hide-scrollbar">
+            <div className="flex gap-4 overflow-x-auto pb-2 px-1 hide-scrollbar">
               {departments.map((department, index) => (
                 <motion.div
                   key={department.id}
@@ -325,33 +351,33 @@ export function MobileDashboardClient({
                   <button
                     onClick={() => handleDepartmentClick(department.id)}
                     className={cn(
-                      "w-[280px] h-[400px] p-6 rounded-xl transition-all duration-200",
+                      "w-[260px] h-[280px] p-5 rounded-2xl transition-all duration-200",
                       "touch-target flex flex-col justify-between",
                       "hover:scale-[1.02] active:scale-[0.98]",
                       "bg-card border border-border",
-                      "hover:border-primary/30 hover:shadow-md"
+                      "hover:border-primary/30 hover:shadow-lg"
                     )}
                   >
                     {/* Top section with icon and arrow */}
                     <div className="flex items-start justify-between w-full">
-                      <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center">
-                        {getDepartmentIcon(department.icon)}
+                      <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+                        {getDepartmentIcon(department.name)}
                       </div>
                       <div className="flex-shrink-0">
-                        <ArrowRight className="h-6 w-6 text-muted-foreground" />
+                        <ArrowRight className="h-5 w-5 text-muted-foreground" />
                       </div>
                     </div>
 
                     {/* Bottom section with text content */}
-                    <div className="flex-1 text-left mt-4">
+                    <div className="flex-1 text-left mt-6">
                       <h3 className="font-semibold text-lg text-foreground mb-2 leading-tight">
                         {department.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
                         {department.description}
                       </p>
                       {department.available_slots !== undefined && (
-                        <p className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded-full inline-block">
+                        <p className="text-xs text-primary font-medium bg-primary/10 px-3 py-1.5 rounded-full inline-block">
                           {department.available_slots} slots available
                         </p>
                       )}
@@ -363,11 +389,11 @@ export function MobileDashboardClient({
 
             {/* Scroll indicator dots */}
             {departments.length > 1 && (
-              <div className="flex justify-center mt-4 space-x-2">
+              <div className="flex justify-center mt-6 space-x-2">
                 {departments.map((_, index) => (
                   <div
                     key={index}
-                    className="w-2 h-2 rounded-full bg-muted-foreground/30"
+                    className="w-2 h-2 rounded-full bg-muted-foreground/40"
                   />
                 ))}
               </div>

@@ -1,40 +1,71 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { ClientService, OtpService } from "@/lib/db-services";
+import { verifyOTP } from "@/lib/auth";
+import { rateLimiter } from "@/lib/rate-limiter";
+import { getClientInfo } from "@/lib/get-client-ip";
 
 export async function POST(request: NextRequest) {
   try {
-    const { xNumber, otp } = await request.json();
+    const { token, otp } = await request.json();
 
-    // Verify OTP against database
-    const isValidOtp = await OtpService.verify(xNumber, otp);
-    if (!isValidOtp) {
+    // Get client information for rate limiting
+    const clientInfo = getClientInfo(request);
+
+    if (!token) {
+      // Record failed attempt for missing token
+      rateLimiter.recordAttempt(
+        clientInfo.ip,
+        false,
+        undefined,
+        clientInfo.userAgent
+      );
+
       return NextResponse.json(
-        { error: "Invalid or expired OTP" },
+        { error: "OTP token is required" },
         { status: 400 }
       );
     }
 
-    // Find client by X-number (only clients authenticate via OTP)
-    const client = await ClientService.findByXNumber(xNumber);
-    if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    // Check rate limiting before processing
+    const rateLimitResult = rateLimiter.checkRateLimit(
+      clientInfo.ip,
+      undefined, // We don't have X-number here, but IP limiting still applies
+      clientInfo.userAgent
+    );
+
+    if (!rateLimitResult.allowed) {
+      console.log(
+        `🚫 Rate limit exceeded for ${clientInfo.ip} during OTP verification: ${rateLimitResult.reason}`
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            rateLimitResult.reason ||
+            "Too many attempts. Please try again later.",
+          rateLimited: true,
+          resetTime: rateLimitResult.resetTime,
+          blockDuration: rateLimitResult.blockDuration,
+          requiresCaptcha: rateLimitResult.requiresCaptcha,
+        },
+        { status: 429 }
+      );
     }
 
-    // Create session token
-    const sessionData = {
-      id: client.id,
-      xNumber: client.x_number,
-      name: client.name,
-      phone: client.phone,
-      category: client.category,
-      role: "client" as const,
-      loginTime: new Date().toISOString(),
-    };
+    // Use BetterAuth verifyOTP function with JWT token
+    const userData = await verifyOTP(token, otp);
 
-    // Set secure HTTP-only cookie
+    // Record successful attempt
+    rateLimiter.recordAttempt(
+      clientInfo.ip,
+      true,
+      userData.xNumber,
+      clientInfo.userAgent
+    );
+
+    // Set secure HTTP-only cookie (maintaining compatibility)
     const cookieStore = await cookies();
-    cookieStore.set("session_token", JSON.stringify(sessionData), {
+    cookieStore.set("session_token", JSON.stringify(userData), {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -44,14 +75,37 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: sessionData,
+      user: userData,
       redirectUrl: "/dashboard",
     });
   } catch (error) {
     console.error("Verify OTP error:", error);
+
+    // Record failed attempt for verification errors
+    try {
+      const clientInfo = getClientInfo(request);
+      rateLimiter.recordAttempt(
+        clientInfo.ip,
+        false,
+        undefined,
+        clientInfo.userAgent
+      );
+    } catch (recordError) {
+      console.error("Failed to record rate limit attempt:", recordError);
+    }
+
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      {
+        error: error instanceof Error ? error.message : "Internal server error",
+      },
+      {
+        status:
+          error instanceof Error && error.message.includes("Invalid")
+            ? 400
+            : error instanceof Error && error.message.includes("not found")
+            ? 404
+            : 500,
+      }
     );
   }
 }

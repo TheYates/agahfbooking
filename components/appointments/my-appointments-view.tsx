@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, User, Building } from "lucide-react";
+import { toast } from "sonner";
 
 interface Appointment {
   id: number;
@@ -119,15 +120,31 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
             apt.id === appointmentId ? { ...apt, status: "cancelled" } : apt
           )
         );
-        alert("Appointment cancelled successfully!");
-      } else {
-        alert(
-          "Failed to cancel appointment: " + (data.error || "Unknown error")
+
+        // Show success toast
+        const appointment = appointments.find(
+          (apt) => apt.id === appointmentId
         );
+        toast.success("Appointment Cancelled! ✅", {
+          description: `Your appointment on ${appointment?.date} has been cancelled successfully`,
+          duration: 4000,
+        });
+      } else {
+        // Show error toast
+        toast.error("Cancellation Failed", {
+          description:
+            data.error || "Failed to cancel appointment. Please try again.",
+          duration: 4000,
+        });
       }
     } catch (error) {
       console.error("Error cancelling appointment:", error);
-      alert("Failed to cancel appointment. Please try again.");
+
+      // Show error toast
+      toast.error("Cancellation Error", {
+        description: "Failed to cancel appointment. Please try again.",
+        duration: 4000,
+      });
     }
   };
 

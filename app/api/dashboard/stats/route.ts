@@ -18,122 +18,124 @@ export async function GET(request: Request) {
     const today = new Date().toISOString().split("T")[0];
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
 
-    // Get upcoming appointments count
-    const upcomingResult = await query(
+    // Optimized: Combine multiple queries into a single query using CTEs and window functions
+    const combinedStatsResult = await query(
       `
-      SELECT COUNT(*) as count
-      FROM appointments a
-      WHERE a.client_id = $1 
-      AND a.appointment_date >= $2
-      AND a.status NOT IN ('cancelled', 'completed', 'no_show')
-    `,
-      [clientId, today]
-    );
-
-    // Get total appointments this month
-    const totalThisMonthResult = await query(
-      `
-      SELECT COUNT(*) as count
-      FROM appointments a
-      WHERE a.client_id = $1 
-      AND DATE_TRUNC('month', a.appointment_date) = DATE_TRUNC('month', $2::date)
-    `,
-      [clientId, today]
-    );
-
-    // Get completed appointments count
-    const completedResult = await query(
-      `
-      SELECT COUNT(*) as count
-      FROM appointments a
-      WHERE a.client_id = $1 
-      AND a.status = 'completed'
-    `,
-      [clientId]
-    );
-
-    // Get next appointment date
-    const nextAppointmentResult = await query(
-      `
-      SELECT appointment_date
-      FROM appointments a
-      WHERE a.client_id = $1 
-      AND a.appointment_date >= $2
-      AND a.status NOT IN ('cancelled', 'completed', 'no_show')
-      ORDER BY a.appointment_date ASC
-      LIMIT 1
-    `,
-      [clientId, today]
-    );
-
-    // Get recent appointments (last 5)
-    const recentAppointmentsResult = await query(
-      `
+      WITH appointment_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE appointment_date >= $2 AND status NOT IN ('cancelled', 'completed', 'no_show')) as upcoming_count,
+          COUNT(*) FILTER (WHERE DATE_TRUNC('month', appointment_date) = DATE_TRUNC('month', $2::date)) as total_month_count,
+          COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
+          MIN(appointment_date) FILTER (WHERE appointment_date >= $2 AND status NOT IN ('cancelled', 'completed', 'no_show')) as next_appointment_date
+        FROM appointments
+        WHERE client_id = $1
+      ),
+      recent_appointments AS (
+        SELECT
+          a.id,
+          a.appointment_date,
+          a.slot_number,
+          a.status,
+          d.name as doctor_name,
+          dept.name as department_name,
+          dept.color as department_color,
+          ROW_NUMBER() OVER (ORDER BY a.appointment_date DESC, a.slot_number DESC) as rn
+        FROM appointments a
+        JOIN departments dept ON a.department_id = dept.id
+        LEFT JOIN doctors d ON a.doctor_id = d.id
+        WHERE a.client_id = $1
+      ),
+      week_slots AS (
+        SELECT
+          COALESCE(SUM(dept.slots_per_day * 7), 0) as total_weekly_slots,
+          COALESCE(COUNT(a.id), 0) as booked_weekly_slots
+        FROM departments dept
+        LEFT JOIN appointments a ON a.department_id = dept.id
+          AND a.appointment_date BETWEEN $3 AND $4
+          AND a.status NOT IN ('cancelled')
+        WHERE dept.is_active = true
+      )
       SELECT
-        a.id,
-        a.appointment_date,
-        a.slot_number,
-        a.status,
-        d.name as doctor_name,
-        dept.name as department_name,
-        dept.color as department_color
-      FROM appointments a
-      JOIN departments dept ON a.department_id = dept.id
-      LEFT JOIN doctors d ON a.doctor_id = d.id
-      WHERE a.client_id = $1
-      ORDER BY a.appointment_date DESC, a.slot_number DESC
-      LIMIT 5
+        ast.upcoming_count,
+        ast.total_month_count,
+        ast.completed_count,
+        ast.next_appointment_date,
+        ws.total_weekly_slots,
+        ws.booked_weekly_slots,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', ra.id,
+              'date', ra.appointment_date,
+              'slotNumber', ra.slot_number,
+              'status', ra.status,
+              'doctorName', ra.doctor_name,
+              'departmentName', ra.department_name,
+              'departmentColor', ra.department_color
+            ) ORDER BY ra.appointment_date DESC, ra.slot_number DESC
+          ) FILTER (WHERE ra.rn <= 5),
+          '[]'::json
+        ) as recent_appointments
+      FROM appointment_stats ast
+      CROSS JOIN week_slots ws
+      LEFT JOIN recent_appointments ra ON ra.rn <= 5
+      GROUP BY ast.upcoming_count, ast.total_month_count, ast.completed_count,
+               ast.next_appointment_date, ws.total_weekly_slots, ws.booked_weekly_slots
     `,
-      [clientId]
+      [
+        clientId,
+        today,
+        // Week start and end for available slots calculation
+        (() => {
+          const weekStart = new Date();
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          return weekStart.toISOString().split("T")[0];
+        })(),
+        (() => {
+          const weekStart = new Date();
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          return weekEnd.toISOString().split("T")[0];
+        })(),
+      ]
     );
+
+    // Process the combined result
+    const result = combinedStatsResult.rows[0];
 
     // Calculate days until next appointment
     let daysUntilNext = null;
-    if (nextAppointmentResult.rows.length > 0) {
-      const nextDate = new Date(nextAppointmentResult.rows[0].appointment_date);
+    if (result.next_appointment_date) {
+      const nextDate = new Date(result.next_appointment_date);
       const todayDate = new Date(today);
-      daysUntilNext = Math.ceil((nextDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+      daysUntilNext = Math.ceil(
+        (nextDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
     }
 
-    // Get available slots for this week (approximate)
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6); // End of week
+    // Calculate available slots
+    const totalSlots = parseInt(result.total_weekly_slots || "0");
+    const bookedSlots = parseInt(result.booked_weekly_slots || "0");
+    const availableSlots = Math.max(0, totalSlots - bookedSlots);
 
-    const availableSlotsResult = await query(
-      `
-      SELECT 
-        SUM(dept.slots_per_day) as total_slots,
-        COUNT(a.id) as booked_slots
-      FROM departments dept
-      CROSS JOIN generate_series($1::date, $2::date, '1 day'::interval) AS date_series
-      LEFT JOIN appointments a ON a.department_id = dept.id 
-        AND DATE(a.appointment_date) = DATE(date_series)
-        AND a.status NOT IN ('cancelled')
-      WHERE dept.is_active = true
-    `,
-      [weekStart.toISOString().split("T")[0], weekEnd.toISOString().split("T")[0]]
-    );
-
-    const totalSlots = parseInt(availableSlotsResult.rows[0]?.total_slots || "0");
-    const bookedSlots = parseInt(availableSlotsResult.rows[0]?.booked_slots || "0");
-    const availableSlots = totalSlots - bookedSlots;
+    // Parse recent appointments from JSON
+    const recentAppointments = result.recent_appointments || [];
 
     const stats = {
-      upcomingAppointments: parseInt(upcomingResult.rows[0]?.count || "0"),
-      totalAppointments: parseInt(totalThisMonthResult.rows[0]?.count || "0"),
-      completedAppointments: parseInt(completedResult.rows[0]?.count || "0"),
-      availableSlots: Math.max(0, availableSlots),
+      upcomingAppointments: parseInt(result.upcoming_count || "0"),
+      totalAppointments: parseInt(result.total_month_count || "0"),
+      completedAppointments: parseInt(result.completed_count || "0"),
+      availableSlots,
       daysUntilNext,
-      recentAppointments: recentAppointmentsResult.rows.map((row: any) => ({
-        id: row.id,
-        date: row.appointment_date.toISOString().split("T")[0],
-        slotNumber: row.slot_number,
-        status: row.status,
-        doctorName: row.doctor_name,
-        departmentName: row.department_name,
-        departmentColor: row.department_color,
+      recentAppointments: recentAppointments.map((appointment: any) => ({
+        id: appointment.id,
+        date: new Date(appointment.date).toISOString().split("T")[0],
+        slotNumber: appointment.slotNumber,
+        status: appointment.status,
+        doctorName: appointment.doctorName,
+        departmentName: appointment.departmentName,
+        departmentColor: appointment.departmentColor,
       })),
     };
 

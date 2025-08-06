@@ -12,10 +12,13 @@ import { ViewSwitcher } from "./view-switcher";
 import { AppointmentModal } from "./appointment-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DayAppointmentsPopover } from "./day-appointments-popover";
+import { AppointmentAlerts } from "./appointment-alerts";
 import {
   isValidBookingDate,
   isWorkingDayForAnyDepartment,
 } from "@/lib/working-days-utils";
+import { toast } from "sonner";
+// Removed direct import to avoid client-side database dependency
 
 interface Appointment {
   id: number;
@@ -78,7 +81,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     fetchDepartments();
     fetchDoctors();
     fetchAppointments();
-  }, [currentDate, view]);
+  }, [currentDate, view, userRole, currentUserId]);
 
   const fetchDepartments = async () => {
     try {
@@ -143,25 +146,58 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         endDate = startDate;
       }
 
-      const response = await fetch(
-        `/api/appointments?startDate=${startDate}&endDate=${endDate}`
+      // Get the appropriate appointments endpoint based on admin settings
+      const endpointResponse = await fetch(
+        `/api/calendar/endpoint?userRole=${userRole}&currentUserId=${currentUserId}`
       );
+      const endpointData = await endpointResponse.json();
+
+      if (!endpointResponse.ok || !endpointData.success) {
+        throw new Error(
+          endpointData.error || "Failed to get calendar endpoint"
+        );
+      }
+
+      const baseEndpoint = endpointData.data.endpoint;
+      console.log(
+        "Calendar: Using endpoint:",
+        baseEndpoint,
+        "for user:",
+        userRole,
+        currentUserId
+      );
+
+      // Properly construct URL with query parameters
+      const url = new URL(baseEndpoint, window.location.origin);
+      url.searchParams.set("startDate", startDate);
+      url.searchParams.set("endDate", endDate);
+
+      const response = await fetch(url.toString());
       const data = await response.json();
+      console.log("Calendar: Raw response data:", data);
       if (data.success) {
         // Transform the data to match the expected interface
+        // Handle both full appointment data and client-specific data
         const transformedAppointments = data.data.map((appointment: any) => ({
           id: appointment.id,
-          clientId: appointment.client_id,
-          clientName: appointment.client_name,
+          clientId: appointment.client_id || appointment.clientId,
+          clientName: appointment.client_name || appointment.clientName,
           clientXNumber:
-            appointment.client_x_number ||
-            `X${appointment.client_id.toString().padStart(5, "0")}/00`,
-          doctorId: appointment.doctor_id,
-          doctorName: appointment.doctor_name || "Unassigned",
-          departmentId: appointment.department_id,
-          departmentName: appointment.department_name,
-          date: appointment.appointment_date.split("T")[0], // Convert to YYYY-MM-DD
-          slotNumber: appointment.slot_number,
+            appointment.client_x_number || appointment.clientXNumber,
+          doctorId:
+            appointment.doctor_id ||
+            appointment.doctorId ||
+            appointment.department_id ||
+            appointment.departmentId,
+          doctorName:
+            appointment.doctor_name || appointment.doctorName || "Unassigned",
+          departmentId: appointment.department_id || appointment.departmentId,
+          departmentName:
+            appointment.department_name || appointment.departmentName,
+          date: appointment.appointment_date
+            ? appointment.appointment_date.split("T")[0]
+            : appointment.date, // Handle both date formats
+          slotNumber: appointment.slot_number || appointment.slotNumber,
           status: appointment.status,
           statusColor: getStatusColor(appointment.status),
           notes: appointment.notes,
@@ -392,7 +428,10 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     );
 
     if (existingAppointment) {
-      alert("This slot is already occupied!");
+      toast.error("Slot Occupied", {
+        description: "This slot is already occupied by another appointment",
+        duration: 4000,
+      });
       setDraggedAppointment(null);
       return;
     }
@@ -417,6 +456,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         apt.id === draggedAppointment.id ? updatedAppointment : apt
       )
     );
+
+    // Show success toast
+    const newDate = targetDate.toLocaleDateString();
+    toast.success("Appointment Moved! 📅", {
+      description: `${draggedAppointment.clientName}'s appointment moved to ${newDate}, Slot ${targetSlot}`,
+      duration: 4000,
+    });
+
     setDraggedAppointment(null);
   };
 
@@ -1021,6 +1068,13 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
   return (
     <div className="space-y-6">
+      {/* Appointment Alerts - Shows toast notifications for upcoming appointments */}
+      <AppointmentAlerts
+        userRole={userRole}
+        currentUserId={currentUserId}
+        enabled={true}
+      />
+
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
       {view === "day" && renderDayView()}

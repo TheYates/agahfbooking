@@ -16,7 +16,6 @@ import {
   CreateDepartmentInput,
   CreateDoctorInput,
   SystemSetting,
-  OtpCode,
 } from "./db-types";
 
 // User Services (for staff: receptionists, admins)
@@ -48,11 +47,142 @@ export class UserService {
     return result.rows[0];
   }
 
+  static async getAll(): Promise<User[]> {
+    const result = await query(
+      `SELECT id, name, phone, role, employee_id, is_active, created_at, updated_at
+       FROM users
+       WHERE role IN ('receptionist', 'admin')
+       ORDER BY role, name`
+    );
+    return result.rows;
+  }
+
+  static async search(searchTerm: string): Promise<User[]> {
+    const result = await query(
+      `SELECT id, name, phone, role, employee_id, is_active, created_at, updated_at
+       FROM users
+       WHERE role IN ('receptionist', 'admin')
+       AND (name ILIKE $1 OR employee_id ILIKE $1 OR phone ILIKE $1)
+       ORDER BY role, name`,
+      [`%${searchTerm}%`]
+    );
+    return result.rows;
+  }
+
+  static async update(
+    id: number,
+    userData: Partial<CreateUserInput>
+  ): Promise<User> {
+    const setParts = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (userData.name) {
+      setParts.push(`name = $${paramCount}`);
+      values.push(userData.name);
+      paramCount++;
+    }
+
+    if (userData.phone) {
+      setParts.push(`phone = $${paramCount}`);
+      values.push(userData.phone);
+      paramCount++;
+    }
+
+    if (userData.role) {
+      setParts.push(`role = $${paramCount}`);
+      values.push(userData.role);
+      paramCount++;
+    }
+
+    if (userData.employee_id) {
+      setParts.push(`employee_id = $${paramCount}`);
+      values.push(userData.employee_id);
+      paramCount++;
+    }
+
+    setParts.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+
+    const result = await query(
+      `UPDATE users SET ${setParts.join(
+        ", "
+      )} WHERE id = $${paramCount} RETURNING *`,
+      values
+    );
+    return result.rows[0];
+  }
+
+  static async toggleActive(id: number): Promise<User> {
+    const result = await query(
+      `UPDATE users SET is_active = NOT is_active, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    return result.rows[0];
+  }
+
+  static async setPassword(id: number, passwordHash: string): Promise<void> {
+    await query(
+      "UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+      [passwordHash, id]
+    );
+  }
+
   static async updateLastLogin(id: number): Promise<void> {
     await query(
       "UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = $1",
       [id]
     );
+  }
+
+  static async delete(id: number): Promise<void> {
+    await query("UPDATE users SET is_active = false WHERE id = $1", [id]);
+  }
+
+  static async checkUserAppointments(
+    id: number
+  ): Promise<{ count: number; hasAppointments: boolean }> {
+    const result = await query(
+      "SELECT COUNT(*) as count FROM appointments WHERE booked_by = $1",
+      [id]
+    );
+    const count = parseInt(result.rows[0].count);
+    return { count, hasAppointments: count > 0 };
+  }
+
+  static async permanentDelete(
+    id: number,
+    cascadeDelete: boolean = false
+  ): Promise<void> {
+    // Check if user has appointments
+    const appointmentCheck = await this.checkUserAppointments(id);
+    if (appointmentCheck.hasAppointments) {
+      if (cascadeDelete) {
+        // Delete all appointments associated with this user
+        await query("DELETE FROM appointments WHERE booked_by = $1", [id]);
+        console.log(
+          `Deleted ${appointmentCheck.count} appointment(s) for user ${id}`
+        );
+      } else {
+        throw new Error(
+          `Cannot delete user: they have ${appointmentCheck.count} appointment(s) associated with them. Please reassign or cancel these appointments first.`
+        );
+      }
+    }
+
+    await query("DELETE FROM users WHERE id = $1", [id]);
+  }
+
+  static async reassignUserAppointments(
+    fromUserId: number,
+    toUserId: number
+  ): Promise<number> {
+    const result = await query(
+      "UPDATE appointments SET booked_by = $1 WHERE booked_by = $2",
+      [toUserId, fromUserId]
+    );
+    return result.rowCount || 0;
   }
 }
 
@@ -150,8 +280,12 @@ export class ClientService {
 // Department Services
 export class DepartmentService {
   static async getAll(): Promise<Department[]> {
+    // Optimized: Add index hint and limit fields for faster retrieval
     const result = await query(
-      "SELECT * FROM departments WHERE is_active = true ORDER BY name"
+      `SELECT id, name, description, color, slots_per_day, working_days, working_hours, is_active, created_at
+       FROM departments
+       WHERE is_active = true
+       ORDER BY name`
     );
     return result.rows;
   }
@@ -515,7 +649,9 @@ export class AppointmentService {
       [departmentId]
     );
 
-    const bookedSlots = result.rows.map((row) => row.slot_number);
+    const bookedSlots = result.rows.map(
+      (row: { slot_number: number }) => row.slot_number
+    );
     const totalSlots = deptResult.rows[0]?.slots_per_day || 10;
     const availableSlots = [];
 
@@ -559,6 +695,32 @@ export class AppointmentService {
 
     return workingDays.includes(dayName);
   }
+
+  static async getByClientAndDateRange(
+    clientId: number,
+    startDate: string,
+    endDate: string
+  ): Promise<Appointment[]> {
+    const result = await query(
+      `
+      SELECT
+        a.*,
+        c.name as client_name,
+        c.x_number as client_x_number,
+        d.name as department_name,
+        COALESCE(d.color, '#3B82F6') as department_color,
+        COALESCE(doc.name, 'Dr. Smith') as doctor_name
+      FROM appointments a
+      LEFT JOIN clients c ON a.client_id = c.id
+      LEFT JOIN departments d ON a.department_id = d.id
+      LEFT JOIN doctors doc ON a.doctor_id = doc.id
+      WHERE a.client_id = $1 AND a.appointment_date BETWEEN $2 AND $3
+      ORDER BY a.appointment_date ASC, a.slot_number ASC
+    `,
+      [clientId, startDate, endDate]
+    );
+    return result.rows;
+  }
 }
 
 // System Settings Services
@@ -590,42 +752,6 @@ export class SystemSettingsService {
   }
 }
 
-// OTP Services
-export class OtpService {
-  static async create(
-    xNumber: string,
-    otpCode: string,
-    expiresInMinutes: number = 10
-  ): Promise<OtpCode> {
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + expiresInMinutes);
-
-    const result = await query(
-      "INSERT INTO otp_codes (x_number, otp_code, expires_at) VALUES ($1, $2, $3) RETURNING *",
-      [xNumber, otpCode, expiresAt]
-    );
-    return result.rows[0];
-  }
-
-  static async verify(xNumber: string, otpCode: string): Promise<boolean> {
-    const result = await query(
-      "SELECT * FROM otp_codes WHERE x_number = $1 AND otp_code = $2 AND expires_at > NOW() AND is_used = false",
-      [xNumber, otpCode]
-    );
-
-    if (result.rows.length > 0) {
-      // Mark OTP as used
-      await query("UPDATE otp_codes SET is_used = true WHERE id = $1", [
-        result.rows[0].id,
-      ]);
-      return true;
-    }
-
-    return false;
-  }
-
-  static async cleanup(): Promise<void> {
-    // Remove expired OTPs
-    await query("DELETE FROM otp_codes WHERE expires_at < NOW()");
-  }
-}
+// OTP Services - REMOVED
+// OTP functionality now handled by JWT-based system (lib/jwt-otp-service.ts)
+// No database storage needed for OTPs
