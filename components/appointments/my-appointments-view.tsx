@@ -297,7 +297,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                   </TableCell>
                   <TableCell>
                     <div className="text-muted-foreground">
-                      Dr. {appointment.doctorName}
+                      {appointment.doctorName}
                     </div>
                   </TableCell>
                   <TableCell>

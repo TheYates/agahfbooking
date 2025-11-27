@@ -32,8 +32,11 @@ function maskPhoneNumber(phone: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  let requestBody: { xNumber?: string } = {};
+  
   try {
-    const { xNumber } = await request.json();
+    requestBody = await request.json();
+    const { xNumber } = requestBody;
 
     // Get client information for rate limiting
     const clientInfo = getClientInfo(request);
@@ -107,13 +110,15 @@ export async function POST(request: NextRequest) {
     // Record failed attempt for server errors
     try {
       const clientInfo = getClientInfo(request);
-      const { xNumber } = await request.json();
-      rateLimiter.recordAttempt(
-        clientInfo.ip,
-        false,
-        xNumber,
-        clientInfo.userAgent
-      );
+      const { xNumber } = requestBody; // Use already parsed body
+      if (xNumber) {
+        rateLimiter.recordAttempt(
+          clientInfo.ip,
+          false,
+          xNumber,
+          clientInfo.userAgent
+        );
+      }
     } catch (recordError) {
       console.error("Failed to record rate limit attempt:", recordError);
     }

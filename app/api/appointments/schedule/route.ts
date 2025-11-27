@@ -19,8 +19,17 @@ export async function GET(request: Request) {
     const start = startDate ? new Date(startDate) : new Date();
     const schedule = [];
 
-    // Generate 7 days starting from the start date
-    for (let i = 0; i < 7; i++) {
+    // For the first week (weekOffset=0), only show remaining days of current week
+    // For other weeks, show full 7 days
+    const today = new Date();
+    const isFirstWeek = Math.abs(start.getTime() - today.getTime()) < 24 * 60 * 60 * 1000; // Within 1 day
+    // Sunday = 0, Monday = 1, ..., Saturday = 6
+    // If today is Wednesday (3), remaining days = 7 - 3 = 4 (Wed, Thu, Fri, Sat)
+    // But we want to include Sunday as the last day of the week, so: (7 - today.getDay()) days
+    const daysToGenerate = isFirstWeek ? (7 - today.getDay()) : 7; // Remaining days of week or full week
+    
+    // Generate days
+    for (let i = 0; i < daysToGenerate; i++) {
       const currentDate = new Date(start);
       currentDate.setDate(start.getDate() + i);
 
@@ -48,7 +57,12 @@ export async function GET(request: Request) {
         "Dec",
       ];
 
-      const dayName = i === 0 ? "Today" : dayNames[currentDate.getDay()];
+      // Only show "Today" if it's actually today
+      const today = new Date();
+      const isToday = currentDate.getFullYear() === today.getFullYear() && 
+                     currentDate.getMonth() === today.getMonth() && 
+                     currentDate.getDate() === today.getDate();
+      const dayName = isToday ? "Today" : dayNames[currentDate.getDay()];
       const dateString = `${
         months[currentDate.getMonth()]
       } ${currentDate.getDate()}`;

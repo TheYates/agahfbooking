@@ -196,7 +196,7 @@ export default function LoginPage() {
             <CardContent className="grid p-0 md:grid-cols-2">
               <div className="bg-muted relative hidden md:block">
                 <img
-                  src="https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&h=600&fit=crop&crop=center"
+                  src="https://images.pexels.com/photos/34862508/pexels-photo-34862508.jpeg"
                   alt="Hospital Interior"
                   className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.6] dark:grayscale"
                 />

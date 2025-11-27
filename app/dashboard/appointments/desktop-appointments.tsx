@@ -313,9 +313,12 @@ export default function DesktopAppointmentsPage() {
                 Appointments ({filteredAppointments.length})
               </CardTitle>
               <CardDescription>
-                Showing {startIndex + 1}-
-                {Math.min(endIndex, filteredAppointments.length)} of{" "}
-                {filteredAppointments.length} appointments
+                Showing {currentPage * itemsPerPage - itemsPerPage + 1}-
+                {Math.min(
+                  currentPage * itemsPerPage,
+                  filteredAppointments.length
+                )}{" "}
+                of {filteredAppointments.length} appointments
               </CardDescription>
             </div>
             {totalPages > 1 && (
@@ -360,7 +363,7 @@ export default function DesktopAppointmentsPage() {
                 <p>Error: {error}</p>
                 <Button
                   variant="outline"
-                  onClick={fetchAppointments}
+                  onClick={() => fetchAppointments()}
                   className="mt-4"
                 >
                   Try Again

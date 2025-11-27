@@ -217,7 +217,6 @@ export function BookingModal({
         throw new Error(data.error || "Failed to book appointment");
       }
 
-      console.log("Appointment booked successfully:", data.data);
 
       // Show success toast
       const selectedClient = clients.find((c) => c.id === clientId);

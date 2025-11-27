@@ -108,7 +108,6 @@ export function DashboardClient({ user }: DashboardClientProps) {
     time: string,
     doctorId: number
   ) => {
-    console.log(`Booking: ${day} at ${time} with doctor ${doctorId}`);
     // Handle booking logic here
   };
 

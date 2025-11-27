@@ -159,13 +159,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
       }
 
       const baseEndpoint = endpointData.data.endpoint;
-      console.log(
-        "Calendar: Using endpoint:",
-        baseEndpoint,
-        "for user:",
-        userRole,
-        currentUserId
-      );
 
       // Properly construct URL with query parameters
       const url = new URL(baseEndpoint, window.location.origin);
@@ -174,7 +167,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
       const response = await fetch(url.toString());
       const data = await response.json();
-      console.log("Calendar: Raw response data:", data);
       if (data.success) {
         // Transform the data to match the expected interface
         // Handle both full appointment data and client-specific data

@@ -220,24 +220,67 @@ const fetchClients = async (
   }
 };
 
-// Function to fetch real appointment schedule from API
+// Function to fetch real appointment schedule from API with caching
 const fetchWeekSchedule = async (
   departmentId: number,
-  weekOffset: number = 0
+  weekOffset: number = 0,
+  cache?: React.MutableRefObject<
+    Map<string, { data: DaySchedule[]; timestamp: number }>
+  >
 ): Promise<DaySchedule[]> => {
   try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() + weekOffset * 7);
+    // Create cache key
+    const cacheKey = `${departmentId}-${weekOffset}`;
 
-    const response = await fetch(
-      `/api/appointments/schedule?departmentId=${departmentId}&startDate=${startDate.toISOString()}`
-    );
+    // Check cache first (cache for 30 seconds)
+    if (cache) {
+      const cached = cache.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 30000) {
+        return cached.data;
+      }
+    }
+
+    let startDate = new Date();
+    
+    if (weekOffset === 0) {
+      // First week: start from today
+      // Keep startDate as today
+    } else if (weekOffset > 0) {
+      // Future weeks: calculate from the start of the next complete week after today
+      const today = new Date();
+      const daysUntilSunday = (7 - today.getDay()) % 7; // Days until next Sunday (week end)
+      const nextWeekStart = new Date(today);
+      nextWeekStart.setDate(today.getDate() + daysUntilSunday + 1); // Monday after next Sunday
+      
+      startDate = new Date(nextWeekStart);
+      startDate.setDate(nextWeekStart.getDate() + (weekOffset - 1) * 7);
+    } else {
+      // Previous weeks: go back from today
+      startDate.setDate(startDate.getDate() + weekOffset * 7);
+    }
+    
+    const apiUrl = `/api/appointments/schedule?departmentId=${departmentId}&startDate=${startDate.toISOString()}`;
+
+    const response = await fetch(apiUrl);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
 
     if (data.success) {
+      // Store in cache
+      if (cache) {
+        cache.current.set(cacheKey, {
+          data: data.data,
+          timestamp: Date.now(),
+        });
+      }
       return data.data;
+    } else {
+      return [];
     }
-    return [];
   } catch (error) {
     console.error("Error fetching schedule:", error);
     return [];
@@ -246,10 +289,40 @@ const fetchWeekSchedule = async (
 
 // Function to generate week range string
 const generateWeekRange = (weekOffset: number = 0): string => {
-  const today = new Date();
-  today.setDate(today.getDate() + weekOffset * 7);
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + 6);
+  let startDate = new Date();
+  
+  if (weekOffset === 0) {
+    // First week: start from today
+    // Keep startDate as today
+  } else if (weekOffset > 0) {
+    // Future weeks: calculate from the start of the next complete week after today
+    const today = new Date();
+    const daysUntilSunday = (7 - today.getDay()) % 7; // Days until next Sunday (week end)
+    const nextWeekStart = new Date(today);
+    nextWeekStart.setDate(today.getDate() + daysUntilSunday); // Next Sunday (start of next week)
+    
+    startDate = new Date(nextWeekStart);
+    startDate.setDate(nextWeekStart.getDate() + (weekOffset - 1) * 7);
+  } else {
+    // Previous weeks: go back from today
+    startDate.setDate(startDate.getDate() + weekOffset * 7);
+  }
+  
+  const endDate = new Date(startDate);
+  if (weekOffset === 0) {
+    // For current week, end on Saturday (since Sunday is the first day of next week)
+    const daysUntilSaturday = (7 - startDate.getDay() - 1) % 7;
+    if (startDate.getDay() === 0) {
+      // If today is Sunday, show the full week (Sunday to Saturday)
+      endDate.setDate(startDate.getDate() + 6);
+    } else {
+      // Show from today until Saturday
+      endDate.setDate(startDate.getDate() + daysUntilSaturday);
+    }
+  } else {
+    // For other weeks, show full 7 days (Sunday to Saturday)
+    endDate.setDate(startDate.getDate() + 6);
+  }
 
   const months = [
     "Jan",
@@ -266,13 +339,13 @@ const generateWeekRange = (weekOffset: number = 0): string => {
     "Dec",
   ];
 
-  const startMonth = months[today.getMonth()];
+  const startMonth = months[startDate.getMonth()];
   const endMonth = months[endDate.getMonth()];
 
   if (startMonth === endMonth) {
-    return `${startMonth} ${today.getDate()} - ${endDate.getDate()}`;
+    return `${startMonth} ${startDate.getDate()} - ${endDate.getDate()}`;
   } else {
-    return `${startMonth} ${today.getDate()} - ${endMonth} ${endDate.getDate()}`;
+    return `${startMonth} ${startDate.getDate()} - ${endMonth} ${endDate.getDate()}`;
   }
 };
 
@@ -308,6 +381,9 @@ export function QuickBookingDialog({
   const [weekSchedule, setWeekSchedule] = useState<DaySchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const departmentsLoadedRef = useRef(false);
+  const scheduleCache = useRef<
+    Map<string, { data: DaySchedule[]; timestamp: number }>
+  >(new Map());
 
   // Generate current week range based on offset
   const currentWeekRange = generateWeekRange(currentWeekOffset);
@@ -363,12 +439,21 @@ export function QuickBookingDialog({
     const loadSchedule = async () => {
       if (selectedDepartment) {
         setLoading(true);
-        const schedule = await fetchWeekSchedule(
-          selectedDepartment.id,
-          currentWeekOffset
-        );
-        setWeekSchedule(schedule);
-        setLoading(false);
+        try {
+          const schedule = await fetchWeekSchedule(
+            selectedDepartment.id,
+            currentWeekOffset,
+            scheduleCache
+          );
+          setWeekSchedule(schedule);
+        } catch (error) {
+          console.error("Error loading schedule in useEffect:", error);
+          setWeekSchedule([]);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setWeekSchedule([]);
       }
     };
     loadSchedule();
@@ -436,10 +521,14 @@ export function QuickBookingDialog({
       const data = await response.json();
 
       if (data.success) {
-        // Refresh the schedule to show the cancellation
+        // Clear cache and refresh the schedule to show the cancellation
+        scheduleCache.current.delete(
+          `${selectedDepartment.id}-${currentWeekOffset}`
+        );
         const updatedSchedule = await fetchWeekSchedule(
           selectedDepartment.id,
-          currentWeekOffset
+          currentWeekOffset,
+          scheduleCache
         );
         setWeekSchedule(updatedSchedule);
 
@@ -520,10 +609,14 @@ export function QuickBookingDialog({
       const data = await response.json();
 
       if (data.success) {
-        // Refresh the schedule to show the new booking
+        // Clear cache and refresh the schedule to show the new booking
+        scheduleCache.current.delete(
+          `${selectedDepartment.id}-${currentWeekOffset}`
+        );
         const updatedSchedule = await fetchWeekSchedule(
           selectedDepartment.id,
-          currentWeekOffset
+          currentWeekOffset,
+          scheduleCache
         );
         setWeekSchedule(updatedSchedule);
 
@@ -591,6 +684,17 @@ export function QuickBookingDialog({
 
   const isOwnAppointment = (slot: TimeSlot) => {
     return !slot.available && slot.clientId === currentUserId;
+  };
+
+  // Helper function to check if a date is today
+  const isToday = (dateString: string) => {
+    const today = new Date();
+    const checkDate = new Date(dateString);
+    return (
+      today.getFullYear() === checkDate.getFullYear() &&
+      today.getMonth() === checkDate.getMonth() &&
+      today.getDate() === checkDate.getDate()
+    );
   };
 
   const getSlotStyling = (slot: TimeSlot, fullDateString: string) => {
@@ -836,114 +940,136 @@ export function QuickBookingDialog({
                       {/* Daily Schedule - Scrollable */}
                       <motion.div
                         variants={shouldAnimate ? itemVariants : {}}
-                        className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide pb-4"
+                        className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide pb-4 bg-background"
                         style={{
                           scrollbarWidth: "none",
                           msOverflowStyle: "none",
                         }}
                       >
-                        {weekSchedule.map((day: DaySchedule) => (
-                          <motion.div
-                            key={day.date}
-                            variants={shouldAnimate ? itemVariants : {}}
-                            className="space-y-3"
-                          >
-                            {/* Day Header */}
-                            <div className="flex items-center justify-center">
-                              <h4 className="font-medium text-foreground">
-                                {day.dayName}, {day.date}
-                              </h4>
-                              {!day.hasAvailability && (
-                                <span className="text-sm text-muted-foreground ml-2">
-                                  - No Availability
-                                </span>
-                              )}
-                            </div>
+                        {loading ? (
+                          <div className="text-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                            <p className="text-muted-foreground">
+                              Loading schedule...
+                            </p>
+                          </div>
+                        ) : weekSchedule.length === 0 ? (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground">
+                              No schedule data available for this department
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Try selecting a different department
+                            </p>
+                          </div>
+                        ) : (
+                          weekSchedule.map((day: DaySchedule) => (
+                            <motion.div
+                              key={day.date}
+                              variants={shouldAnimate ? itemVariants : {}}
+                              className="space-y-3"
+                            >
+                              {/* Day Header */}
+                              <div className="flex items-center justify-center">
+                                <h4 className="font-medium text-foreground">
+                                  {day.dayName}, {day.date}
+                                </h4>
+                                {!day.hasAvailability && (
+                                  <span className="text-sm text-muted-foreground ml-2">
+                                    - No Availability
+                                  </span>
+                                )}
+                              </div>
 
-                            {/* Time Slots */}
-                            {day.hasAvailability && (
-                              <motion.div
-                                variants={
-                                  shouldAnimate ? containerVariants : {}
-                                }
-                                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2"
-                              >
-                                {day.slots.map((slot: TimeSlot) => (
-                                  <motion.button
-                                    key={`${day.date}-${slot.time}`}
-                                    variants={
-                                      shouldAnimate ? timeSlotVariants : {}
-                                    }
-                                    whileHover={
-                                      shouldAnimate && slot.available
-                                        ? {
-                                            scale: 1.05,
-                                            y: -2,
-                                            transition: {
-                                              type: "spring",
-                                              stiffness: 400,
-                                              damping: 25,
-                                            },
-                                          }
-                                        : {}
-                                    }
-                                    whileTap={
-                                      shouldAnimate && slot.available
-                                        ? { scale: 0.98 }
-                                        : {}
-                                    }
-                                    onClick={() => {
-                                      if (
-                                        slot.available &&
-                                        !isPastDate(day.fullDate) &&
-                                        !slot.isNonWorkingDay
-                                      ) {
-                                        handleTimeSlotClick(
-                                          day.date,
-                                          slot.time
-                                        );
-                                      } else if (
-                                        isOwnAppointment(slot) &&
-                                        !isPastDate(day.fullDate) &&
-                                        !slot.isNonWorkingDay
-                                      ) {
-                                        handleCancelAppointment(day, slot);
+                              {/* Time Slots */}
+                              {day.hasAvailability ? (
+                                <motion.div
+                                  variants={
+                                    shouldAnimate ? containerVariants : {}
+                                  }
+                                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2"
+                                >
+                                  {day.slots.map((slot: TimeSlot) => (
+                                    <motion.button
+                                      key={`${day.date}-${slot.time}`}
+                                      variants={
+                                        shouldAnimate ? timeSlotVariants : {}
                                       }
-                                    }}
-                                    disabled={
-                                      isPastDate(day.fullDate) ||
-                                      slot.isNonWorkingDay
-                                    }
-                                    aria-label={`${
-                                      slot.available ? "Book" : "Occupied"
-                                    } time slot ${slot.time} on ${
-                                      day.dayName
-                                    }, ${day.date}`}
-                                    className={cn(
-                                      "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
-                                      getSlotStyling(slot, day.fullDate)
-                                    )}
-                                  >
-                                    <div className="text-center relative">
-                                      <div className="font-medium">
-                                        {slot.time}
+                                      whileHover={
+                                        shouldAnimate && slot.available
+                                          ? {
+                                              scale: 1.05,
+                                              y: -2,
+                                              transition: {
+                                                type: "spring",
+                                                stiffness: 400,
+                                                damping: 25,
+                                              },
+                                            }
+                                          : {}
+                                      }
+                                      whileTap={
+                                        shouldAnimate && slot.available
+                                          ? { scale: 0.98 }
+                                          : {}
+                                      }
+                                      onClick={() => {
+                                        if (
+                                          slot.available &&
+                                          !isPastDate(day.fullDate) &&
+                                          !slot.isNonWorkingDay
+                                        ) {
+                                          handleTimeSlotClick(
+                                            day.date,
+                                            slot.time
+                                          );
+                                        } else if (
+                                          isOwnAppointment(slot) &&
+                                          !isPastDate(day.fullDate) &&
+                                          !slot.isNonWorkingDay
+                                        ) {
+                                          handleCancelAppointment(day, slot);
+                                        }
+                                      }}
+                                      disabled={
+                                        isPastDate(day.fullDate) ||
+                                        slot.isNonWorkingDay
+                                      }
+                                      aria-label={`${
+                                        slot.available ? "Book" : "Occupied"
+                                      } time slot ${slot.time} on ${
+                                        day.dayName
+                                      }, ${day.date}`}
+                                      className={cn(
+                                        "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
+                                        getSlotStyling(slot, day.fullDate)
+                                      )}
+                                    >
+                                      <div className="text-center relative">
+                                        <div className="font-medium">
+                                          {slot.time}
+                                        </div>
+                                        <div className="text-xs">
+                                          {getSlotText(slot)}
+                                        </div>
+                                        {isOwnAppointment(slot) &&
+                                          !isPastDate(day.fullDate) && (
+                                            <div className="absolute -top-1 -right-1 text-red-500 opacity-80 font-bold">
+                                              ×
+                                            </div>
+                                          )}
                                       </div>
-                                      <div className="text-xs">
-                                        {getSlotText(slot)}
-                                      </div>
-                                      {isOwnAppointment(slot) &&
-                                        !isPastDate(day.fullDate) && (
-                                          <div className="absolute -top-1 -right-1 text-red-500 opacity-80 font-bold">
-                                            ×
-                                          </div>
-                                        )}
-                                    </div>
-                                  </motion.button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </motion.div>
-                        ))}
+                                    </motion.button>
+                                  ))}
+                                </motion.div>
+                              ) : (
+                                <div className="text-center py-4 text-muted-foreground text-sm">
+                                  No available slots for this day
+                                </div>
+                              )}
+                            </motion.div>
+                          ))
+                        )}
                       </motion.div>
                     </div>
                   )
