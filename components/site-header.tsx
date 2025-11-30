@@ -87,6 +87,21 @@ export function SiteHeader() {
           <SidebarIcon />
         </Button>
         <Separator orientation="vertical" className="mr-2 h-4" />
+
+        {/* Logo - visible on all screen sizes */}
+        <div className="flex items-center gap-2">
+          <img
+            src="/agahflogo.svg"
+            alt="AGAHF Logo"
+            className="h-6 w-6 dark:hidden"
+          />
+          <img
+            src="/agahflogo white.svg"
+            alt="AGAHF Logo"
+            className="h-6 w-6 hidden dark:block"
+          />
+          <span className="font-semibold text-sm hidden sm:inline">AGAHF BOOKING</span>
+        </div>
         
         {breadcrumbs && breadcrumbs.length > 0 && (
           <Breadcrumb className="hidden sm:block">

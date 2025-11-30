@@ -34,13 +34,16 @@ if (process.env.DATABASE_URL) {
   // Use DATABASE_URL if provided (common in production) - OPTIMIZED
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 50, // Increased pool size
-    connectionTimeoutMillis: 2000, // Faster timeout for acquiring connections
+    max: 3, // Reduced for Supabase free tier (recommended: 3-5 connections)
+    connectionTimeoutMillis: 5000, // Increased timeout for slow networks
     idleTimeoutMillis: 60000, // Keep connections longer
     statement_timeout: 30000,
     query_timeout: 10000,
     application_name: "booking-app-optimized",
     ssl: { rejectUnauthorized: false },
+    // Additional Supabase-specific settings
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   });
 } else {
   // Use individual config variables

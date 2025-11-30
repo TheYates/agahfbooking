@@ -105,20 +105,20 @@ export function AppSidebar({ user }: AppSidebarProps) {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+          <div className="flex aspect-square size-10 items-center justify-center">
             <img
               src="/agahflogo.svg"
               alt="AGAHF Logo"
-              className="size-4 dark:hidden"
+              className="size-10 dark:hidden"
             />
             <img
               src="/agahflogo white.svg"
               alt="AGAHF Logo"
-              className="size-4 hidden dark:block"
+              className="size-10 hidden dark:block"
             />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">AGAHF Hospital</span>
+            <span className="truncate font-semibold">AGAHF BOOKING</span>
             <span className="truncate text-xs text-muted-foreground">
               {user.name} • {user.role}
             </span>

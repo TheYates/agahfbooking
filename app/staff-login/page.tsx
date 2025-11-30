@@ -77,24 +77,25 @@ export default function StaffLoginPage() {
               <form className="p-8 md:p-12" onSubmit={handleUsernameLogin}>
                 <div className="flex flex-col gap-6">
                   <div className="flex flex-col items-center text-center">
-                    <div className="mb-2 flex justify-center">
+                    <div className="mb-3 flex flex-col items-center gap-2">
                       <img
                         src="/agahflogo.svg"
                         alt="AGAHF Logo"
-                        className="h-24 w-24 object-contain dark:hidden"
+                        className="h-20 w-20 object-contain dark:hidden"
                       />
                       <img
                         src="/agahflogo white.svg"
                         alt="AGAHF Logo"
-                        className="h-24 w-24 object-contain hidden dark:block"
+                        className="h-20 w-20 object-contain hidden dark:block"
                       />
+                      <h2 className="text-lg font-bold tracking-tight">AGAHF BOOKING</h2>
                     </div>
                     <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
                       <Shield className="h-6 w-6" />
                       Staff Login
                     </h1>
                     <p className="text-muted-foreground text-balance">
-                      Access the hospital appointment system
+                      Access the appointment system
                     </p>
                   </div>
 

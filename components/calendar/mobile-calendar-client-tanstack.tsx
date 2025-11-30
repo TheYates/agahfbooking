@@ -456,27 +456,6 @@ export function MobileCalendarClientTanstack({
 
   return (
     <div className="space-y-6">
-      {/* TanStack Query Status (Development) */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="bg-muted/50 rounded-lg p-3 text-xs">
-          <p className="font-medium mb-1">🚀 TanStack Query Calendar Status:</p>
-          <p>
-            Loading: {loading ? "Yes" : "No"} •{" "}
-            Error: {error ? "Yes" : "No"} •{" "}
-            Background Refresh: {isRefetching ? "Active" : "Idle"} •{" "}
-            Departments: {departments.length} •{" "}
-            Appointments: {appointments.length} •{" "}
-            View: {view} •{" "}
-            Date: {currentDate.toLocaleDateString()}
-          </p>
-          {error && (
-            <p className="text-red-500 mt-1">
-              Error: {(error as Error).message}
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Header Controls */}
       <div className="flex flex-col space-y-4">
         {/* Navigation and View Switcher */}

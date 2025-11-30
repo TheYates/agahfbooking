@@ -261,24 +261,6 @@ export function MobileAppointmentsClientTanstack({
         </motion.div>
       </div>
 
-      {/* TanStack Query Status (Development) */}
-      {process.env.NODE_ENV === "development" && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          className="bg-muted/50 rounded-lg p-3 text-xs"
-        >
-          <p className="font-medium mb-1">🚀 TanStack Query Status:</p>
-          <p>
-            Stats: {statsLoading ? "Loading..." : statsError ? "Error" : "✅ Cached"} •{" "}
-            Appointments: {appointmentsLoading ? "Loading..." : appointmentsError ? "Error" : "✅ Cached"} •{" "}
-            Page: {currentPage}/{pagination.totalPages} •{" "}
-            Previous Data: {isPreviousData ? "Yes" : "No"}
-          </p>
-        </motion.div>
-      )}
-
       {/* Quick Book Button */}
       {openBooking && (
         <motion.div

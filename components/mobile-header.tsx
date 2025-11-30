@@ -66,10 +66,22 @@ export function MobileHeader({ user }: MobileHeaderProps) {
       <div className="flex h-14 items-center justify-between px-4">
         {/* Logo and Page Title */}
         <div className="flex items-center space-x-3">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">H</span>
+          <div className="h-8 w-8 flex items-center justify-center">
+            <img
+              src="/agahflogo.svg"
+              alt="AGAHF Logo"
+              className="h-8 w-8 dark:hidden"
+            />
+            <img
+              src="/agahflogo white.svg"
+              alt="AGAHF Logo"
+              className="h-8 w-8 hidden dark:block"
+            />
           </div>
-          <h1 className="font-semibold text-lg">{getPageTitle()}</h1>
+          <div className="flex flex-col">
+            <h1 className="font-semibold text-sm leading-tight">AGAHF BOOKING</h1>
+            <span className="text-xs text-muted-foreground">{getPageTitle()}</span>
+          </div>
         </div>
 
         {/* User Menu */}

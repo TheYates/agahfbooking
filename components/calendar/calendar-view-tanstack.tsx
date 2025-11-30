@@ -56,32 +56,6 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     refetch,
   } = useCalendarData(userRole, currentUserId, view, currentDate);
 
-  // TanStack Query Status (Development)
-  const renderDebugInfo = () => {
-    if (process.env.NODE_ENV !== "development") return null;
-    
-    return (
-      <div className="bg-muted/50 rounded-lg p-3 text-xs mb-4">
-        <p className="font-medium mb-1">🚀 TanStack Query Calendar Status:</p>
-        <p>
-          Loading: {loading ? "Yes" : "No"} •{" "}
-          Error: {error ? "Yes" : "No"} •{" "}
-          Background Refresh: {isRefetching ? "Active" : "Idle"} •{" "}
-          Departments: {departments.length} •{" "}
-          Doctors: {doctors.length} •{" "}
-          Appointments: {appointments.length} •{" "}
-          View: {view} •{" "}
-          Date: {currentDate.toLocaleDateString()}
-        </p>
-        {error && (
-          <p className="text-red-500 mt-1">
-            Error: {(error as Error).message}
-          </p>
-        )}
-      </div>
-    );
-  };
-
   // Helper functions (same as original but using TanStack data)
   const getStatusColor = (status: string) => {
     const statusColors: { [key: string]: string } = {
@@ -329,7 +303,6 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
   if (loading) {
     return (
       <div className="space-y-6">
-        {renderDebugInfo()}
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading calendar data...</p>
@@ -345,7 +318,6 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
   if (error) {
     return (
       <div className="space-y-6">
-        {renderDebugInfo()}
         <div className="text-center py-12 text-red-600">
           <div className="text-lg mb-2">⚠️ Calendar Error</div>
           <p className="mb-4">{(error as Error).message}</p>
@@ -539,7 +511,6 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
 
   return (
     <div className="space-y-6">
-      {renderDebugInfo()}
 
       {/* Appointment Alerts - Shows toast notifications for upcoming appointments */}
       <AppointmentAlerts
