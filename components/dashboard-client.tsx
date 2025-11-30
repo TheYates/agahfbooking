@@ -11,8 +11,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Users, CheckCircle } from "lucide-react";
 import Link from "next/link";
-import { QuickBookingDialog } from "@/components/ui/quick-booking-dialog";
+import { QuickBookingDialogTanstack as QuickBookingDialog } from "@/components/ui/quick-booking-dialog-tanstack";
 import type { User } from "@/lib/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-client";
 
 interface DashboardClientProps {
   user: User;
@@ -49,6 +51,7 @@ export function DashboardClient({ user }: DashboardClientProps) {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const queryClient = useQueryClient();
 
   // Fetch dashboard statistics
   useEffect(() => {
@@ -87,6 +90,35 @@ export function DashboardClient({ user }: DashboardClientProps) {
       fetchStats();
     }
   }, [user.id, user.role]);
+
+  // 🚀 Prefetch client data on dashboard mount for instant dialog opening
+  useEffect(() => {
+    if (user.id && user.role) {
+      // Prefetch client data in the background
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.clients.search("", user.role, user.id),
+        queryFn: async () => {
+          const response = await fetch(
+            user.role === "client"
+              ? `/api/clients/stats?clientId=${user.id}`
+              : `/api/clients/stats?limit=20`
+          );
+          const data = await response.json();
+          if (data.success && data.data.length > 0) {
+            return data.data.map((client: any) => ({
+              id: client.id,
+              name: client.name,
+              x_number: client.xNumber || client.x_number,
+              phone: client.phone,
+              category: client.category,
+            }));
+          }
+          return [];
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+      });
+    }
+  }, [user.id, user.role, queryClient]);
 
   // Helper function to get status colors
   const getStatusColor = (status: string) => {

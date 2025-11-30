@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,16 +42,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-
-// 🚀 Import TanStack Query hooks
-import {
-  useUsers,
-  useAddUser,
-  useUpdateUser,
-  useToggleUserActive,
-  useDeleteUser,
-} from "@/hooks/use-hospital-queries";
-import { useDebounce } from "@/hooks/use-debounce";
+import { toast } from "sonner";
 
 interface User {
   id: number;
@@ -73,6 +64,8 @@ interface UserFormData {
 }
 
 export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -89,26 +82,41 @@ export default function UsersPage() {
     password: "",
   });
 
-  // 🚀 Debounce search term (500ms delay)
-  const debouncedSearch = useDebounce(searchTerm, 500);
+  // Fetch users
+  const fetchUsers = async (search?: string) => {
+    try {
+      const url = search
+        ? `/api/users?search=${encodeURIComponent(search)}`
+        : "/api/users";
+      const response = await fetch(url);
 
-  // 🚀 TanStack Query: Replace fetchUsers useEffect with one hook!
-  const {
-    data: usersData,
-    isLoading: loading,
-    error: queryError,
-    isRefetching,
-  } = useUsers(debouncedSearch);
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
 
-  // 🚀 TanStack Query: Mutations with optimistic updates
-  const addMutation = useAddUser();
-  const updateMutation = useUpdateUser();
-  const toggleMutation = useToggleUserActive();
-  const deleteMutation = useDeleteUser();
+      const data = await response.json();
+      setUsers(data.users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast.error("Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Extract data with safe defaults
-  const users = usersData?.users || [];
-  const error = queryError?.message || "";
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Handle search
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    if (value.trim()) {
+      fetchUsers(value);
+    } else {
+      fetchUsers();
+    }
+  };
 
   // Reset form
   const resetForm = () => {
@@ -125,56 +133,130 @@ export default function UsersPage() {
 
   // Handle add user
   const handleAddUser = async () => {
-    if (!formData.name || !formData.phone || !formData.employee_id) {
-      return; // Toast will be handled by mutation
-    }
+    try {
+      if (!formData.name || !formData.phone || !formData.employee_id) {
+        toast.error("Please fill in all required fields");
+        return;
+      }
 
-    // 🚀 TanStack Query: Use mutation hook
-    addMutation.mutate(formData, {
-      onSuccess: () => {
-        setIsAddDialogOpen(false);
-        resetForm();
-      },
-    });
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create user");
+      }
+
+      toast.success("User created successfully");
+      setIsAddDialogOpen(false);
+      resetForm();
+      fetchUsers();
+    } catch (error) {
+      console.error("Error creating user:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create user"
+      );
+    }
   };
 
   // Handle edit user
   const handleEditUser = async () => {
     if (!editingUser) return;
 
-    // 🚀 TanStack Query: Use mutation hook with optimistic updates
-    updateMutation.mutate(
-      { id: editingUser.id, data: formData },
-      {
-        onSuccess: () => {
-          setIsEditDialogOpen(false);
-          resetForm();
+    try {
+      const response = await fetch(`/api/users/${editingUser.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update user");
       }
-    );
+
+      toast.success("User updated successfully");
+      setIsEditDialogOpen(false);
+      resetForm();
+      fetchUsers();
+    } catch (error) {
+      console.error("Error updating user:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update user"
+      );
+    }
   };
 
   // Handle toggle active status
   const handleToggleActive = async (user: User) => {
-    // 🚀 TanStack Query: Use mutation hook with optimistic updates
-    toggleMutation.mutate(user.id);
+    try {
+      const response = await fetch(`/api/users/${user.id}/toggle-active`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to toggle user status");
+      }
+
+      toast.success(
+        `User ${user.is_active ? "deactivated" : "activated"} successfully`
+      );
+      fetchUsers();
+    } catch (error) {
+      console.error("Error toggling user status:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to toggle user status"
+      );
+    }
   };
 
   // Handle delete user
   const handleDeleteUser = async () => {
     if (!deletingUser) return;
 
-    // 🚀 TanStack Query: Use mutation hook with optimistic updates
-    deleteMutation.mutate(
-      { id: deletingUser.id, cascade: deleteWithAppointments },
-      {
-        onSuccess: () => {
-          setIsDeleteDialogOpen(false);
-          setDeletingUser(null);
-          setDeleteWithAppointments(false);
-        },
-      }
+    console.log(
+      `DEBUG: deleteWithAppointments state: ${deleteWithAppointments}`
     );
+    console.log(`DEBUG: deletingUser:`, deletingUser);
+
+    try {
+      const url = deleteWithAppointments
+        ? `/api/users/${deletingUser.id}?cascade=true`
+        : `/api/users/${deletingUser.id}`;
+
+      console.log(
+        `Deleting user with URL: ${url}, deleteWithAppointments: ${deleteWithAppointments}`
+      );
+
+      const response = await fetch(url, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete user");
+      }
+
+      const result = await response.json();
+      toast.success(result.message || "User deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setDeletingUser(null);
+      setDeleteWithAppointments(false);
+      fetchUsers();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete user"
+      );
+    }
   };
 
   // Open delete dialog
@@ -207,6 +289,14 @@ export default function UsersPage() {
     return isActive ? "default" : "secondary";
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading users...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -222,20 +312,6 @@ export default function UsersPage() {
           Add User
         </Button>
       </div>
-
-      {/* TanStack Query Status (Development) */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="bg-muted/50 rounded-lg p-3 text-xs">
-          <p className="font-medium mb-1">🚀 TanStack Query Status:</p>
-          <p>
-            Loading: {loading ? "Yes" : "No"} •{" "}
-            Error: {error ? "Yes" : "No"} •{" "}
-            Background Refresh: {isRefetching ? "Active" : "Idle"} •{" "}
-            Users: {users.length}
-          </p>
-          {error && <p className="text-red-500 mt-1">Error: {error}</p>}
-        </div>
-      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -281,7 +357,7 @@ export default function UsersPage() {
           <Input
             placeholder="Search users..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             className="pl-8"
           />
         </div>
@@ -290,97 +366,85 @@ export default function UsersPage() {
       {/* Users Table */}
       <Card>
         <CardContent className="p-0">
-          {loading && users.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p>Loading users...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-8 text-red-600">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Error: {error}</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.length === 0 ? (
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Employee ID</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    No users found
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      No users found
+              ) : (
+                users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.employee_id}</TableCell>
+                    <TableCell>{user.phone}</TableCell>
+                    <TableCell>
+                      <span className={getRoleColor(user.role)}>
+                        {user.role}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(user.is_active)}>
+                        {user.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(user.created_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(user)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleToggleActive(user)}
+                        >
+                          {user.is_active ? (
+                            <UserX className="h-4 w-4" />
+                          ) : (
+                            <UserCheck className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openDeleteDialog(user)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.employee_id}</TableCell>
-                      <TableCell>{user.phone}</TableCell>
-                      <TableCell>
-                        <span className={getRoleColor(user.role)}>
-                          {user.role}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadgeVariant(user.is_active)}>
-                          {user.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(user.created_at).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(user)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleActive(user)}
-                          >
-                            {user.is_active ? (
-                              <UserX className="h-4 w-4" />
-                            ) : (
-                              <UserCheck className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openDeleteDialog(user)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -476,9 +540,7 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddUser} disabled={addMutation.isPending}>
-              {addMutation.isPending ? "Creating..." : "Create User"}
-            </Button>
+            <Button onClick={handleAddUser}>Create User</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -578,9 +640,7 @@ export default function UsersPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleEditUser} disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? "Updating..." : "Update User"}
-            </Button>
+            <Button onClick={handleEditUser}>Update User</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -622,6 +682,7 @@ export default function UsersPage() {
                     id="delete-appointments"
                     checked={deleteWithAppointments}
                     onCheckedChange={(checked) => {
+                      console.log(`DEBUG: Checkbox changed to: ${checked}`);
                       setDeleteWithAppointments(checked as boolean);
                     }}
                   />
@@ -631,6 +692,10 @@ export default function UsersPage() {
                       className="text-sm font-medium cursor-pointer"
                     >
                       Also delete all associated appointments
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        (Current state:{" "}
+                        {deleteWithAppointments ? "CHECKED" : "UNCHECKED"})
+                      </span>
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       This will permanently delete all appointments booked by
@@ -648,12 +713,8 @@ export default function UsersPage() {
             >
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteUser}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete User"}
+            <Button variant="destructive" onClick={handleDeleteUser}>
+              Delete User
             </Button>
           </DialogFooter>
         </DialogContent>

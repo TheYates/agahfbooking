@@ -1,13 +1,14 @@
 import { requireAuth } from "@/lib/auth";
-import { CalendarView } from "@/components/calendar/calendar-view";
-import { MobileCalendarClient } from "@/components/calendar/mobile-calendar-client";
+// 🚀 Import TanStack-optimized calendar components
+import { CalendarViewTanstack as CalendarView } from "@/components/calendar/calendar-view-tanstack";
+import { MobileCalendarClientTanstack as MobileCalendarClient } from "@/components/calendar/mobile-calendar-client-tanstack";
 
 export default async function CalendarPage() {
   const user = await requireAuth();
 
   return (
     <>
-      {/* Desktop View */}
+      {/* Desktop View - TanStack Optimized */}
       <div className="hidden md:block space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Calendar</h1>
@@ -21,7 +22,7 @@ export default async function CalendarPage() {
         <CalendarView userRole={user.role} currentUserId={user.id} />
       </div>
 
-      {/* Mobile View */}
+      {/* Mobile View - TanStack Optimized */}
       <div className="md:hidden">
         <MobileCalendarClient
           user={user}

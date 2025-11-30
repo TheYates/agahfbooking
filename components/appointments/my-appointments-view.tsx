@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -13,6 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, User, Building } from "lucide-react";
 import { toast } from "sonner";
+
+// 🚀 Import TanStack Query hooks
+import {
+  useClientAppointmentsPaginated,
+  useCancelAppointment,
+} from "@/hooks/use-hospital-queries";
 
 interface Appointment {
   id: number;
@@ -31,41 +37,27 @@ interface MyAppointmentsViewProps {
 }
 
 export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filter, setFilter] = useState<
     "all" | "upcoming" | "past" | "completed" | "cancelled"
   >("all");
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        setLoading(true);
-        setError("");
+  // 🚀 TanStack Query: Replace manual fetch with optimized hook
+  const {
+    data: appointmentsData,
+    isLoading: loading,
+    error: queryError,
+  } = useClientAppointmentsPaginated(
+    currentUserId,
+    1,
+    1000 // Fetch all appointments at once for filtering
+  );
 
-        const response = await fetch(
-          `/api/appointments/client?clientId=${currentUserId}`
-        );
-        const data = await response.json();
+  // 🚀 TanStack Query: Use mutation hook for cancellations
+  const cancelMutation = useCancelAppointment();
 
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to fetch appointments");
-        }
-
-        setAppointments(data.data || []);
-      } catch (err) {
-        console.error("Error fetching appointments:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load appointments"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAppointments();
-  }, [currentUserId]);
+  // Extract appointments with safe default
+  const appointments = appointmentsData?.data || [];
+  const error = queryError?.message || "";
 
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
@@ -91,6 +83,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     );
   };
 
+  // 🚀 TanStack Query: Simplified cancel with optimistic updates
   const handleCancelAppointment = async (appointmentId: number) => {
     const appointment = appointments.find((apt) => apt.id === appointmentId);
     if (!appointment) return;
@@ -103,49 +96,13 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
 
     if (!confirmCancel) return;
 
-    try {
-      const response = await fetch(
-        `/api/appointments/cancel?departmentId=${appointment.departmentId}&date=${appointment.date}&slotNumber=${appointment.slotNumber}&clientId=${currentUserId}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Update the local state to reflect the cancellation
-        setAppointments((prev) =>
-          prev.map((apt) =>
-            apt.id === appointmentId ? { ...apt, status: "cancelled" } : apt
-          )
-        );
-
-        // Show success toast
-        const appointment = appointments.find(
-          (apt) => apt.id === appointmentId
-        );
-        toast.success("Appointment Cancelled! ✅", {
-          description: `Your appointment on ${appointment?.date} has been cancelled successfully`,
-          duration: 4000,
-        });
-      } else {
-        // Show error toast
-        toast.error("Cancellation Failed", {
-          description:
-            data.error || "Failed to cancel appointment. Please try again.",
-          duration: 4000,
-        });
-      }
-    } catch (error) {
-      console.error("Error cancelling appointment:", error);
-
-      // Show error toast
-      toast.error("Cancellation Error", {
-        description: "Failed to cancel appointment. Please try again.",
-        duration: 4000,
-      });
-    }
+    // Use TanStack Query mutation - handles optimistic updates automatically!
+    cancelMutation.mutate({
+      departmentId: appointment.departmentId,
+      date: appointment.date,
+      slotNumber: appointment.slotNumber,
+      clientId: currentUserId,
+    });
   };
 
   const filteredAppointments = appointments.filter((appointment) => {

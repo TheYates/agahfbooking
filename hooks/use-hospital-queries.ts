@@ -193,13 +193,30 @@ const fetchWeekSchedule = async (
   departmentId: number,
   weekOffset: number = 0
 ): Promise<DaySchedule[]> => {
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() + weekOffset * 7)
+  let startDate = new Date()
+
+  if (weekOffset === 0) {
+    // First week: start from today
+    // Keep startDate as today
+  } else if (weekOffset > 0) {
+    // Future weeks: calculate from the start of the next complete week after today
+    const today = new Date()
+    const daysUntilNextSunday = today.getDay() === 0 ? 7 : 7 - today.getDay() // Days until next Sunday
+    const nextSunday = new Date(today)
+    nextSunday.setDate(today.getDate() + daysUntilNextSunday) // Sunday is week start
+
+    startDate = new Date(nextSunday)
+    startDate.setDate(nextSunday.getDate() + (weekOffset - 1) * 7)
+  } else {
+    // Previous weeks: go back from today
+    startDate.setDate(startDate.getDate() + weekOffset * 7)
+  }
+
   const apiUrl = `/api/appointments/schedule?departmentId=${departmentId}&startDate=${startDate.toISOString()}`
-  
+
   const response = await fetch(apiUrl)
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-  
+
   const data = await response.json()
   return data.success ? data.data : []
 }
@@ -441,8 +458,9 @@ export const useClients = (
     queryKey: queryKeys.clients.search(searchTerm, userRole, currentUserId),
     queryFn: () => fetchClients(searchTerm, userRole, currentUserId),
     enabled,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - clients don't change often
     gcTime: 10 * 60 * 1000, // 10 minutes
+    placeholderData: (previousData) => previousData, // Show previous results while searching
   })
 }
 
@@ -451,7 +469,9 @@ export const useSchedule = (
   weekOffset: number = 0,
   enabled: boolean = true
 ) => {
-  return useQuery({
+  const queryClient = useQueryClient()
+
+  const query = useQuery({
     queryKey: queryKeys.schedule.department(departmentId!, weekOffset),
     queryFn: () => fetchWeekSchedule(departmentId!, weekOffset),
     enabled: enabled && !!departmentId,
@@ -459,7 +479,27 @@ export const useSchedule = (
     gcTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 60 * 1000, // Refetch every minute for real-time updates
     refetchIntervalInBackground: true,
+    placeholderData: (previousData) => previousData, // Show previous data while loading new week
   })
+
+  // Prefetch adjacent weeks for instant navigation
+  if (departmentId && enabled && query.data) {
+    // Prefetch next week
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.schedule.department(departmentId, weekOffset + 1),
+      queryFn: () => fetchWeekSchedule(departmentId, weekOffset + 1),
+      staleTime: 30 * 1000,
+    })
+
+    // Prefetch previous week
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.schedule.department(departmentId, weekOffset - 1),
+      queryFn: () => fetchWeekSchedule(departmentId, weekOffset - 1),
+      staleTime: 30 * 1000,
+    })
+  }
+
+  return query
 }
 
 export const useBookAppointment = () => {
@@ -857,6 +897,995 @@ export const useDeleteAppointment = () => {
       toast.success('Appointment Deleted! ✅', {
         description: 'The appointment has been successfully deleted.',
         duration: 4000,
+      })
+    },
+  })
+}
+
+// ==========================================
+// 📋 CLIENTS MANAGEMENT HOOKS
+// ==========================================
+
+interface ClientDetailed {
+  id: number
+  xNumber: string
+  name: string
+  phone: string
+  category: string
+  joinDate: string
+  totalAppointments: number
+  lastAppointment?: string
+  status: 'active' | 'inactive'
+  emergencyContact?: string
+  address?: string
+  medicalNotes?: string
+}
+
+interface ClientsQueryParams {
+  search?: string
+  category?: string
+  status?: string
+  page: number
+  limit: number
+  sortBy: string
+  sortOrder: 'asc' | 'desc'
+}
+
+interface ClientsResponse {
+  data: ClientDetailed[]
+  pagination: {
+    currentPage: number
+    totalPages: number
+    totalCount: number
+    hasMore: boolean
+  }
+}
+
+// Fetch Clients with Pagination and Filters (for management page)
+const fetchClientsManagement = async (params: ClientsQueryParams): Promise<ClientsResponse> => {
+  const queryParams = new URLSearchParams()
+  if (params.search) queryParams.append('search', params.search)
+  if (params.category && params.category !== 'all') queryParams.append('category', params.category)
+  if (params.status && params.status !== 'all') queryParams.append('status', params.status)
+  queryParams.append('page', params.page.toString())
+  queryParams.append('limit', params.limit.toString())
+  queryParams.append('sortBy', params.sortBy)
+  queryParams.append('sortOrder', params.sortOrder)
+
+  const response = await fetch(`/api/clients/stats?${queryParams.toString()}`)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch clients')
+  }
+
+  return response.json()
+}
+
+// useClientsManagement Hook - Main query hook with pagination and filters (Management Page)
+export const useClientsManagement = (params: ClientsQueryParams) => {
+  const queryClient = useQueryClient()
+
+  const query = useQuery({
+    queryKey: ['clients', 'list', params],
+    queryFn: () => fetchClientsManagement(params),
+    staleTime: 30 * 1000, // 30 seconds
+    placeholderData: (previousData) => previousData, // Show previous data while loading
+  })
+
+  // Prefetch next page for instant navigation
+  if (query.data && params.page < query.data.pagination.totalPages) {
+    queryClient.prefetchQuery({
+      queryKey: ['clients', 'list', { ...params, page: params.page + 1 }],
+      queryFn: () => fetchClientsManagement({ ...params, page: params.page + 1 }),
+      staleTime: 30 * 1000,
+    })
+  }
+
+  return query
+}
+
+// Add Client Mutation
+const addClient = async (clientData: Partial<ClientDetailed>) => {
+  const response = await fetch('/api/clients', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(clientData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to add client')
+  }
+
+  return response.json()
+}
+
+export const useAddClient = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: addClient,
+    onSuccess: () => {
+      // Invalidate all clients list queries to refetch with new data
+      queryClient.invalidateQueries({ queryKey: ['clients', 'list'] })
+
+      toast.success('Client Added! ✅', {
+        description: 'The client has been successfully added.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Add Failed', {
+        description: err.message || 'Failed to add client. Please try again.',
+      })
+    },
+  })
+}
+
+// Update Client Mutation
+const updateClient = async ({ id, data }: { id: number; data: Partial<ClientDetailed> }) => {
+  const response = await fetch(`/api/clients/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update client')
+  }
+
+  return response.json()
+}
+
+export const useUpdateClient = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateClient,
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['clients', 'list'] })
+
+      // Snapshot previous data
+      const queryCache = queryClient.getQueryCache()
+      const clientQueries = queryCache.findAll(['clients', 'list'])
+      const previousQueries: Array<{ queryKey: any; data: any }> = []
+
+      // Optimistically update all client list queries
+      clientQueries.forEach((query) => {
+        const data = query.state.data as ClientsResponse | undefined
+        if (data) {
+          previousQueries.push({ queryKey: query.queryKey, data })
+
+          const updatedData = {
+            ...data,
+            data: data.data.map((client) =>
+              client.id === id ? { ...client, ...data } : client
+            ),
+          }
+          queryClient.setQueryData(query.queryKey, updatedData)
+        }
+      })
+
+      return { previousQueries }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update client. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', 'list'] })
+
+      toast.success('Client Updated! ✅', {
+        description: 'The client has been successfully updated.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Delete Client Mutation
+const deleteClient = async (id: number) => {
+  const response = await fetch(`/api/clients/${id}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete client')
+  }
+
+  return response.json()
+}
+
+export const useDeleteClient = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteClient,
+    onMutate: async (id) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['clients', 'list'] })
+
+      // Snapshot previous data
+      const queryCache = queryClient.getQueryCache()
+      const clientQueries = queryCache.findAll(['clients', 'list'])
+      const previousQueries: Array<{ queryKey: any; data: any }> = []
+
+      // Optimistically remove from all client list queries
+      clientQueries.forEach((query) => {
+        const data = query.state.data as ClientsResponse | undefined
+        if (data) {
+          previousQueries.push({ queryKey: query.queryKey, data })
+
+          const updatedData = {
+            ...data,
+            data: data.data.filter((client) => client.id !== id),
+          }
+          queryClient.setQueryData(query.queryKey, updatedData)
+        }
+      })
+
+      return { previousQueries }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      toast.error('Delete Failed', {
+        description: err.message || 'Failed to delete client. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', 'list'] })
+
+      toast.success('Client Deleted! ✅', {
+        description: 'The client has been successfully deleted.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// ==========================================
+// 📅 APPOINTMENTS LIST MANAGEMENT HOOKS
+// ==========================================
+
+interface AppointmentDetailed {
+  id: number
+  clientId: number
+  clientName: string
+  clientXNumber: string
+  doctorId: number
+  doctorName: string
+  departmentId: number
+  departmentName: string
+  date: string
+  slotNumber: number
+  status: string
+  statusColor: string
+  notes?: string
+  phone: string
+  category: string
+}
+
+interface AppointmentsListQueryParams {
+  search?: string
+  status?: string
+  dateFilter?: string
+  page: number
+  limit: number
+}
+
+interface AppointmentsListResponse {
+  data: AppointmentDetailed[]
+  pagination: {
+    currentPage: number
+    totalPages: number
+    totalCount: number
+    hasMore: boolean
+  }
+}
+
+// Fetch Appointments List with Pagination and Filters (Management Page)
+const fetchAppointmentsListManagement = async (params: AppointmentsListQueryParams): Promise<AppointmentsListResponse> => {
+  const queryParams = new URLSearchParams()
+  if (params.search) queryParams.append('search', params.search)
+  if (params.status && params.status !== 'all') queryParams.append('status', params.status)
+  if (params.dateFilter && params.dateFilter !== 'all') queryParams.append('dateFilter', params.dateFilter)
+  queryParams.append('page', params.page.toString())
+  queryParams.append('limit', params.limit.toString())
+
+  const response = await fetch(`/api/appointments/list?${queryParams.toString()}`)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch appointments')
+  }
+
+  return response.json()
+}
+
+// useAppointmentsListManagement Hook - Main query hook with pagination and filters (Management Page)
+export const useAppointmentsListManagement = (params: AppointmentsListQueryParams) => {
+  const queryClient = useQueryClient()
+
+  const query = useQuery({
+    queryKey: ['appointments', 'list', params],
+    queryFn: () => fetchAppointmentsListManagement(params),
+    staleTime: 30 * 1000, // 30 seconds
+    placeholderData: (previousData) => previousData, // Show previous data while loading
+  })
+
+  // Prefetch next page for instant navigation
+  if (query.data && params.page < query.data.pagination.totalPages) {
+    queryClient.prefetchQuery({
+      queryKey: ['appointments', 'list', { ...params, page: params.page + 1 }],
+      queryFn: () => fetchAppointmentsListManagement({ ...params, page: params.page + 1 }),
+      staleTime: 30 * 1000,
+    })
+  }
+
+  return query
+}
+
+// Update Appointment Status Mutation
+const updateAppointmentStatus = async ({ id, status }: { id: number; status: string }) => {
+  const response = await fetch(`/api/appointments/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update appointment status')
+  }
+
+  return response.json()
+}
+
+export const useUpdateAppointmentStatus = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateAppointmentStatus,
+    onMutate: async ({ id, status }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['appointments', 'list'] })
+
+      // Snapshot previous data
+      const queryCache = queryClient.getQueryCache()
+      const appointmentQueries = queryCache.findAll(['appointments', 'list'])
+      const previousQueries: Array<{ queryKey: any; data: any }> = []
+
+      // Optimistically update all appointment list queries
+      appointmentQueries.forEach((query) => {
+        const data = query.state.data as AppointmentsListResponse | undefined
+        if (data) {
+          previousQueries.push({ queryKey: query.queryKey, data })
+
+          const updatedData = {
+            ...data,
+            data: data.data.map((apt) =>
+              apt.id === id ? { ...apt, status } : apt
+            ),
+          }
+          queryClient.setQueryData(query.queryKey, updatedData)
+        }
+      })
+
+      return { previousQueries }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update appointment. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments', 'list'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStats.forStaff() })
+
+      toast.success('Appointment Updated! ✅', {
+        description: 'The appointment status has been updated.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// ==========================================
+// 👥 USERS MANAGEMENT HOOKS
+// ==========================================
+
+interface User {
+  id: number
+  name: string
+  phone: string
+  role: 'receptionist' | 'admin'
+  employee_id: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+interface UserFormData {
+  name: string
+  phone: string
+  role: 'receptionist' | 'admin'
+  employee_id: string
+  password?: string
+}
+
+interface UsersResponse {
+  users: User[]
+}
+
+// Fetch Users
+const fetchUsers = async (search?: string): Promise<UsersResponse> => {
+  const url = search
+    ? `/api/users?search=${encodeURIComponent(search)}`
+    : '/api/users'
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch users')
+  }
+
+  return response.json()
+}
+
+// useUsers Hook - Main query hook with search
+export const useUsers = (searchTerm: string = '') => {
+  return useQuery({
+    queryKey: ['users', 'list', searchTerm],
+    queryFn: () => fetchUsers(searchTerm),
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    placeholderData: (previousData) => previousData, // Show previous data while searching
+  })
+}
+
+// Add User Mutation
+const addUser = async (userData: UserFormData) => {
+  const response = await fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to create user')
+  }
+
+  return response.json()
+}
+
+export const useAddUser = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: addUser,
+    onSuccess: () => {
+      // Invalidate all users queries to refetch with new data
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] })
+
+      toast.success('User Created! ✅', {
+        description: 'The user account has been successfully created.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Creation Failed', {
+        description: err.message || 'Failed to create user. Please try again.',
+      })
+    },
+  })
+}
+
+// Update User Mutation
+const updateUser = async ({ id, data }: { id: number; data: UserFormData }) => {
+  const response = await fetch(`/api/users/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update user')
+  }
+
+  return response.json()
+}
+
+export const useUpdateUser = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateUser,
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['users', 'list'] })
+
+      // Snapshot previous data
+      const queryCache = queryClient.getQueryCache()
+      const userQueries = queryCache.findAll(['users', 'list'])
+      const previousQueries: Array<{ queryKey: any; data: any }> = []
+
+      // Optimistically update all user list queries
+      userQueries.forEach((query) => {
+        const queryData = query.state.data as UsersResponse | undefined
+        if (queryData) {
+          previousQueries.push({ queryKey: query.queryKey, data: queryData })
+
+          const updatedData = {
+            ...queryData,
+            users: queryData.users.map((user) =>
+              user.id === id ? { ...user, ...data } : user
+            ),
+          }
+          queryClient.setQueryData(query.queryKey, updatedData)
+        }
+      })
+
+      return { previousQueries }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update user. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] })
+
+      toast.success('User Updated! ✅', {
+        description: 'The user account has been successfully updated.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Toggle User Active Status Mutation
+const toggleUserActive = async (id: number) => {
+  const response = await fetch(`/api/users/${id}/toggle-active`, {
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to toggle user status')
+  }
+
+  return response.json()
+}
+
+export const useToggleUserActive = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: toggleUserActive,
+    onMutate: async (id) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['users', 'list'] })
+
+      // Snapshot previous data
+      const queryCache = queryClient.getQueryCache()
+      const userQueries = queryCache.findAll(['users', 'list'])
+      const previousQueries: Array<{ queryKey: any; data: any }> = []
+
+      // Optimistically toggle active status in all user list queries
+      userQueries.forEach((query) => {
+        const queryData = query.state.data as UsersResponse | undefined
+        if (queryData) {
+          previousQueries.push({ queryKey: query.queryKey, data: queryData })
+
+          const updatedData = {
+            ...queryData,
+            users: queryData.users.map((user) =>
+              user.id === id ? { ...user, is_active: !user.is_active } : user
+            ),
+          }
+          queryClient.setQueryData(query.queryKey, updatedData)
+        }
+      })
+
+      return { previousQueries }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      toast.error('Toggle Failed', {
+        description: err.message || 'Failed to toggle user status. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] })
+
+      toast.success('Status Updated! ✅', {
+        description: 'User status has been successfully toggled.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Delete User Mutation
+const deleteUser = async ({ id, cascade }: { id: number; cascade: boolean }) => {
+  const url = cascade ? `/api/users/${id}?cascade=true` : `/api/users/${id}`
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete user')
+  }
+
+  return response.json()
+}
+
+export const useDeleteUser = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteUser,
+    onMutate: async ({ id }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['users', 'list'] })
+
+      // Snapshot previous data
+      const queryCache = queryClient.getQueryCache()
+      const userQueries = queryCache.findAll(['users', 'list'])
+      const previousQueries: Array<{ queryKey: any; data: any }> = []
+
+      // Optimistically remove from all user list queries
+      userQueries.forEach((query) => {
+        const queryData = query.state.data as UsersResponse | undefined
+        if (queryData) {
+          previousQueries.push({ queryKey: query.queryKey, data: queryData })
+
+          const updatedData = {
+            ...queryData,
+            users: queryData.users.filter((user) => user.id !== id),
+          }
+          queryClient.setQueryData(query.queryKey, updatedData)
+        }
+      })
+
+      return { previousQueries }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data)
+        })
+      }
+
+      toast.error('Delete Failed', {
+        description: err.message || 'Failed to delete user. Please try again.',
+      })
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'list'] })
+
+      toast.success('User Deleted! ✅', {
+        description: data.message || 'The user has been successfully deleted.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// ==========================================
+// 🏥 DEPARTMENTS & DOCTORS MANAGEMENT HOOKS
+// ==========================================
+
+interface DepartmentDetailed {
+  id: number
+  name: string
+  description: string
+  slots_per_day: number
+  working_days: string[]
+  working_hours: { start: string; end: string }
+  color: string
+  is_active: boolean
+}
+
+interface DepartmentFormData {
+  name: string
+  description: string
+  slots_per_day: number
+  working_days: string[]
+  working_hours: { start: string; end: string }
+  color: string
+}
+
+interface DoctorDetailed {
+  id: number
+  name: string
+  department_id: number
+  department_name?: string
+}
+
+interface DoctorFormData {
+  name: string
+  department_id: number
+}
+
+// Fetch All Departments (for management page)
+const fetchAllDepartments = async (): Promise<DepartmentDetailed[]> => {
+  const response = await fetch('/api/departments')
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch departments')
+  }
+
+  const data = await response.json()
+  return data.success ? data.data : []
+}
+
+// useAllDepartments Hook - For management page (not booking)
+export const useAllDepartments = () => {
+  return useQuery({
+    queryKey: ['departments', 'all'],
+    queryFn: fetchAllDepartments,
+    staleTime: 60 * 1000, // 1 minute - departments don't change often
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Fetch All Doctors
+const fetchAllDoctors = async (): Promise<DoctorDetailed[]> => {
+  const response = await fetch('/api/doctors')
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch doctors')
+  }
+
+  const data = await response.json()
+  return data.success ? data.data : []
+}
+
+// useAllDoctors Hook
+export const useAllDoctors = () => {
+  return useQuery({
+    queryKey: ['doctors', 'all'],
+    queryFn: fetchAllDoctors,
+    staleTime: 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Add Department Mutation
+const addDepartment = async (deptData: DepartmentFormData) => {
+  const response = await fetch('/api/departments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(deptData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to create department')
+  }
+
+  const data = await response.json()
+  if (!data.success) throw new Error(data.error || 'Failed to create department')
+  return data
+}
+
+export const useAddDepartment = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: addDepartment,
+    onSuccess: () => {
+      // Invalidate both management and booking department queries
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+
+      toast.success('Department Created! ✅', {
+        description: 'The department has been successfully created.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Creation Failed', {
+        description: err.message || 'Failed to create department. Please try again.',
+      })
+    },
+  })
+}
+
+// Update Department Mutation
+const updateDepartment = async ({ id, data }: { id: number; data: DepartmentFormData }) => {
+  const response = await fetch(`/api/departments/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update department')
+  }
+
+  const result = await response.json()
+  if (!result.success) throw new Error(result.error || 'Failed to update department')
+  return result
+}
+
+export const useUpdateDepartment = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateDepartment,
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['departments', 'all'] })
+
+      // Snapshot previous data
+      const previousDepartments = queryClient.getQueryData(['departments', 'all'])
+
+      // Optimistically update
+      queryClient.setQueryData(['departments', 'all'], (old: DepartmentDetailed[] | undefined) => {
+        if (!old) return old
+        return old.map((dept) =>
+          dept.id === id ? { ...dept, ...data } : dept
+        )
+      })
+
+      return { previousDepartments }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousDepartments) {
+        queryClient.setQueryData(['departments', 'all'], context.previousDepartments)
+      }
+
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update department. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+
+      toast.success('Department Updated! ✅', {
+        description: 'The department has been successfully updated.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Delete Department Mutation
+const deleteDepartment = async (id: number) => {
+  const response = await fetch(`/api/departments/${id}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete department')
+  }
+
+  const data = await response.json()
+  if (!data.success) throw new Error(data.error || 'Failed to delete department')
+  return data
+}
+
+export const useDeleteDepartment = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteDepartment,
+    onMutate: async (id) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['departments', 'all'] })
+
+      // Snapshot previous data
+      const previousDepartments = queryClient.getQueryData(['departments', 'all'])
+
+      // Optimistically remove from list
+      queryClient.setQueryData(['departments', 'all'], (old: DepartmentDetailed[] | undefined) => {
+        if (!old) return old
+        return old.filter((dept) => dept.id !== id)
+      })
+
+      return { previousDepartments }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousDepartments) {
+        queryClient.setQueryData(['departments', 'all'], context.previousDepartments)
+      }
+
+      toast.error('Delete Failed', {
+        description: err.message || 'Failed to delete department. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] })
+
+      toast.success('Department Deleted! ✅', {
+        description: 'The department has been successfully deleted.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Add Doctor Mutation
+const addDoctor = async (doctorData: DoctorFormData) => {
+  const response = await fetch('/api/doctors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(doctorData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to add doctor')
+  }
+
+  const data = await response.json()
+  if (!data.success) throw new Error(data.error || 'Failed to add doctor')
+  return data
+}
+
+export const useAddDoctor = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: addDoctor,
+    onSuccess: () => {
+      // Invalidate doctors queries
+      queryClient.invalidateQueries({ queryKey: ['doctors'] })
+
+      toast.success('Doctor Added! ✅', {
+        description: 'The doctor has been successfully added.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Add Failed', {
+        description: err.message || 'Failed to add doctor. Please try again.',
       })
     },
   })

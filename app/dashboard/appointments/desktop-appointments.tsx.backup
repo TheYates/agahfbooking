@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -32,10 +32,6 @@ import { AppointmentModal } from "@/components/calendar/appointment-modal";
 import { QuickBookingDialogTanstack as QuickBookingDialog } from "@/components/ui/quick-booking-dialog-tanstack";
 import { DataPagination } from "@/components/ui/data-pagination";
 
-// 🚀 Import TanStack Query hooks
-import { useAppointmentsListManagement, useDeleteAppointment } from "@/hooks/use-hospital-queries";
-import { useDebounce } from "@/hooks/use-debounce";
-
 interface Appointment {
   id: number;
   clientId: number;
@@ -55,6 +51,10 @@ interface Appointment {
 }
 
 export default function DesktopAppointmentsPage() {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [filteredAppointments, setFilteredAppointments] = useState<
+    Appointment[]
+  >([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
@@ -62,38 +62,76 @@ export default function DesktopAppointmentsPage() {
     useState<Appointment | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuickBookingOpen, setIsQuickBookingOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20; // Increased from 10 to 20 for better UX
+  const [itemsPerPage] = useState(20); // Increased from 10 to 20 for better UX
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
-  // 🚀 Debounce search term (500ms delay)
-  const debouncedSearch = useDebounce(searchTerm, 500);
+  // Fetch appointments from API with pagination
+  const fetchAppointments = async (page: number = currentPage) => {
+    try {
+      setLoading(true);
+      setError("");
 
-  // 🚀 TanStack Query: Replace all manual fetch logic with one hook!
-  const {
-    data: appointmentsData,
-    isLoading: loading,
-    error: queryError,
-    isRefetching,
-  } = useAppointmentsListManagement({
-    search: debouncedSearch,
-    status: statusFilter,
-    dateFilter,
-    page: currentPage,
-    limit: itemsPerPage,
-  });
+      const params = new URLSearchParams();
+      if (searchTerm) params.append("search", searchTerm);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (dateFilter !== "all") params.append("dateFilter", dateFilter);
 
-  // 🚀 TanStack Query: Delete mutation with optimistic updates
-  const deleteMutation = useDeleteAppointment();
+      // Add pagination parameters
+      params.append("page", page.toString());
+      params.append("limit", itemsPerPage.toString());
 
-  // Extract data with safe defaults
-  const appointments = appointmentsData?.data || [];
-  const pagination = appointmentsData?.pagination || {
-    currentPage: 1,
-    totalPages: 1,
-    totalCount: 0,
-    hasMore: false,
+      const response = await fetch(
+        `/api/appointments/list?${params.toString()}`
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch appointments");
+      }
+
+      setAppointments(data.data);
+      setFilteredAppointments(data.data);
+
+      // Update pagination info
+      if (data.pagination) {
+        setTotalPages(data.pagination.totalPages);
+        setTotalCount(data.pagination.totalCount);
+        setCurrentPage(data.pagination.currentPage);
+      }
+    } catch (err) {
+      console.error("Error fetching appointments:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch appointments"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
-  const error = queryError?.message || "";
+
+  // Fetch appointments on component mount and when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(
+      () => {
+        // Reset to page 1 when filters change
+        setCurrentPage(1);
+        fetchAppointments(1);
+      },
+      searchTerm ? 500 : 0
+    ); // 500ms debounce for search, immediate for other filters
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, statusFilter, dateFilter]);
+
+  // Fetch appointments when page changes
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchAppointments(currentPage);
+    }
+  }, [currentPage]);
 
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
@@ -101,25 +139,40 @@ export default function DesktopAppointmentsPage() {
   };
 
   const handleAppointmentUpdate = (updatedAppointment: Appointment) => {
-    // TanStack Query automatically refetches after mutation!
-    setIsModalOpen(false);
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === updatedAppointment.id ? updatedAppointment : apt
+      )
+    );
+    setFilteredAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === updatedAppointment.id ? updatedAppointment : apt
+      )
+    );
   };
 
-  const handleAppointmentDelete = (appointmentId: number) => {
-    // 🚀 TanStack Query: Use mutation hook - handles optimistic updates automatically!
-    deleteMutation.mutate(appointmentId);
-    setIsModalOpen(false);
+  const handleAppointmentDelete = async (appointmentId: number) => {
+    try {
+      const response = await fetch(`/api/appointments?id=${appointmentId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setAppointments((prev) =>
+          prev.filter((apt) => apt.id !== appointmentId)
+        );
+        setFilteredAppointments((prev) =>
+          prev.filter((apt) => apt.id !== appointmentId)
+        );
+      }
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+    }
   };
 
   // Pagination handler
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-  };
-
-  // Reset to page 1 when filters change
-  const handleFilterChange = (setter: (value: any) => void, value: any) => {
-    setter(value);
-    setCurrentPage(1);
   };
 
   const exportAppointments = () => {
@@ -135,7 +188,7 @@ export default function DesktopAppointmentsPage() {
         "Phone",
         "Notes",
       ],
-      ...appointments.map((apt) => [
+      ...filteredAppointments.map((apt) => [
         apt.date,
         `Slot ${apt.slotNumber}`,
         apt.clientName,
@@ -180,21 +233,6 @@ export default function DesktopAppointmentsPage() {
         </div>
       </div>
 
-      {/* TanStack Query Status (Development) */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="bg-muted/50 rounded-lg p-3 text-xs">
-          <p className="font-medium mb-1">🚀 TanStack Query Status:</p>
-          <p>
-            Loading: {loading ? "Yes" : "No"} •{" "}
-            Error: {error ? "Yes" : "No"} •{" "}
-            Background Refresh: {isRefetching ? "Active" : "Idle"} •{" "}
-            Appointments: {appointments.length} •{" "}
-            Page: {currentPage}/{pagination.totalPages}
-          </p>
-          {error && <p className="text-red-500 mt-1">Error: {error}</p>}
-        </div>
-      )}
-
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -219,10 +257,7 @@ export default function DesktopAppointmentsPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Status</label>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) => handleFilterChange(setStatusFilter, value)}
-              >
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -240,10 +275,7 @@ export default function DesktopAppointmentsPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Date</label>
-              <Select
-                value={dateFilter}
-                onValueChange={(value) => handleFilterChange(setDateFilter, value)}
-              >
+              <Select value={dateFilter} onValueChange={setDateFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -262,7 +294,6 @@ export default function DesktopAppointmentsPage() {
                   setSearchTerm("");
                   setStatusFilter("all");
                   setDateFilter("all");
-                  setCurrentPage(1);
                 }}
                 className="w-full"
               >
@@ -279,15 +310,18 @@ export default function DesktopAppointmentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>
-                Appointments ({pagination.totalCount})
+                Appointments ({filteredAppointments.length})
               </CardTitle>
               <CardDescription>
-                Showing {(currentPage - 1) * itemsPerPage + 1}-
-                {Math.min(currentPage * itemsPerPage, pagination.totalCount)}{" "}
-                of {pagination.totalCount} appointments
+                Showing {currentPage * itemsPerPage - itemsPerPage + 1}-
+                {Math.min(
+                  currentPage * itemsPerPage,
+                  filteredAppointments.length
+                )}{" "}
+                of {filteredAppointments.length} appointments
               </CardDescription>
             </div>
-            {pagination.totalPages > 1 && (
+            {totalPages > 1 && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -295,20 +329,20 @@ export default function DesktopAppointmentsPage() {
                   onClick={() =>
                     setCurrentPage((prev) => Math.max(prev - 1, 1))
                   }
-                  disabled={currentPage === 1 || loading}
+                  disabled={currentPage === 1}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  Page {currentPage} of {pagination.totalPages}
+                  Page {currentPage} of {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, pagination.totalPages))
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                   }
-                  disabled={currentPage === pagination.totalPages || loading}
+                  disabled={currentPage === totalPages}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -318,7 +352,7 @@ export default function DesktopAppointmentsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {loading && appointments.length === 0 ? (
+            {loading ? (
               <div className="text-center py-8 text-muted-foreground">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p>Loading appointments...</p>
@@ -327,6 +361,13 @@ export default function DesktopAppointmentsPage() {
               <div className="text-center py-8 text-red-600">
                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Error: {error}</p>
+                <Button
+                  variant="outline"
+                  onClick={() => fetchAppointments()}
+                  className="mt-4"
+                >
+                  Try Again
+                </Button>
               </div>
             ) : appointments.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -398,15 +439,13 @@ export default function DesktopAppointmentsPage() {
           </div>
 
           {/* Pagination Controls */}
-          {pagination.totalPages > 0 && (
-            <DataPagination
-              currentPage={currentPage}
-              totalPages={pagination.totalPages}
-              totalCount={pagination.totalCount}
-              itemsPerPage={itemsPerPage}
-              onPageChange={handlePageChange}
-            />
-          )}
+          <DataPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+          />
         </CardContent>
       </Card>
 

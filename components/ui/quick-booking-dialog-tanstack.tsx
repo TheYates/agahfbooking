@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +37,8 @@ import {
   useBookAppointment,
   useCancelAppointment,
 } from "@/hooks/use-hospital-queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-client";
 
 // Types (same as your existing interfaces)
 interface TimeSlot {
@@ -186,25 +188,60 @@ function ClientSelector({
   );
 }
 
-// Function to generate week range string
+// Function to generate week range string (Sunday-first)
 const generateWeekRange = (weekOffset: number = 0): string => {
   const today = new Date();
-  today.setDate(today.getDate() + weekOffset * 7);
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + 6);
+  let startDate = new Date();
+
+  if (weekOffset === 0) {
+    // Current week: start from today
+    startDate = new Date(today);
+  } else if (weekOffset > 0) {
+    // Future weeks: start from the next Sunday (week start)
+    const daysUntilNextSunday = today.getDay() === 0 ? 7 : 7 - today.getDay();
+    const nextSunday = new Date(today);
+    nextSunday.setDate(today.getDate() + daysUntilNextSunday);
+
+    startDate = new Date(nextSunday);
+    startDate.setDate(nextSunday.getDate() + (weekOffset - 1) * 7);
+  } else {
+    // Previous weeks: go to previous Sunday-based weeks (Sunday is week start)
+    const currentSunday = new Date(today);
+    const daysSinceSunday = today.getDay();
+    currentSunday.setDate(today.getDate() - daysSinceSunday);
+
+    startDate = new Date(currentSunday);
+    startDate.setDate(currentSunday.getDate() + weekOffset * 7);
+  }
+
+  const endDate = new Date(startDate);
+  if (weekOffset === 0) {
+    // For current week, end on Saturday (Sunday is the first day of the week)
+    const daysUntilSaturday = 6 - startDate.getDay();
+    if (startDate.getDay() === 0) {
+      // If today is Sunday, show the full week (Sunday to Saturday)
+      endDate.setDate(startDate.getDate() + 6);
+    } else {
+      // Show from today until Saturday
+      endDate.setDate(startDate.getDate() + daysUntilSaturday);
+    }
+  } else {
+    // For other weeks, show full 7 days (Sunday to Saturday)
+    endDate.setDate(startDate.getDate() + 6);
+  }
 
   const months = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ];
 
-  const startMonth = months[today.getMonth()];
+  const startMonth = months[startDate.getMonth()];
   const endMonth = months[endDate.getMonth()];
 
   if (startMonth === endMonth) {
-    return `${startMonth} ${today.getDate()} - ${endDate.getDate()}`;
+    return `${startMonth} ${startDate.getDate()} - ${endDate.getDate()}`;
   } else {
-    return `${startMonth} ${today.getDate()} - ${endMonth} ${endDate.getDate()}`;
+    return `${startMonth} ${startDate.getDate()} - ${endMonth} ${endDate.getDate()}`;
   }
 };
 
@@ -240,12 +277,27 @@ export function QuickBookingDialogTanstack({
   const shouldReduceMotion = useReducedMotion();
   const shouldAnimate = enableAnimations && !shouldReduceMotion;
   const currentWeekRange = generateWeekRange(currentWeekOffset);
+  const queryClient = useQueryClient();
 
   // TanStack Query hooks - This replaces ALL your useEffect hooks!
-  const { 
-    data: fetchedDepartments = [], 
-    isLoading: departmentsLoading 
+  const {
+    data: fetchedDepartments = [],
+    isLoading: departmentsLoading,
+    error: departmentsError
   } = useDepartments();
+
+  // Debug logging
+  if (process.env.NODE_ENV === 'development' && departmentsError) {
+    console.error('Departments query error:', departmentsError);
+  }
+  if (process.env.NODE_ENV === 'development' && fetchedDepartments) {
+    console.log('Fetched departments:', {
+      isArray: Array.isArray(fetchedDepartments),
+      length: Array.isArray(fetchedDepartments) ? fetchedDepartments.length : 'N/A',
+      type: typeof fetchedDepartments,
+      value: fetchedDepartments
+    });
+  }
 
   const { 
     data: clients = [], 
@@ -257,13 +309,13 @@ export function QuickBookingDialogTanstack({
     isOpen
   );
 
-  const { 
-    data: weekSchedule = [], 
+  const {
+    data: weekSchedule = [],
     isLoading: scheduleLoading,
     error: scheduleError
   } = useSchedule(
-    selectedDepartment?.id, 
-    currentWeekOffset, 
+    selectedDepartment?.id,
+    currentWeekOffset,
     isOpen && !!selectedDepartment
   );
 
@@ -271,7 +323,39 @@ export function QuickBookingDialogTanstack({
   const cancelMutation = useCancelAppointment();
 
   // Use fetched departments if no departments prop provided
-  const availableDepartments = departments.length > 0 ? departments : fetchedDepartments;
+  // Ensure it's always an array to prevent .map errors
+  const availableDepartments = Array.isArray(departments) && departments.length > 0
+    ? departments
+    : (Array.isArray(fetchedDepartments) ? fetchedDepartments : []);
+
+  // Prefetch client data when dialog opens for faster initial load
+  useEffect(() => {
+    if (isOpen && userRole) {
+      // Prefetch client data immediately
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.clients.search("", userRole, currentUserId),
+        queryFn: async () => {
+          const response = await fetch(
+            userRole === "client" && currentUserId
+              ? `/api/clients/stats?clientId=${currentUserId}`
+              : `/api/clients/stats?limit=20`
+          );
+          const data = await response.json();
+          if (data.success && data.data.length > 0) {
+            return data.data.map((client: any) => ({
+              id: client.id,
+              name: client.name,
+              x_number: client.xNumber || client.x_number,
+              phone: client.phone,
+              category: client.category,
+            }));
+          }
+          return [];
+        },
+        staleTime: 5 * 60 * 1000,
+      });
+    }
+  }, [isOpen, userRole, currentUserId, queryClient]);
 
   // Auto-select client if user is a client and only one client is returned
   if (userRole === "client" && clients.length === 1 && !selectedClient) {
@@ -360,11 +444,8 @@ export function QuickBookingDialogTanstack({
   };
 
   const handleWeekNavigation = (direction: "prev" | "next") => {
-    if (direction === "prev") {
-      setCurrentWeekOffset(currentWeekOffset - 1);
-    } else {
-      setCurrentWeekOffset(currentWeekOffset + 1);
-    }
+    const newOffset = direction === "prev" ? currentWeekOffset - 1 : currentWeekOffset + 1;
+    setCurrentWeekOffset(newOffset);
     onWeekChange?.(direction);
   };
 
@@ -478,10 +559,48 @@ export function QuickBookingDialogTanstack({
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-3xl w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] h-[90vh] max-h-[90vh] overflow-hidden p-0 flex flex-col">
           <DialogHeader className="p-4 pb-2">
-            <DialogTitle>Quick Booking with TanStack Query</DialogTitle>
+            <DialogTitle>Quick Booking</DialogTitle>
             <DialogDescription className="mb-4">
               Select a department and available time slot
             </DialogDescription>
+
+            {/* Client Selector - Moved before department */}
+            <div className="space-y-2">
+              {userRole === "client" ? (
+                // Read-only display for clients - centered
+                <div className="w-full p-3 rounded-md bg-muted/10 flex justify-center">
+                  {clientsLoading ? (
+                    <div className="h-6 w-32 bg-muted animate-pulse rounded" />
+                  ) : selectedClient ? (
+                    <div className="flex flex-col text-center">
+                      <span className="font-medium">{selectedClient.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedClient.x_number} • {selectedClient.category}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Loading your information...
+                    </span>
+                  )}
+                </div>
+              ) : (
+                // Dropdown selector for staff with label
+                <>
+                  <label className="block text-sm font-medium text-foreground">
+                    Select Client *
+                  </label>
+                  <ClientSelector
+                    selectedClient={selectedClient}
+                    onClientChange={setSelectedClient}
+                    searchTerm={clientSearchTerm}
+                    onSearchChange={setClientSearchTerm}
+                    userRole={userRole}
+                    currentUserId={currentUserId}
+                  />
+                </>
+              )}
+            </div>
 
             {/* Department Selector */}
             <div className="relative z-50">
@@ -502,40 +621,6 @@ export function QuickBookingDialogTanstack({
                   searchPlaceholder="Search departments..."
                   emptyText="No departments found."
                   className="w-full"
-                />
-              )}
-            </div>
-
-            {/* Client Selector */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">
-                {userRole === "client" ? "Booking For" : "Select Client *"}
-              </label>
-              {userRole === "client" ? (
-                <div className="w-full p-3 border border-border rounded-md bg-muted/50">
-                  {clientsLoading ? (
-                    <div className="h-6 bg-muted animate-pulse rounded" />
-                  ) : selectedClient ? (
-                    <div className="flex flex-col">
-                      <span className="font-medium">{selectedClient.name}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {selectedClient.x_number} • {selectedClient.category}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      Loading your information...
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <ClientSelector
-                  selectedClient={selectedClient}
-                  onClientChange={setSelectedClient}
-                  searchTerm={clientSearchTerm}
-                  onSearchChange={setClientSearchTerm}
-                  userRole={userRole}
-                  currentUserId={currentUserId}
                 />
               )}
             </div>

@@ -36,8 +36,9 @@ export function isWorkingDay(department: Department, date: Date | string): boole
  * @param date - Date object or date string
  * @returns boolean - true if it's a working day for at least one department
  */
-export function isWorkingDayForAnyDepartment(departments: Department[], date: Date | string): boolean {
-  if (!departments || departments.length === 0) {
+export function isWorkingDayForAnyDepartment(departments: Department[] | undefined | null, date: Date | string): boolean {
+  // Safeguard: ensure departments is a valid array
+  if (!departments || !Array.isArray(departments) || departments.length === 0) {
     return false;
   }
 
@@ -50,8 +51,9 @@ export function isWorkingDayForAnyDepartment(departments: Department[], date: Da
  * @param date - Date object or date string
  * @returns Department[] - Array of departments that work on this date
  */
-export function getWorkingDepartments(departments: Department[], date: Date | string): Department[] {
-  if (!departments || departments.length === 0) {
+export function getWorkingDepartments(departments: Department[] | undefined | null, date: Date | string): Department[] {
+  // Safeguard: ensure departments is a valid array
+  if (!departments || !Array.isArray(departments) || departments.length === 0) {
     return [];
   }
 
@@ -81,7 +83,7 @@ export function isPastDate(date: Date | string): boolean {
 export function isValidBookingDate(
   date: Date | string,
   department?: Department,
-  departments?: Department[]
+  departments?: Department[] | undefined | null
 ): boolean {
   // Check if date is in the past
   if (isPastDate(date)) {
@@ -91,7 +93,7 @@ export function isValidBookingDate(
   // Check working days
   if (department) {
     return isWorkingDay(department, date);
-  } else if (departments) {
+  } else if (departments && Array.isArray(departments)) {
     return isWorkingDayForAnyDepartment(departments, date);
   }
 

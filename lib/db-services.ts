@@ -678,6 +678,18 @@ export class AppointmentService {
     }
 
     const workingDays = result.rows[0].working_days;
+    return this.isWorkingDayFromArray(workingDays, date);
+  }
+
+  // 🚀 Optimized version that doesn't query the database
+  static isWorkingDayFromArray(
+    workingDays: string[],
+    date: string
+  ): boolean {
+    if (!workingDays || workingDays.length === 0) {
+      return false;
+    }
+
     const dateObj = new Date(date);
     const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
 

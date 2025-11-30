@@ -116,8 +116,8 @@ class MockOTPService {
       console.log(`💬 Message: ${message}`);
       console.log("=====================================\n");
 
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Simulate network delay (reduced from 500ms to 50ms for faster mock mode)
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       return {
         status: "success",

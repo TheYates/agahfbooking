@@ -104,7 +104,7 @@ export async function sendOTP(xNumber: string) {
       );
 
       if (smsResult.status === "success") {
-        const currentMode = await otpConfig.getCurrentMode();
+        // Use already-fetched currentMode instead of querying again
         console.log(
           `✅ OTP sent successfully to ${
             client.phone

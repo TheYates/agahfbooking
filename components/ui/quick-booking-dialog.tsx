@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -241,24 +241,24 @@ const fetchWeekSchedule = async (
     }
 
     let startDate = new Date();
-    
+
     if (weekOffset === 0) {
       // First week: start from today
       // Keep startDate as today
     } else if (weekOffset > 0) {
       // Future weeks: calculate from the start of the next complete week after today
       const today = new Date();
-      const daysUntilSunday = (7 - today.getDay()) % 7; // Days until next Sunday (week end)
-      const nextWeekStart = new Date(today);
-      nextWeekStart.setDate(today.getDate() + daysUntilSunday + 1); // Monday after next Sunday
-      
-      startDate = new Date(nextWeekStart);
-      startDate.setDate(nextWeekStart.getDate() + (weekOffset - 1) * 7);
+      const daysUntilNextSunday = today.getDay() === 0 ? 7 : 7 - today.getDay(); // Days until next Sunday
+      const nextSunday = new Date(today);
+      nextSunday.setDate(today.getDate() + daysUntilNextSunday); // Sunday is week start
+
+      startDate = new Date(nextSunday);
+      startDate.setDate(nextSunday.getDate() + (weekOffset - 1) * 7);
     } else {
       // Previous weeks: go back from today
       startDate.setDate(startDate.getDate() + weekOffset * 7);
     }
-    
+
     const apiUrl = `/api/appointments/schedule?departmentId=${departmentId}&startDate=${startDate.toISOString()}`;
 
     const response = await fetch(apiUrl);
@@ -289,29 +289,34 @@ const fetchWeekSchedule = async (
 
 // Function to generate week range string
 const generateWeekRange = (weekOffset: number = 0): string => {
+  const today = new Date();
   let startDate = new Date();
-  
+
   if (weekOffset === 0) {
-    // First week: start from today
-    // Keep startDate as today
+    // Current week: start from today
+    startDate = new Date(today);
   } else if (weekOffset > 0) {
-    // Future weeks: calculate from the start of the next complete week after today
-    const today = new Date();
-    const daysUntilSunday = (7 - today.getDay()) % 7; // Days until next Sunday (week end)
-    const nextWeekStart = new Date(today);
-    nextWeekStart.setDate(today.getDate() + daysUntilSunday); // Next Sunday (start of next week)
-    
-    startDate = new Date(nextWeekStart);
-    startDate.setDate(nextWeekStart.getDate() + (weekOffset - 1) * 7);
+    // Future weeks: start from the next Sunday (week start)
+    const daysUntilNextSunday = today.getDay() === 0 ? 7 : 7 - today.getDay();
+    const nextSunday = new Date(today);
+    nextSunday.setDate(today.getDate() + daysUntilNextSunday);
+
+    startDate = new Date(nextSunday);
+    startDate.setDate(nextSunday.getDate() + (weekOffset - 1) * 7);
   } else {
-    // Previous weeks: go back from today
-    startDate.setDate(startDate.getDate() + weekOffset * 7);
+    // Previous weeks: go to previous Sunday-based weeks (Sunday is week start)
+    const currentSunday = new Date(today);
+    const daysSinceSunday = today.getDay();
+    currentSunday.setDate(today.getDate() - daysSinceSunday);
+
+    startDate = new Date(currentSunday);
+    startDate.setDate(currentSunday.getDate() + weekOffset * 7);
   }
-  
+
   const endDate = new Date(startDate);
   if (weekOffset === 0) {
-    // For current week, end on Saturday (since Sunday is the first day of next week)
-    const daysUntilSaturday = (7 - startDate.getDay() - 1) % 7;
+    // For current week, end on Saturday (Sunday is the first day of the week)
+    const daysUntilSaturday = 6 - startDate.getDay();
     if (startDate.getDay() === 0) {
       // If today is Sunday, show the full week (Sunday to Saturday)
       endDate.setDate(startDate.getDate() + 6);
@@ -385,8 +390,6 @@ export function QuickBookingDialog({
     Map<string, { data: DaySchedule[]; timestamp: number }>
   >(new Map());
 
-  // Generate current week range based on offset
-  const currentWeekRange = generateWeekRange(currentWeekOffset);
   const shouldReduceMotion = useReducedMotion();
   const shouldAnimate = enableAnimations && !shouldReduceMotion;
 
@@ -412,13 +415,19 @@ export function QuickBookingDialog({
     loadDepartments();
   }, [isOpen]); // Only depend on isOpen
 
-  // Fetch clients when search term changes or dialog opens
-  useEffect(() => {
-    if (!isOpen) return;
+  // Debounced client search
+  const debouncedSearchTerm = useMemo(() => {
+    const timeoutId = setTimeout(() => clientSearchTerm, 300);
+    return () => clearTimeout(timeoutId);
+  }, [clientSearchTerm]);
 
-    const loadClients = async () => {
+  // Memoized client loading function
+  const loadClients = useCallback(
+    async (searchTerm: string) => {
+      if (!isOpen) return;
+
       const fetchedClients = await fetchClients(
-        clientSearchTerm,
+        searchTerm,
         userRole,
         currentUserId
       );
@@ -428,57 +437,79 @@ export function QuickBookingDialog({
       if (userRole === "client" && fetchedClients.length === 1) {
         setSelectedClient(fetchedClients[0]);
       }
-    };
+    },
+    [isOpen, userRole, currentUserId]
+  );
 
-    const timeoutId = setTimeout(loadClients, clientSearchTerm ? 300 : 0);
+  // Fetch clients when search term changes or dialog opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timeoutId = setTimeout(
+      () => {
+        loadClients(clientSearchTerm);
+      },
+      clientSearchTerm ? 300 : 0
+    );
+
     return () => clearTimeout(timeoutId);
-  }, [clientSearchTerm, isOpen, userRole, currentUserId]);
+  }, [clientSearchTerm, loadClients]);
+
+  // Memoized schedule loading function
+  const loadSchedule = useCallback(async () => {
+    if (!selectedDepartment) {
+      setWeekSchedule([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const schedule = await fetchWeekSchedule(
+        selectedDepartment.id,
+        currentWeekOffset,
+        scheduleCache
+      );
+      setWeekSchedule(schedule);
+    } catch (error) {
+      console.error("Error loading schedule:", error);
+      setWeekSchedule([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDepartment?.id, currentWeekOffset]);
 
   // Fetch schedule when department or week changes
   useEffect(() => {
-    const loadSchedule = async () => {
-      if (selectedDepartment) {
-        setLoading(true);
-        try {
-          const schedule = await fetchWeekSchedule(
-            selectedDepartment.id,
-            currentWeekOffset,
-            scheduleCache
-          );
-          setWeekSchedule(schedule);
-        } catch (error) {
-          console.error("Error loading schedule in useEffect:", error);
-          setWeekSchedule([]);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setWeekSchedule([]);
-      }
-    };
     loadSchedule();
-  }, [selectedDepartment, currentWeekOffset]);
+  }, [loadSchedule]);
 
   // Use real departments or fetched departments
   const availableDepartments =
     departments.length > 0 ? departments : realDepartments;
 
-  const handleDepartmentChange = (departmentId: string) => {
-    const department = availableDepartments.find(
-      (d) => d.id.toString() === departmentId
-    );
-    if (department) {
-      setSelectedDepartment(department);
-      onDepartmentChange?.(department.id);
-    }
-  };
+  // Memoized event handlers
+  const handleDepartmentChange = useCallback(
+    (departmentId: string) => {
+      const department = availableDepartments.find(
+        (d) => d.id.toString() === departmentId
+      );
+      if (department) {
+        setSelectedDepartment(department);
+        onDepartmentChange?.(department.id);
+      }
+    },
+    [availableDepartments, onDepartmentChange]
+  );
 
-  const handleClientChange = (clientId: string) => {
-    const client = clients.find((c) => c.id.toString() === clientId);
-    if (client) {
-      setSelectedClient(client);
-    }
-  };
+  const handleClientChange = useCallback(
+    (clientId: string) => {
+      const client = clients.find((c) => c.id.toString() === clientId);
+      if (client) {
+        setSelectedClient(client);
+      }
+    },
+    [clients]
+  );
 
   const handleTimeSlotClick = (day: string, time: string) => {
     if (selectedDepartment && selectedClient) {
@@ -654,16 +685,18 @@ export function QuickBookingDialog({
     }
   };
 
-  const handleWeekNavigation = (direction: "prev" | "next") => {
-    if (direction === "prev") {
-      setCurrentWeekOffset(currentWeekOffset - 1);
-    } else {
-      setCurrentWeekOffset(currentWeekOffset + 1);
-    }
-    onWeekChange?.(direction);
-  };
+  const handleWeekNavigation = useCallback(
+    (direction: "prev" | "next") => {
+      setCurrentWeekOffset((prev) =>
+        direction === "prev" ? prev - 1 : prev + 1
+      );
+      onWeekChange?.(direction);
+    },
+    [onWeekChange]
+  );
 
-  const maskXNumber = (xNumber: string) => {
+  // Memoized helper functions
+  const maskXNumber = useCallback((xNumber: string) => {
     if (!xNumber) return "";
     const parts = xNumber.split("/");
     if (parts.length === 2) {
@@ -672,30 +705,28 @@ export function QuickBookingDialog({
       return `${firstPart}/${secondPart}`;
     }
     return xNumber;
-  };
+  }, []);
 
-  const isPastDate = (fullDateString: string) => {
-    const slotDate = new Date(fullDateString); // YYYY-MM-DD format
+  const isPastDate = useCallback((fullDateString: string) => {
+    const slotDate = new Date(fullDateString);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     slotDate.setHours(0, 0, 0, 0);
     return slotDate < today;
-  };
+  }, []);
 
-  const isOwnAppointment = (slot: TimeSlot) => {
-    return !slot.available && slot.clientId === currentUserId;
-  };
+  const isOwnAppointment = useCallback(
+    (slot: TimeSlot) => {
+      return !slot.available && slot.clientId === currentUserId;
+    },
+    [currentUserId]
+  );
 
-  // Helper function to check if a date is today
-  const isToday = (dateString: string) => {
-    const today = new Date();
-    const checkDate = new Date(dateString);
-    return (
-      today.getFullYear() === checkDate.getFullYear() &&
-      today.getMonth() === checkDate.getMonth() &&
-      today.getDate() === checkDate.getDate()
-    );
-  };
+  // Memoized current week range
+  const currentWeekRange = useMemo(
+    () => generateWeekRange(currentWeekOffset),
+    [currentWeekOffset]
+  );
 
   const getSlotStyling = (slot: TimeSlot, fullDateString: string) => {
     const isPast = isPastDate(fullDateString);
@@ -734,51 +765,30 @@ export function QuickBookingDialog({
     }
   };
 
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.08,
-        delayChildren: 0.1,
-      },
-    },
-  };
+  // Simplified animation variants for better performance
+  const containerVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0 },
+      visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+    }),
+    []
+  );
 
-  const itemVariants = {
-    hidden: {
-      opacity: 0,
-      x: -25,
-      scale: 0.95,
-      filter: "blur(4px)",
-    },
-    visible: {
-      opacity: 1,
-      x: 0,
-      scale: 1,
-      filter: "blur(0px)",
-      transition: {
-        type: "spring" as const,
-        stiffness: 400,
-        damping: 28,
-        mass: 0.6,
-      },
-    },
-  };
+  const itemVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0, y: 10 },
+      visible: { opacity: 1, y: 0, transition: { duration: 0.2 } },
+    }),
+    []
+  );
 
-  const timeSlotVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      transition: {
-        type: "spring" as const,
-        stiffness: 400,
-        damping: 25,
-      },
-    },
-  };
+  const timeSlotVariants = useMemo(
+    () => ({
+      hidden: { opacity: 0, scale: 0.95 },
+      visible: { opacity: 1, scale: 1, transition: { duration: 0.15 } },
+    }),
+    []
+  );
 
   return (
     <>
@@ -790,7 +800,42 @@ export function QuickBookingDialog({
               Select a department and available time slot
             </DialogDescription>
 
-            {/* Department Selector - Moved to header */}
+            {/* Client Selector - Moved before department */}
+            <div className="space-y-2">
+              {userRole === "client" ? (
+                // Read-only display for clients - centered
+                <div className="w-full p-3  rounded-md bg-muted/10 flex justify-center">
+                  {selectedClient ? (
+                    <div className="flex flex-col text-center">
+                      <span className="font-medium">{selectedClient.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedClient.x_number} • {selectedClient.category}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Loading your information...
+                    </span>
+                  )}
+                </div>
+              ) : (
+                // Dropdown selector for staff with label
+                <>
+                  <label className="block text-sm font-medium text-foreground">
+                    Select Client *
+                  </label>
+                  <ClientSelector
+                    clients={clients}
+                    selectedClient={selectedClient}
+                    onClientChange={handleClientChange}
+                    onSearchChange={setClientSearchTerm}
+                    searchTerm={clientSearchTerm}
+                  />
+                </>
+              )}
+            </div>
+
+            {/* Department Selector */}
             <div className="relative z-50">
               <label className="block text-sm font-medium text-foreground mb-2">
                 Choose Department
@@ -807,39 +852,6 @@ export function QuickBookingDialog({
                 emptyText="No departments found."
                 className="w-full"
               />
-            </div>
-
-            {/* Client Selector */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">
-                {userRole === "client" ? "Booking For" : "Select Client *"}
-              </label>
-              {userRole === "client" ? (
-                // Read-only display for clients
-                <div className="w-full p-3 border border-border rounded-md bg-muted/50">
-                  {selectedClient ? (
-                    <div className="flex flex-col">
-                      <span className="font-medium">{selectedClient.name}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {selectedClient.x_number} • {selectedClient.category}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      Loading your information...
-                    </span>
-                  )}
-                </div>
-              ) : (
-                // Dropdown selector for staff
-                <ClientSelector
-                  clients={clients}
-                  selectedClient={selectedClient}
-                  onClientChange={handleClientChange}
-                  onSearchChange={setClientSearchTerm}
-                  searchTerm={clientSearchTerm}
-                />
-              )}
             </div>
           </DialogHeader>
 
@@ -997,15 +1009,7 @@ export function QuickBookingDialog({
                                       }
                                       whileHover={
                                         shouldAnimate && slot.available
-                                          ? {
-                                              scale: 1.05,
-                                              y: -2,
-                                              transition: {
-                                                type: "spring",
-                                                stiffness: 400,
-                                                damping: 25,
-                                              },
-                                            }
+                                          ? { scale: 1.02 }
                                           : {}
                                       }
                                       whileTap={

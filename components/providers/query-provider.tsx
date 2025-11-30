@@ -22,13 +22,10 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
             // Performance optimizations
             refetchOnWindowFocus: false, // Don't refetch on tab focus (annoying)
             refetchOnReconnect: true, // Do refetch when back online
-            refetchOnMount: "always", // Always check for fresh data
+            refetchOnMount: true, // Check for fresh data
 
             // Network mode: prefer cached data
-            networkMode: "offlineFirst", // Show cached data first, then fetch
-
-            // Placeholder data - instant UI
-            placeholderData: (previousData: any) => previousData, // Keep old data while loading
+            networkMode: "online", // Fetch fresh data for param changes
           },
           mutations: {
             retry: 0, // No retries for mutations (faster feedback)

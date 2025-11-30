@@ -19,15 +19,68 @@ export async function GET(request: Request) {
     const start = startDate ? new Date(startDate) : new Date();
     const schedule = [];
 
-    // For the first week (weekOffset=0), only show remaining days of current week
-    // For other weeks, show full 7 days
+    // Determine how many days to generate based on week type
     const today = new Date();
-    const isFirstWeek = Math.abs(start.getTime() - today.getTime()) < 24 * 60 * 60 * 1000; // Within 1 day
-    // Sunday = 0, Monday = 1, ..., Saturday = 6
-    // If today is Wednesday (3), remaining days = 7 - 3 = 4 (Wed, Thu, Fri, Sat)
-    // But we want to include Sunday as the last day of the week, so: (7 - today.getDay()) days
-    const daysToGenerate = isFirstWeek ? (7 - today.getDay()) : 7; // Remaining days of week or full week
-    
+    const isCurrentWeek = Math.abs(start.getTime() - today.getTime()) < 24 * 60 * 60 * 1000; // Within 1 day
+
+    let daysToGenerate = 7; // Default: full week
+
+    if (isCurrentWeek) {
+      // Current week: from today until Saturday (since Sunday starts next week)
+      const todayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      if (todayOfWeek === 0) {
+        // If today is Sunday, show full week (Sunday to Saturday)
+        daysToGenerate = 7;
+      } else {
+        // Show from today until Saturday
+        daysToGenerate = 7 - todayOfWeek;
+      }
+    }
+
+    // Fetch department info ONCE before the loop (performance optimization)
+    const deptResult = await query(
+      "SELECT slots_per_day, working_days FROM departments WHERE id = $1",
+      [departmentId]
+    );
+    const slotsPerDay = deptResult.rows[0]?.slots_per_day || 10;
+    const workingDays = deptResult.rows[0]?.working_days || [];
+
+    // 🚀 Fetch ALL appointments for the entire week in ONE query
+    const endDate = new Date(start);
+    endDate.setDate(start.getDate() + daysToGenerate - 1);
+
+    const allAppointmentsResult = await query(
+      `
+      SELECT
+        a.id,
+        a.slot_number,
+        a.client_id,
+        DATE(a.appointment_date) as appointment_date,
+        c.x_number as client_x_number
+      FROM appointments a
+      LEFT JOIN clients c ON a.client_id = c.id
+      WHERE a.department_id = $1
+      AND DATE(a.appointment_date) >= DATE($2)
+      AND DATE(a.appointment_date) <= DATE($3)
+      AND a.status != 'cancelled'
+      ORDER BY a.appointment_date, a.slot_number
+    `,
+      [departmentId, start.toISOString().split("T")[0], endDate.toISOString().split("T")[0]]
+    );
+
+    // Group appointments by date for fast lookup
+    const appointmentsByDate = new Map();
+    allAppointmentsResult.rows.forEach((apt: any) => {
+      const dateKey = apt.appointment_date;
+      if (!appointmentsByDate.has(dateKey)) {
+        appointmentsByDate.set(dateKey, new Map());
+      }
+      appointmentsByDate.get(dateKey).set(apt.slot_number, {
+        clientXNumber: apt.client_x_number,
+        clientId: apt.client_id,
+      });
+    });
+
     // Generate days
     for (let i = 0; i < daysToGenerate; i++) {
       const currentDate = new Date(start);
@@ -67,46 +120,15 @@ export async function GET(request: Request) {
         months[currentDate.getMonth()]
       } ${currentDate.getDate()}`;
 
-      // Get department info to determine slots per day and working days
-      const deptResult = await query(
-        "SELECT slots_per_day, working_days FROM departments WHERE id = $1",
-        [departmentId]
-      );
-
-      const slotsPerDay = deptResult.rows[0]?.slots_per_day || 10;
-      const workingDays = deptResult.rows[0]?.working_days || [];
-
-      // Check if this date is a working day
-      const isWorkingDay = await AppointmentService.isWorkingDay(
-        parseInt(departmentId),
+      // 🚀 Check if this date is a working day (using cached working_days array)
+      const isWorkingDay = AppointmentService.isWorkingDayFromArray(
+        workingDays,
         currentDate.toISOString().split("T")[0]
       );
 
-      // Get existing appointments for this date and department
-      const appointmentsResult = await query(
-        `
-        SELECT
-          a.id,
-          a.slot_number,
-          a.client_id,
-          c.x_number as client_x_number
-        FROM appointments a
-        LEFT JOIN clients c ON a.client_id = c.id
-        WHERE a.department_id = $1
-        AND DATE(a.appointment_date) = DATE($2)
-        AND a.status != 'cancelled'
-        ORDER BY a.slot_number
-      `,
-        [departmentId, currentDate.toISOString().split("T")[0]]
-      );
-
-      const bookedSlots = new Map();
-      appointmentsResult.rows.forEach((apt: any) => {
-        bookedSlots.set(apt.slot_number, {
-          clientXNumber: apt.client_x_number,
-          clientId: apt.client_id,
-        });
-      });
+      // 🚀 Get booked slots from pre-fetched data (no database query!)
+      const dateKey = currentDate.toISOString().split("T")[0];
+      const bookedSlots = appointmentsByDate.get(dateKey) || new Map();
 
       // Generate time slots
       const slots = [];
@@ -145,10 +167,17 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      data: schedule,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: schedule,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching schedule:", error);
     return NextResponse.json(
