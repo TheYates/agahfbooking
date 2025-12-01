@@ -670,13 +670,13 @@ export default function ClientsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">X-Number</label>
-                  <p className="text-sm bg-gray-100 p-2 rounded font-mono">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded font-mono">
                     {selectedClient.xNumber}
                   </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium">Category</label>
-                  <p className="text-sm bg-gray-100 p-2 rounded">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
                     {selectedClient.category}
                   </p>
                 </div>
@@ -684,7 +684,7 @@ export default function ClientsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Phone</label>
-                  <p className="text-sm bg-gray-100 p-2 rounded">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded">
                     {selectedClient.phone}
                   </p>
                 </div>
@@ -692,27 +692,27 @@ export default function ClientsPage() {
                   <label className="text-sm font-medium">
                     Emergency Contact
                   </label>
-                  <p className="text-sm bg-gray-100 p-2 rounded">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded">
                     {selectedClient.emergencyContact || "Not provided"}
                   </p>
                 </div>
               </div>
               <div>
                 <label className="text-sm font-medium">Address</label>
-                <p className="text-sm bg-gray-100 p-2 rounded">
+                <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded">
                   {selectedClient.address || "Not provided"}
                 </p>
               </div>
               <div>
                 <label className="text-sm font-medium">Medical Notes</label>
-                <p className="text-sm bg-gray-100 p-2 rounded min-h-[60px]">
+                <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded min-h-[60px]">
                   {selectedClient.medicalNotes || "No medical notes"}
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium">Join Date</label>
-                  <p className="text-sm bg-gray-100 p-2 rounded">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded">
                     {new Date(selectedClient.joinDate).toLocaleDateString(
                       "en-US",
                       {
@@ -727,13 +727,13 @@ export default function ClientsPage() {
                   <label className="text-sm font-medium">
                     Total Appointments
                   </label>
-                  <p className="text-sm bg-gray-100 p-2 rounded">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded">
                     {selectedClient.totalAppointments}
                   </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium">Last Visit</label>
-                  <p className="text-sm bg-gray-100 p-2 rounded">
+                  <p className="text-sm bg-gray-100 dark:bg-gray-800 text-foreground p-2 rounded">
                     {selectedClient.lastAppointment
                       ? new Date(
                           selectedClient.lastAppointment

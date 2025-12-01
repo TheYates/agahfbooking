@@ -2,8 +2,8 @@ import { requireAuth } from "@/lib/auth-server";
 import { MobileAppointmentsClient } from "@/components/appointments/mobile-appointments-client";
 import { MobileAppointmentsWrapper } from "@/components/appointments/mobile-appointments-wrapper";
 
-// Desktop appointments component
-import DesktopAppointments from "./desktop-appointments";
+// Desktop appointments component (TanStack Query version)
+import DesktopAppointments from "./desktop-appointments-tanstack";
 
 export default async function AppointmentsPage() {
   const user = await requireAuth();

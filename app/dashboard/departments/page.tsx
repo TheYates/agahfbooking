@@ -71,6 +71,15 @@ const DEPARTMENT_COLORS = [
   "#10B981",
 ];
 
+// Helper function to convert 24-hour time to 12-hour format
+function formatTo12Hour(time24: string): string {
+  const [hours, minutes] = time24.split(':');
+  const hour = parseInt(hours);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${period}`;
+}
+
 export default function DepartmentsPage() {
   const [selectedDepartment, setSelectedDepartment] =
     useState<Department | null>(null);
@@ -397,8 +406,8 @@ export default function DepartmentsPage() {
                             Working Hours
                           </Label>
                           <p className="text-lg font-semibold">
-                            {selectedDepartment.working_hours.start} -{" "}
-                            {selectedDepartment.working_hours.end}
+                            {formatTo12Hour(selectedDepartment.working_hours.start)} -{" "}
+                            {formatTo12Hour(selectedDepartment.working_hours.end)}
                           </p>
                         </div>
                         <div>

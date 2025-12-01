@@ -81,13 +81,13 @@ interface PaginatedAppointments {
   }
 }
 
-interface AppointmentFilters {
+export interface AppointmentFilters {
   search?: string
   status?: string
   dateFilter?: string
 }
 
-interface DesktopAppointment {
+export interface DesktopAppointment {
   id: number
   clientId: number
   clientName: string

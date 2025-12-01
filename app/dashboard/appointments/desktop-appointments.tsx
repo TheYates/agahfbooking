@@ -33,7 +33,10 @@ import { QuickBookingDialogTanstack as QuickBookingDialog } from "@/components/u
 import { DataPagination } from "@/components/ui/data-pagination";
 
 // 🚀 Import TanStack Query hooks
-import { useAppointmentsListManagement, useDeleteAppointment } from "@/hooks/use-hospital-queries";
+import {
+  useAppointmentsListManagement,
+  useDeleteAppointment,
+} from "@/hooks/use-hospital-queries";
 import { useDebounce } from "@/hooks/use-debounce";
 
 interface Appointment {
@@ -180,7 +183,6 @@ export default function DesktopAppointmentsPage() {
         </div>
       </div>
 
-
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -207,7 +209,9 @@ export default function DesktopAppointmentsPage() {
               <label className="text-sm font-medium mb-2 block">Status</label>
               <Select
                 value={statusFilter}
-                onValueChange={(value) => handleFilterChange(setStatusFilter, value)}
+                onValueChange={(value) =>
+                  handleFilterChange(setStatusFilter, value)
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -228,7 +232,9 @@ export default function DesktopAppointmentsPage() {
               <label className="text-sm font-medium mb-2 block">Date</label>
               <Select
                 value={dateFilter}
-                onValueChange={(value) => handleFilterChange(setDateFilter, value)}
+                onValueChange={(value) =>
+                  handleFilterChange(setDateFilter, value)
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -264,13 +270,11 @@ export default function DesktopAppointmentsPage() {
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>
-                Appointments ({pagination.totalCount})
-              </CardTitle>
+              <CardTitle>Appointments ({pagination.totalCount})</CardTitle>
               <CardDescription>
                 Showing {(currentPage - 1) * itemsPerPage + 1}-
-                {Math.min(currentPage * itemsPerPage, pagination.totalCount)}{" "}
-                of {pagination.totalCount} appointments
+                {Math.min(currentPage * itemsPerPage, pagination.totalCount)} of{" "}
+                {pagination.totalCount} appointments
               </CardDescription>
             </div>
             {pagination.totalPages > 1 && (
@@ -292,7 +296,9 @@ export default function DesktopAppointmentsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, pagination.totalPages))
+                    setCurrentPage((prev) =>
+                      Math.min(prev + 1, pagination.totalPages)
+                    )
                   }
                   disabled={currentPage === pagination.totalPages || loading}
                 >
@@ -323,7 +329,7 @@ export default function DesktopAppointmentsPage() {
               appointments.map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent dark:hover:bg-accent cursor-pointer transition-colors"
                   onClick={() => handleAppointmentClick(appointment)}
                 >
                   <div className="flex items-center gap-3">

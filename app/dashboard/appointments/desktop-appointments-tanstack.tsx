@@ -33,6 +33,7 @@ import { AppointmentModal } from "@/components/calendar/appointment-modal";
 import { QuickBookingDialogTanstack } from "@/components/ui/quick-booking-dialog-tanstack";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useDebounce } from "@/hooks/use-debounce";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Import TanStack Query hooks
 import {
@@ -42,12 +43,40 @@ import {
   type DesktopAppointment,
 } from "@/hooks/use-hospital-queries";
 
+// Appointment Skeleton Loader Component
+function AppointmentSkeleton() {
+  return (
+    <div className="flex items-center justify-between p-3 border rounded-lg">
+      <div className="flex items-center gap-3 flex-1">
+        <div className="text-center min-w-[60px] space-y-2">
+          <Skeleton className="h-4 w-12 mx-auto" />
+          <Skeleton className="h-3 w-10 mx-auto" />
+        </div>
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-5 w-16" />
+          </div>
+          <Skeleton className="h-4 w-64" />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Skeleton className="h-6 w-20" />
+        <Skeleton className="h-8 w-8" />
+        <Skeleton className="h-8 w-8" />
+      </div>
+    </div>
+  );
+}
+
 export default function DesktopAppointmentsTanstackPage() {
   // Local state - much simpler now!
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
-  const [selectedAppointment, setSelectedAppointment] = useState<DesktopAppointment | null>(null);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<DesktopAppointment | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuickBookingOpen, setIsQuickBookingOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,26 +86,29 @@ export default function DesktopAppointmentsTanstackPage() {
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // Create filters object for TanStack Query
-  const filters: AppointmentFilters = useMemo(() => ({
-    search: debouncedSearchTerm,
-    status: statusFilter,
-    dateFilter: dateFilter,
-  }), [debouncedSearchTerm, statusFilter, dateFilter]);
+  const filters: AppointmentFilters = useMemo(
+    () => ({
+      search: debouncedSearchTerm,
+      status: statusFilter,
+      dateFilter: dateFilter,
+    }),
+    [debouncedSearchTerm, statusFilter, dateFilter]
+  );
 
   // TanStack Query hooks - This replaces ALL the useEffect and fetch logic!
   const {
     data: appointmentsData,
     isLoading: loading,
     error,
-    isPreviousData, // For smooth pagination
+    isPlaceholderData, // For smooth pagination (replaces isPreviousData in v5)
     isRefetching, // For background refresh indicator
   } = useAppointmentsList(filters, currentPage, itemsPerPage);
 
   const deleteAppointmentMutation = useDeleteAppointment();
 
-  // Safe data extraction
-  const appointments = appointmentsData?.data || [];
-  const pagination = appointmentsData?.pagination || {
+  // Safe data extraction with proper typing
+  const appointments: DesktopAppointment[] = (appointmentsData as any)?.data || [];
+  const pagination = (appointmentsData as any)?.pagination || {
     currentPage: 1,
     totalPages: 1,
     totalCount: 0,
@@ -85,17 +117,20 @@ export default function DesktopAppointmentsTanstackPage() {
   };
 
   // Reset page when filters change
-  const handleFilterChange = (type: 'search' | 'status' | 'date', value: string) => {
+  const handleFilterChange = (
+    type: "search" | "status" | "date",
+    value: string
+  ) => {
     setCurrentPage(1); // Reset to page 1 when filters change
-    
+
     switch (type) {
-      case 'search':
+      case "search":
         setSearchTerm(value);
         break;
-      case 'status':
+      case "status":
         setStatusFilter(value);
         break;
-      case 'date':
+      case "date":
         setDateFilter(value);
         break;
     }
@@ -106,10 +141,16 @@ export default function DesktopAppointmentsTanstackPage() {
     setIsModalOpen(true);
   };
 
-  const handleAppointmentUpdate = (updatedAppointment: DesktopAppointment) => {
+  const handleAppointmentUpdate = (updatedAppointment: any) => {
     // TanStack Query will automatically update the cache when we invalidate queries
     // The AppointmentModal should trigger cache invalidation on successful update
-    setSelectedAppointment(updatedAppointment);
+    // Convert modal appointment type back to DesktopAppointment
+    const updated: DesktopAppointment = {
+      ...updatedAppointment,
+      phone: selectedAppointment?.phone || "",
+      category: selectedAppointment?.category || "",
+    };
+    setSelectedAppointment(updated);
   };
 
   const handleAppointmentDelete = async (appointmentId: number) => {
@@ -150,7 +191,7 @@ export default function DesktopAppointmentsTanstackPage() {
         "Phone",
         "Notes",
       ],
-      ...appointments.map((apt) => [
+      ...appointments.map((apt: DesktopAppointment) => [
         apt.date,
         `Slot ${apt.slotNumber}`,
         apt.clientName,
@@ -185,8 +226,8 @@ export default function DesktopAppointmentsTanstackPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            onClick={exportAppointments} 
+          <Button
+            onClick={exportAppointments}
             variant="outline"
             disabled={loading || appointments.length === 0}
           >
@@ -199,7 +240,6 @@ export default function DesktopAppointmentsTanstackPage() {
           </Button>
         </div>
       </div>
-
 
       {/* Filters */}
       <Card>
@@ -221,7 +261,7 @@ export default function DesktopAppointmentsTanstackPage() {
                 <Input
                   placeholder="Search patients, doctors..."
                   value={searchTerm}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  onChange={(e) => handleFilterChange("search", e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -233,7 +273,10 @@ export default function DesktopAppointmentsTanstackPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Status</label>
-              <Select value={statusFilter} onValueChange={(value) => handleFilterChange('status', value)}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => handleFilterChange("status", value)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -251,7 +294,10 @@ export default function DesktopAppointmentsTanstackPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Date</label>
-              <Select value={dateFilter} onValueChange={(value) => handleFilterChange('date', value)}>
+              <Select
+                value={dateFilter}
+                onValueChange={(value) => handleFilterChange("date", value)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -268,7 +314,11 @@ export default function DesktopAppointmentsTanstackPage() {
                 variant="outline"
                 onClick={clearFilters}
                 className="w-full"
-                disabled={searchTerm === "" && statusFilter === "all" && dateFilter === "all"}
+                disabled={
+                  searchTerm === "" &&
+                  statusFilter === "all" &&
+                  dateFilter === "all"
+                }
               >
                 Clear Filters
               </Button>
@@ -290,12 +340,21 @@ export default function DesktopAppointmentsTanstackPage() {
               </CardTitle>
               <CardDescription>
                 {loading ? (
-                  <div className="animate-pulse bg-gray-200 h-4 w-48 rounded"></div>
+                  <Skeleton className="h-4 w-48" />
                 ) : (
                   <>
-                    Showing {Math.max(1, (pagination.currentPage - 1) * itemsPerPage + 1)}-
-                    {Math.min(pagination.currentPage * itemsPerPage, pagination.totalCount)} of {pagination.totalCount} appointments
-                    {isPreviousData && " (Previous page while loading)"}
+                    Showing{" "}
+                    {Math.max(
+                      1,
+                      (pagination.currentPage - 1) * itemsPerPage + 1
+                    )}
+                    -
+                    {Math.min(
+                      pagination.currentPage * itemsPerPage,
+                      pagination.totalCount
+                    )}{" "}
+                    of {pagination.totalCount} appointments
+                    {isPlaceholderData && " (Previous page while loading)"}
                   </>
                 )}
               </CardDescription>
@@ -328,14 +387,18 @@ export default function DesktopAppointmentsTanstackPage() {
         <CardContent>
           <div className="space-y-2">
             {loading && currentPage === 1 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p>Loading appointments...</p>
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <AppointmentSkeleton key={index} />
+                ))}
               </div>
             ) : error ? (
               <div className="text-center py-8 text-red-600">
                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Error: {(error as Error)?.message || 'Failed to load appointments'}</p>
+                <p>
+                  Error:{" "}
+                  {(error as Error)?.message || "Failed to load appointments"}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   TanStack Query will retry automatically
                 </p>
@@ -344,7 +407,9 @@ export default function DesktopAppointmentsTanstackPage() {
               <div className="text-center py-8 text-muted-foreground">
                 <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No appointments found matching your criteria</p>
-                {(searchTerm || statusFilter !== 'all' || dateFilter !== 'all') && (
+                {(searchTerm ||
+                  statusFilter !== "all" ||
+                  dateFilter !== "all") && (
                   <Button
                     onClick={clearFilters}
                     variant="outline"
@@ -358,32 +423,34 @@ export default function DesktopAppointmentsTanstackPage() {
             ) : (
               <>
                 {/* Show loading indicator for page changes */}
-                {loading && isPreviousData && (
-                  <div className="text-center py-2 border-b">
-                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      Loading page {currentPage}...
-                    </div>
+                {loading && isPlaceholderData && (
+                  <div className="space-y-2 mb-4">
+                    {Array.from({ length: 3 }).map((_, idx) => (
+                      <AppointmentSkeleton key={`loading-${idx}`} />
+                    ))}
                   </div>
                 )}
 
-                {appointments.map((appointment, index) => (
+                {appointments.map((appointment: DesktopAppointment) => (
                   <div
                     key={appointment.id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent dark:hover:bg-accent cursor-pointer transition-colors"
                     style={{
-                      opacity: loading && isPreviousData ? 0.7 : 1,
-                      transition: 'opacity 0.2s ease-in-out',
+                      opacity: loading && isPlaceholderData ? 0.7 : 1,
+                      transition: "opacity 0.2s ease-in-out",
                     }}
                     onClick={() => handleAppointmentClick(appointment)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="text-center min-w-[60px]">
                         <div className="text-sm font-medium">
-                          {new Date(appointment.date).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {new Date(appointment.date).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                            }
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Slot {appointment.slotNumber}
@@ -402,7 +469,8 @@ export default function DesktopAppointmentsTanstackPage() {
                           </Badge>
                         </div>
                         <div className="text-sm text-muted-foreground truncate">
-                          {appointment.doctorName} • {appointment.departmentName} • {appointment.phone}
+                          {appointment.doctorName} •{" "}
+                          {appointment.departmentName} • {appointment.phone}
                         </div>
                         {appointment.notes && (
                           <div className="text-xs text-muted-foreground truncate">
@@ -422,8 +490,8 @@ export default function DesktopAppointmentsTanstackPage() {
                       >
                         {appointment.status.replace("_", " ")}
                       </Badge>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -442,7 +510,9 @@ export default function DesktopAppointmentsTanstackPage() {
                         disabled={deleteAppointmentMutation.isPending}
                         className="text-red-500 hover:text-red-700 hover:bg-red-50"
                       >
-                        {deleteAppointmentMutation.isPending && deleteAppointmentMutation.variables === appointment.id ? (
+                        {deleteAppointmentMutation.isPending &&
+                        deleteAppointmentMutation.variables ===
+                          appointment.id ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
                         ) : (
                           <Trash2 className="h-4 w-4" />
@@ -456,27 +526,28 @@ export default function DesktopAppointmentsTanstackPage() {
           </div>
 
           {/* Pagination Controls with TanStack Query features */}
-          {pagination.totalPages > 1 && (
+          {pagination.totalPages > 1 && !loading && (
             <DataPagination
               currentPage={pagination.currentPage}
               totalPages={pagination.totalPages}
               totalCount={pagination.totalCount}
               itemsPerPage={itemsPerPage}
               onPageChange={handlePageChange}
-              disabled={loading} // Prevent rapid pagination clicks
             />
           )}
         </CardContent>
       </Card>
 
-      <AppointmentModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        appointment={selectedAppointment as any}
-        userRole="admin"
-        onAppointmentUpdate={handleAppointmentUpdate as any}
-        onAppointmentDelete={handleAppointmentDelete}
-      />
+      {selectedAppointment && (
+        <AppointmentModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          appointment={selectedAppointment}
+          userRole="admin"
+          onAppointmentUpdate={handleAppointmentUpdate}
+          onAppointmentDelete={handleAppointmentDelete}
+        />
+      )}
 
       <QuickBookingDialogTanstack
         isOpen={isQuickBookingOpen}
