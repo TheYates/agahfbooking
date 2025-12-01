@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(ping:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(pnpm install:*)"
     ],
     "deny": [],
     "ask": []
