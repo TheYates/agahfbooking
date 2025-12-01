@@ -16,6 +16,7 @@ import {
   isWorkingDayForAnyDepartment,
 } from "@/lib/working-days-utils";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Import TanStack Query hooks
 import {
@@ -302,13 +303,44 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
   // Loading state
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading calendar data...</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            TanStack Query is fetching departments, doctors, and appointments
-          </p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <Skeleton className="h-8 w-48" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Skeleton className="h-9 w-9" />
+              <Skeleton className="h-9 w-9" />
+              <Skeleton className="h-9 w-16" />
+            </div>
+            <Skeleton className="h-9 w-32" />
+          </div>
+        </div>
+
+        <div
+          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
+          style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
+        >
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div
+              key={day}
+              className="p-2 text-center font-medium text-sm text-muted-foreground h-8"
+            >
+              {day}
+            </div>
+          ))}
+
+          {Array.from({ length: 42 }).map((_, index) => (
+            <div
+              key={index}
+              className="p-2 h-full border rounded-lg flex flex-col min-h-0"
+            >
+              <Skeleton className="h-5 w-6 mb-2" />
+              <div className="space-y-1">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
