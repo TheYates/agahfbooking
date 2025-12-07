@@ -1,5 +1,4 @@
 import { requireAuth } from "@/lib/auth-server";
-import { MobileAppointmentsClient } from "@/components/appointments/mobile-appointments-client";
 import { MobileAppointmentsWrapper } from "@/components/appointments/mobile-appointments-wrapper";
 
 // Desktop appointments component (TanStack Query version)

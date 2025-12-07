@@ -6,11 +6,14 @@ import { queryKeys } from '@/lib/query-client'
 import { toast } from 'sonner'
 
 // Types (matching your existing interfaces)
-interface Department {
+export interface Department {
   id: number
   name: string
   description: string
-  slots_per_day?: number
+  slots_per_day: number
+  working_days: string[]
+  working_hours: { start: string; end: string }
+  color?: string
 }
 
 interface Client {
@@ -116,7 +119,7 @@ interface PaginatedDesktopAppointments {
   }
 }
 
-interface CalendarAppointment {
+export interface CalendarAppointment {
   id: number
   clientId: number
   clientName: string
@@ -132,7 +135,7 @@ interface CalendarAppointment {
   notes?: string
 }
 
-interface Doctor {
+export interface Doctor {
   id: number
   name: string
   specialization: string
@@ -439,10 +442,11 @@ const cancelAppointment = async (cancelData: {
 }
 
 // Custom Hooks
-export const useDepartments = () => {
+export const useDepartments = (enabled: boolean = true) => {
   return useQuery({
     queryKey: queryKeys.departments,
     queryFn: fetchDepartments,
+    enabled,
     staleTime: 60 * 60 * 1000, // 1 hour - departments rarely change
     gcTime: 2 * 60 * 60 * 1000, // 2 hours
   })
@@ -697,7 +701,7 @@ export const useClientAppointmentsPaginated = (
     enabled: enabled && !!clientId,
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 5 * 60 * 1000, // 5 minutes
-    keepPreviousData: true, // Keep previous page data while loading next page
+    placeholderData: (previousData) => previousData, // Keep previous page data while loading next page
   })
 }
 
@@ -714,7 +718,7 @@ export const useAppointmentsList = (
     enabled,
     staleTime: 30 * 1000, // 30 seconds - appointments change frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
-    keepPreviousData: true, // Smooth pagination experience
+    placeholderData: (previousData) => previousData, // Smooth pagination experience
     refetchInterval: 60 * 1000, // Background refresh every minute
     refetchIntervalInBackground: true,
   })
@@ -840,12 +844,12 @@ export const useDeleteAppointment = () => {
     onMutate: async (appointmentId) => {
       // Cancel outgoing refetches for appointments list queries
       await queryClient.cancelQueries({ 
-        queryKey: ['appointments', 'list'] 
+        queryKey: ['appointments', 'list'],
       })
       
       // Get all current appointments list queries
       const queryCache = queryClient.getQueryCache()
-      const appointmentQueries = queryCache.findAll(['appointments', 'list'])
+      const appointmentQueries = queryCache.findAll({ queryKey: ['appointments', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
       
       // Optimistically remove appointment from all list queries
@@ -888,10 +892,10 @@ export const useDeleteAppointment = () => {
     onSuccess: (data, variables) => {
       // Invalidate and refetch appointments list queries
       queryClient.invalidateQueries({ 
-        queryKey: ['appointments', 'list'] 
+        queryKey: ['appointments', 'list'],
       })
       queryClient.invalidateQueries({ 
-        queryKey: queryKeys.dashboardStats.forStaff() 
+        queryKey: queryKeys.dashboardStats.forStaff(),
       })
       
       toast.success('Appointment Deleted! ✅', {
@@ -977,7 +981,6 @@ export const useClientsManagement = (params: ClientsQueryParams) => {
     queryClient.prefetchQuery({
       queryKey: ['clients', 'list', { ...params, page: params.page + 1 }],
       queryFn: () => fetchClientsManagement({ ...params, page: params.page + 1 }),
-      staleTime: 30 * 1000,
     })
   }
 
@@ -1049,7 +1052,7 @@ export const useUpdateClient = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const clientQueries = queryCache.findAll(['clients', 'list'])
+      const clientQueries = queryCache.findAll({ queryKey: ['clients', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically update all client list queries
@@ -1118,7 +1121,7 @@ export const useDeleteClient = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const clientQueries = queryCache.findAll(['clients', 'list'])
+      const clientQueries = queryCache.findAll({ queryKey: ['clients', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically remove from all client list queries
@@ -1234,7 +1237,6 @@ export const useAppointmentsListManagement = (params: AppointmentsListQueryParam
     queryClient.prefetchQuery({
       queryKey: ['appointments', 'list', { ...params, page: params.page + 1 }],
       queryFn: () => fetchAppointmentsListManagement({ ...params, page: params.page + 1 }),
-      staleTime: 30 * 1000,
     })
   }
 
@@ -1268,7 +1270,7 @@ export const useUpdateAppointmentStatus = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const appointmentQueries = queryCache.findAll(['appointments', 'list'])
+      const appointmentQueries = queryCache.findAll({ queryKey: ['appointments', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically update all appointment list queries
@@ -1431,7 +1433,7 @@ export const useUpdateUser = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const userQueries = queryCache.findAll(['users', 'list'])
+      const userQueries = queryCache.findAll({ queryKey: ['users', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically update all user list queries
@@ -1500,7 +1502,7 @@ export const useToggleUserActive = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const userQueries = queryCache.findAll(['users', 'list'])
+      const userQueries = queryCache.findAll({ queryKey: ['users', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically toggle active status in all user list queries
@@ -1571,7 +1573,7 @@ export const useDeleteUser = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const userQueries = queryCache.findAll(['users', 'list'])
+      const userQueries = queryCache.findAll({ queryKey: ['users', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically remove from all user list queries

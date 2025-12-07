@@ -34,6 +34,7 @@ interface CalendarViewTanstackProps {
 export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTanstackProps) {
   // Local state - much simpler now!
   const [currentDate, setCurrentDate] = useState(new Date());
+  // Only month view is implemented, week and day views coming soon
   const [view, setView] = useState<"month" | "week" | "day">("month");
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
   const [bookingModal, setBookingModal] = useState({
@@ -130,13 +131,13 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
   // Get maximum slots across all departments for calendar display
   const getMaxSlots = () => {
     if (departments.length === 0) return 10; // fallback
-    return Math.max(...departments.map((d) => d.slots_per_day));
+    return Math.max(...departments.map((d) => d.slots_per_day || 10));
   };
 
   // Check if a slot is valid for a specific department
   const isSlotValidForDepartment = (slotNumber: number, departmentId: number) => {
     const department = departments.find((d) => d.id === departmentId);
-    return department ? slotNumber <= department.slots_per_day : false;
+    return department ? slotNumber <= (department.slots_per_day || 10) : false;
   };
 
   // Get department color for visual coding
@@ -151,7 +152,8 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     return colors[departmentId] || "#6B7280"; // Default gray
   };
 
-  const maskXNumber = (xNumber: string, isOwnAppointment: boolean) => {
+  const maskXNumber = (xNumber: string, clientId: number) => {
+    const isOwnAppointment = currentUserId !== undefined && clientId === currentUserId;
     if (userRole !== "client" || isOwnAppointment) {
       return xNumber;
     }
@@ -484,8 +486,8 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
                       onDragStart={(e) => handleDragStart(e, apt)}
                     >
                       <div className="font-medium text-xs truncate">
-                        {userRole === "client" && apt.clientId !== currentUserId
-                          ? `${maskXNumber(apt.clientXNumber, false)} - ***`
+                        {userRole === "client" && currentUserId !== undefined && apt.clientId !== currentUserId
+                          ? `${maskXNumber(apt.clientXNumber, apt.clientId)} - ***`
                           : `${apt.clientXNumber} - ${apt.clientName}`}
                       </div>
                       <div className="opacity-60 text-xs truncate">
@@ -518,25 +520,341 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     );
   };
 
-  // Week and Day views would follow similar patterns with background refresh indicators
   const renderWeekView = () => {
-    // Similar to original but with loading states and background refresh indicators
-    // Implementation would be similar to month view but with week layout
+    const weekDays = getWeekDays(currentDate);
+    const weekStart = weekDays[0];
+    const weekEnd = weekDays[6];
+    const weekLabel = `${weekStart.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    })} - ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+
+    const maxSlots = getMaxSlots();
+
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Week view implementation with TanStack Query</p>
-        <p className="text-xs mt-2">Real-time updates every 30 seconds</p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold">{weekLabel}</h2>
+            {isRefetching && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("prev")}
+                disabled={loading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("next")}
+                disabled={loading}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(new Date())}
+                disabled={loading}
+              >
+                Today
+              </Button>
+            </div>
+            <ViewSwitcher currentView={view} onViewChange={setView} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-8 gap-2">
+          {/* Time slots column */}
+          <div className="space-y-2">
+            <div className="h-12 p-2 font-medium text-sm">Time</div>
+            {Array.from({ length: maxSlots }).map((_, slotIndex) => (
+              <div
+                key={slotIndex}
+                className="h-16 p-2 text-xs text-muted-foreground flex items-center justify-center border rounded"
+              >
+                Slot {slotIndex + 1}
+              </div>
+            ))}
+          </div>
+
+          {/* Days columns */}
+          {weekDays.map((day, dayIndex) => {
+            const dayAppointments = getAppointmentsForDate(day);
+            const isToday = new Date().toDateString() === day.toDateString();
+            const isPast = isPastDate(day);
+            const isWorkingDay = isWorkingDayForAnyDepartment(departments, day);
+            const isValidForBooking = isValidBookingDate(day, undefined, departments);
+
+            return (
+              <div key={dayIndex} className="space-y-2">
+                <div
+                  className={cn(
+                    "h-12 p-2 text-center border rounded-lg font-medium text-sm",
+                    isToday && "bg-blue-50 dark:bg-blue-900/20 border-blue-300",
+                    isPast && "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                  )}
+                >
+                  <div className="font-bold">
+                    {day.toLocaleDateString("en-US", { weekday: "short" })}
+                  </div>
+                  <div className="text-xs">{day.getDate()}</div>
+                </div>
+
+                {Array.from({ length: maxSlots }).map((_, slotIndex) => {
+                  const slotNumber = slotIndex + 1;
+                  const slotAppointment = dayAppointments.find(
+                    (apt) => apt.slotNumber === slotNumber
+                  );
+
+                  return (
+                    <div
+                      key={slotIndex}
+                      className={cn(
+                        "h-16 p-1 border rounded-lg transition-colors",
+                        slotAppointment
+                          ? "cursor-pointer"
+                          : isPast || !isWorkingDay
+                          ? "bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-50"
+                          : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20"
+                      )}
+                      onClick={() => {
+                        if (slotAppointment) {
+                          handleAppointmentClick(slotAppointment);
+                        } else if (isValidForBooking) {
+                          handleBookSlot(day, slotNumber);
+                        }
+                      }}
+                      onDragOver={isValidForBooking && !slotAppointment ? handleDragOver : undefined}
+                      onDrop={
+                        isValidForBooking && !slotAppointment
+                          ? (e) => handleDrop(e, day, slotNumber)
+                          : undefined
+                      }
+                    >
+                      {slotAppointment ? (
+                        <div
+                          className="h-full p-1 rounded text-xs border-l-2 flex flex-col justify-center"
+                          style={{
+                            backgroundColor: getDepartmentColor(slotAppointment.departmentId) + "20",
+                            color: getDepartmentColor(slotAppointment.departmentId),
+                            borderLeftColor: getDepartmentColor(slotAppointment.departmentId),
+                          }}
+                          draggable={!isPastAppointment(slotAppointment)}
+                          onDragStart={(e) => handleDragStart(e, slotAppointment)}
+                        >
+                          <div className="font-semibold text-xs truncate">
+                            {userRole === "client" && currentUserId !== undefined && slotAppointment.clientId !== currentUserId
+                              ? maskXNumber(slotAppointment.clientXNumber, slotAppointment.clientId)
+                              : slotAppointment.clientXNumber}
+                          </div>
+                          <div className="text-xs truncate opacity-80">
+                            {userRole === "client" && currentUserId !== undefined && slotAppointment.clientId !== currentUserId
+                              ? "***"
+                              : slotAppointment.clientName}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                          {isValidForBooking && !isPast && isWorkingDay && (
+                            <Plus className="h-3 w-3" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   };
 
   const renderDayView = () => {
-    // Similar to original but with loading states and background refresh indicators
-    // Implementation would be similar to month view but with day layout
+    const dayLabel = currentDate.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    const dayAppointments = getAppointmentsForDate(currentDate);
+    const isPast = isPastDate(currentDate);
+    const isWorkingDay = isWorkingDayForAnyDepartment(departments, currentDate);
+    const isValidForBooking = isValidBookingDate(currentDate, undefined, departments);
+    const maxSlots = getMaxSlots();
+
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Day view implementation with TanStack Query</p>
-        <p className="text-xs mt-2">Real-time updates every 30 seconds</p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold">{dayLabel}</h2>
+            {isRefetching && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            )}
+            {!isWorkingDay && (
+              <span className="text-sm text-muted-foreground">(Non-working day)</span>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateDay("prev")}
+                disabled={loading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateDay("next")}
+                disabled={loading}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(new Date())}
+                disabled={loading}
+              >
+                Today
+              </Button>
+            </div>
+            <ViewSwitcher currentView={view} onViewChange={setView} />
+          </div>
+        </div>
+
+        <ScrollArea className="h-[calc(100vh-12rem)]">
+          <div className="space-y-2 pr-4">
+            {Array.from({ length: maxSlots }).map((_, slotIndex) => {
+              const slotNumber = slotIndex + 1;
+              const slotAppointment = dayAppointments.find(
+                (apt) => apt.slotNumber === slotNumber
+              );
+
+              return (
+                <div
+                  key={slotIndex}
+                  className={cn(
+                    "p-4 border rounded-lg transition-colors min-h-[80px]",
+                    slotAppointment
+                      ? "cursor-pointer"
+                      : isPast || !isWorkingDay
+                      ? "bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-50"
+                      : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20"
+                  )}
+                  onClick={() => {
+                    if (slotAppointment) {
+                      handleAppointmentClick(slotAppointment);
+                    } else if (isValidForBooking) {
+                      handleBookSlot(currentDate, slotNumber);
+                    }
+                  }}
+                  onDragOver={isValidForBooking && !slotAppointment ? handleDragOver : undefined}
+                  onDrop={
+                    isValidForBooking && !slotAppointment
+                      ? (e) => handleDrop(e, currentDate, slotNumber)
+                      : undefined
+                  }
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-lg">Slot {slotNumber}</span>
+                      {slotAppointment && (
+                        <span
+                          className="px-2 py-1 rounded text-xs font-medium"
+                          style={{
+                            backgroundColor: getDepartmentColor(slotAppointment.departmentId) + "20",
+                            color: getDepartmentColor(slotAppointment.departmentId),
+                          }}
+                        >
+                          {slotAppointment.departmentName}
+                        </span>
+                      )}
+                    </div>
+                    {!slotAppointment && isValidForBooking && (
+                      <Button size="sm" variant="outline">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Book
+                      </Button>
+                    )}
+                  </div>
+
+                  {slotAppointment ? (
+                    <div
+                      className="p-3 rounded border-l-4"
+                      style={{
+                        backgroundColor: getDepartmentColor(slotAppointment.departmentId) + "10",
+                        borderLeftColor: getDepartmentColor(slotAppointment.departmentId),
+                      }}
+                      draggable={!isPastAppointment(slotAppointment)}
+                      onDragStart={(e) => handleDragStart(e, slotAppointment)}
+                    >
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Client:</span>
+                          <div className="font-medium">
+                            {userRole === "client" && currentUserId !== undefined && slotAppointment.clientId !== currentUserId
+                              ? maskXNumber(slotAppointment.clientXNumber, slotAppointment.clientId)
+                              : slotAppointment.clientXNumber}
+                          </div>
+                          <div>
+                            {userRole === "client" && currentUserId !== undefined && slotAppointment.clientId !== currentUserId
+                              ? "***"
+                              : slotAppointment.clientName}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Doctor:</span>
+                          <div className="font-medium">{slotAppointment.doctorName}</div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Status:</span>
+                          <div
+                            className="inline-block px-2 py-0.5 rounded text-xs"
+                            style={{
+                              backgroundColor: slotAppointment.statusColor + "20",
+                              color: slotAppointment.statusColor,
+                            }}
+                          >
+                            {slotAppointment.status}
+                          </div>
+                        </div>
+                        {slotAppointment.notes && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Notes:</span>
+                            <div className="text-sm mt-1">{slotAppointment.notes}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">
+                      {isValidForBooking ? (
+                        <span className="text-sm">Available - Click to book</span>
+                      ) : isPast ? (
+                        <span className="text-sm">Past slot</span>
+                      ) : (
+                        <span className="text-sm">Non-working day</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
       </div>
     );
   };
