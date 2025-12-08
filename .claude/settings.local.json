@@ -3,7 +3,12 @@
     "allow": [
       "Bash(ping:*)",
       "Bash(node:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(\"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\api\\doctors\\[id]\\route.ts\")",
+      "Bash(test:*)",
+      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\calendar\")",
+      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\api\\appointments\")"
     ],
     "deny": [],
     "ask": []

@@ -6,11 +6,14 @@ import { queryKeys } from '@/lib/query-client'
 import { toast } from 'sonner'
 
 // Types (matching your existing interfaces)
-interface Department {
+export interface Department {
   id: number
   name: string
   description: string
   slots_per_day?: number
+  working_days?: string[]
+  working_hours?: { start: string; end: string }
+  is_active?: boolean
 }
 
 interface Client {
@@ -116,7 +119,7 @@ interface PaginatedDesktopAppointments {
   }
 }
 
-interface CalendarAppointment {
+export interface CalendarAppointment {
   id: number
   clientId: number
   clientName: string
@@ -132,7 +135,7 @@ interface CalendarAppointment {
   notes?: string
 }
 
-interface Doctor {
+export interface Doctor {
   id: number
   name: string
   specialization: string
@@ -1886,6 +1889,84 @@ export const useAddDoctor = () => {
     onError: (err: Error) => {
       toast.error('Add Failed', {
         description: err.message || 'Failed to add doctor. Please try again.',
+      })
+    },
+  })
+}
+
+// Update Doctor Mutation
+const updateDoctor = async ({ id, data }: { id: number; data: DoctorFormData }) => {
+  const response = await fetch(`/api/doctors/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update doctor')
+  }
+
+  const responseData = await response.json()
+  if (!responseData.success) throw new Error(responseData.error || 'Failed to update doctor')
+  return responseData
+}
+
+export const useUpdateDoctor = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateDoctor,
+    onSuccess: () => {
+      // Invalidate doctors queries
+      queryClient.invalidateQueries({ queryKey: ['doctors'] })
+
+      toast.success('Doctor Updated! ✅', {
+        description: 'The doctor has been successfully updated.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update doctor. Please try again.',
+      })
+    },
+  })
+}
+
+// Delete Doctor Mutation
+const deleteDoctor = async (id: number) => {
+  const response = await fetch(`/api/doctors/${id}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to delete doctor')
+  }
+
+  const data = await response.json()
+  if (!data.success) throw new Error(data.error || 'Failed to delete doctor')
+  return data
+}
+
+export const useDeleteDoctor = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: deleteDoctor,
+    onSuccess: () => {
+      // Invalidate doctors queries
+      queryClient.invalidateQueries({ queryKey: ['doctors'] })
+
+      toast.success('Doctor Deleted! ✅', {
+        description: 'The doctor has been successfully deleted.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Delete Failed', {
+        description: err.message || 'Failed to delete doctor. Please try again.',
       })
     },
   })

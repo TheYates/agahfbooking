@@ -38,17 +38,15 @@ export default async function DashboardLayout({
 
   // Staff layout with header + sidebar
   return (
-    <div className="[--header-height:3.5rem]">
-      <SidebarProvider className="flex flex-col">
-        <SiteHeader />
-        <div className="flex flex-1">
-          <AppSidebar user={user} />
-          <SidebarInset>
-            <main className="flex-1 p-6">{children}</main>
-          </SidebarInset>
-        </div>
-      </SidebarProvider>
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex min-h-screen w-full">
+        <AppSidebar user={user} />
+        <SidebarInset className="flex flex-col">
+          <SiteHeader />
+          <main className="flex-1 p-6">{children}</main>
+        </SidebarInset>
+      </div>
       <Toaster />
-    </div>
+    </SidebarProvider>
   );
 }

@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface ViewSwitcherProps {
-  currentView: "month" | "week" | "day";
-  onViewChange: (view: "month" | "week" | "day") => void;
+  currentView: "month" | "week";
+  onViewChange: (view: "month" | "week") => void;
   disabled?: boolean;
 }
 
@@ -17,7 +17,6 @@ export function ViewSwitcher({
   const views = [
     { key: "month" as const, label: "Month" },
     { key: "week" as const, label: "Week" },
-    { key: "day" as const, label: "Day" },
   ];
 
   return (
@@ -28,7 +27,7 @@ export function ViewSwitcher({
           variant={currentView === view.key ? "default" : "ghost"}
           size="sm"
           onClick={() => onViewChange(view.key)}
-          disabled={disabled && view.key === "day"}
+          disabled={disabled}
           className={cn(
             "h-7 sm:h-8 px-2 sm:px-3 text-xs sm:text-sm transition-all",
             currentView === view.key

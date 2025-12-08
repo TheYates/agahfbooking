@@ -28,6 +28,7 @@ interface ComboboxProps {
   options: ComboboxOption[];
   value?: string;
   onValueChange?: (value: string) => void;
+  onSearchChange?: (search: string) => void;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
@@ -39,6 +40,7 @@ export function Combobox({
   options,
   value,
   onValueChange,
+  onSearchChange,
   placeholder = "Select option...",
   searchPlaceholder = "Search...",
   emptyText = "No option found.",
@@ -46,8 +48,14 @@ export function Combobox({
   disabled = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
 
   const selectedOption = options.find((option) => option.value === value);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    onSearchChange?.(value);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -69,18 +77,24 @@ export function Combobox({
         sideOffset={4}
         style={{ width: "var(--radix-popover-trigger-width)" }}
       >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={!onSearchChange}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={search}
+            onValueChange={handleSearchChange}
+          />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.value}
-                  onSelect={(currentValue) => {
-                    onValueChange?.(currentValue === value ? "" : currentValue);
+                  value={option.label}
+                  keywords={[option.value, option.label]}
+                  onSelect={() => {
+                    onValueChange?.(option.value);
                     setOpen(false);
+                    setSearch("");
                   }}
                 >
                   <Check

@@ -31,6 +31,7 @@ import {
   useUpdateDepartment,
   useDeleteDepartment,
   useAddDoctor,
+  useDeleteDoctor,
 } from "@/hooks/use-hospital-queries";
 
 interface Department {
@@ -91,6 +92,8 @@ export default function DepartmentsPage() {
     null
   );
   const [isAddDoctorDialogOpen, setIsAddDoctorDialogOpen] = useState(false);
+  const [isDeleteDoctorDialogOpen, setIsDeleteDoctorDialogOpen] = useState(false);
+  const [deletingDoctor, setDeletingDoctor] = useState<Doctor | null>(null);
 
   // Form data
   const [deptFormData, setDeptFormData] = useState({
@@ -127,6 +130,7 @@ export default function DepartmentsPage() {
   const updateDeptMutation = useUpdateDepartment();
   const deleteDeptMutation = useDeleteDepartment();
   const addDoctorMutation = useAddDoctor();
+  const deleteDoctorMutation = useDeleteDoctor();
 
   // Extract data with safe defaults
   const departmentsList = departments || [];
@@ -222,6 +226,18 @@ export default function DepartmentsPage() {
     }
     resetDoctorForm();
     setIsAddDoctorDialogOpen(true);
+  };
+
+  const handleDeleteDoctor = (doctor: Doctor) => {
+    setDeletingDoctor(doctor);
+    setIsDeleteDoctorDialogOpen(true);
+  };
+
+  const confirmDeleteDoctor = () => {
+    if (!deletingDoctor) return;
+    deleteDoctorMutation.mutate(deletingDoctor.id);
+    setIsDeleteDoctorDialogOpen(false);
+    setDeletingDoctor(null);
   };
 
   const handleEditDept = (department: Department) => {
@@ -483,7 +499,14 @@ export default function DepartmentsPage() {
                                 <Button variant="ghost" size="sm">
                                   <Edit className="h-3 w-3" />
                                 </Button>
-                                <Button variant="ghost" size="sm">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteDoctor(doctor);
+                                  }}
+                                >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
@@ -586,20 +609,39 @@ export default function DepartmentsPage() {
 
                 <div>
                   <Label>Department Color</Label>
-                  <div className="flex gap-2 mt-2">
-                    {DEPARTMENT_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`w-8 h-8 rounded-full border-2 ${
-                          deptFormData.color === color
-                            ? "border-gray-900 scale-110"
-                            : "border-gray-300"
-                        }`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setDeptFormData({ ...deptFormData, color })}
+                  <div className="space-y-3 mt-2">
+                    <div className="flex gap-2">
+                      {DEPARTMENT_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                            deptFormData.color === color
+                              ? "border-gray-900 dark:border-gray-100 scale-110"
+                              : "border-gray-300 dark:border-gray-600"
+                          }`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setDeptFormData({ ...deptFormData, color })}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="custom-color" className="text-sm text-muted-foreground">
+                        Or pick custom:
+                      </Label>
+                      <input
+                        id="custom-color"
+                        type="color"
+                        value={deptFormData.color}
+                        onChange={(e) =>
+                          setDeptFormData({ ...deptFormData, color: e.target.value })
+                        }
+                        className="h-10 w-20 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
                       />
-                    ))}
+                      <span className="text-sm font-mono text-muted-foreground">
+                        {deptFormData.color}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -757,20 +799,39 @@ export default function DepartmentsPage() {
 
                 <div>
                   <Label>Department Color</Label>
-                  <div className="flex gap-2 mt-2">
-                    {DEPARTMENT_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`w-8 h-8 rounded-full border-2 ${
-                          deptFormData.color === color
-                            ? "border-gray-900 scale-110"
-                            : "border-gray-300"
-                        }`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setDeptFormData({ ...deptFormData, color })}
+                  <div className="space-y-3 mt-2">
+                    <div className="flex gap-2">
+                      {DEPARTMENT_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`w-8 h-8 rounded-full border-2 transition-transform ${
+                            deptFormData.color === color
+                              ? "border-gray-900 dark:border-gray-100 scale-110"
+                              : "border-gray-300 dark:border-gray-600"
+                          }`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setDeptFormData({ ...deptFormData, color })}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="custom-color" className="text-sm text-muted-foreground">
+                        Or pick custom:
+                      </Label>
+                      <input
+                        id="custom-color"
+                        type="color"
+                        value={deptFormData.color}
+                        onChange={(e) =>
+                          setDeptFormData({ ...deptFormData, color: e.target.value })
+                        }
+                        className="h-10 w-20 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
                       />
-                    ))}
+                      <span className="text-sm font-mono text-muted-foreground">
+                        {deptFormData.color}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -906,6 +967,54 @@ export default function DepartmentsPage() {
                   </Button>
                 </div>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Doctor Confirmation Dialog */}
+          <Dialog
+            open={isDeleteDoctorDialogOpen}
+            onOpenChange={setIsDeleteDoctorDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Doctor</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this doctor? This action cannot
+                  be undone.
+                </DialogDescription>
+              </DialogHeader>
+              {deletingDoctor && (
+                <div className="py-4">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-3">
+                      <Trash2 className="h-5 w-5 text-red-600" />
+                      <div>
+                        <h4 className="text-sm font-medium text-red-800">
+                          {deletingDoctor.name}
+                        </h4>
+                        <p className="text-sm text-red-600">
+                          Department: {selectedDepartment?.name}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDoctorDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={confirmDeleteDoctor}
+                  disabled={deleteDoctorMutation.isPending}
+                >
+                  {deleteDoctorMutation.isPending ? "Deleting..." : "Delete Doctor"}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </>

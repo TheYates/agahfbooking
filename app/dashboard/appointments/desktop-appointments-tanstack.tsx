@@ -28,12 +28,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  LayoutList,
+  Table as TableIcon,
 } from "lucide-react";
 import { AppointmentModal } from "@/components/calendar/appointment-modal";
 import { QuickBookingDialogTanstack } from "@/components/ui/quick-booking-dialog-tanstack";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Import TanStack Query hooks
 import {
@@ -46,23 +57,23 @@ import {
 // Appointment Skeleton Loader Component
 function AppointmentSkeleton() {
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg">
-      <div className="flex items-center gap-3 flex-1">
-        <div className="text-center min-w-[60px] space-y-2">
-          <Skeleton className="h-4 w-12 mx-auto" />
-          <Skeleton className="h-3 w-10 mx-auto" />
-        </div>
-        <div className="flex-1 space-y-2">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-5 w-16" />
-          </div>
-          <Skeleton className="h-4 w-64" />
-        </div>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <Skeleton className="h-6 w-20" />
+    <div
+      className="grid items-center gap-3 p-3 border rounded-lg"
+      style={{
+        gridTemplateColumns:
+          "100px 70px 150px 100px 90px 150px 130px 120px 110px 100px",
+      }}
+    >
+      <Skeleton className="h-4 w-20" />
+      <Skeleton className="h-4 w-14" />
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-4 w-20" />
+      <Skeleton className="h-5 w-16 mx-auto" />
+      <Skeleton className="h-4 w-28" />
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-5 w-20 mx-auto" />
+      <div className="flex items-center gap-1 justify-end">
         <Skeleton className="h-8 w-8" />
         <Skeleton className="h-8 w-8" />
       </div>
@@ -81,6 +92,7 @@ export default function DesktopAppointmentsTanstackPage() {
   const [isQuickBookingOpen, setIsQuickBookingOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
+  const [viewMode, setViewMode] = useState<"list" | "table">("list");
 
   // Debounce search term for performance
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -107,7 +119,8 @@ export default function DesktopAppointmentsTanstackPage() {
   const deleteAppointmentMutation = useDeleteAppointment();
 
   // Safe data extraction with proper typing
-  const appointments: DesktopAppointment[] = (appointmentsData as any)?.data || [];
+  const appointments: DesktopAppointment[] =
+    (appointmentsData as any)?.data || [];
   const pagination = (appointmentsData as any)?.pagination || {
     currentPage: 1,
     totalPages: 1,
@@ -222,10 +235,24 @@ export default function DesktopAppointmentsTanstackPage() {
         <div>
           <h1 className="text-3xl font-bold">Appointments</h1>
           <p className="text-muted-foreground">
-            Manage all patient appointments with TanStack Query
+            Manage all patient appointments
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(value) =>
+              value && setViewMode(value as "list" | "table")
+            }
+          >
+            <ToggleGroupItem value="list" aria-label="List view">
+              <LayoutList className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="table" aria-label="Table view">
+              <TableIcon className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
           <Button
             onClick={exportAppointments}
             variant="outline"
@@ -385,155 +412,259 @@ export default function DesktopAppointmentsTanstackPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {loading && currentPage === 1 ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <AppointmentSkeleton key={index} />
-                ))}
+          {loading && currentPage === 1 ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <AppointmentSkeleton key={index} />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-600">
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>
+                Error:{" "}
+                {(error as Error)?.message || "Failed to load appointments"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                TanStack Query will retry automatically
+              </p>
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No appointments found matching your criteria</p>
+              {(searchTerm ||
+                statusFilter !== "all" ||
+                dateFilter !== "all") && (
+                <Button
+                  onClick={clearFilters}
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          ) : viewMode === "list" ? (
+            <div className="space-y-2">
+              {/* Column Headers */}
+              <div
+                className="grid items-center gap-3 px-3 py-2 bg-muted/50 rounded-lg font-medium text-sm"
+                style={{
+                  gridTemplateColumns:
+                    "100px 70px 250px 100px 150px 150px 130px 120px 110px 150px",
+                }}
+              >
+                <div>Date</div>
+                <div>Slot</div>
+                <div>Patient</div>
+                <div>X-Number</div>
+                <div className="text-center">Category</div>
+                <div>Doctor</div>
+                <div>Department</div>
+                <div>Phone</div>
+                <div className="text-center">Status</div>
+                <div className="text-right">Actions</div>
               </div>
-            ) : error ? (
-              <div className="text-center py-8 text-red-600">
-                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>
-                  Error:{" "}
-                  {(error as Error)?.message || "Failed to load appointments"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  TanStack Query will retry automatically
-                </p>
-              </div>
-            ) : appointments.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No appointments found matching your criteria</p>
-                {(searchTerm ||
-                  statusFilter !== "all" ||
-                  dateFilter !== "all") && (
-                  <Button
-                    onClick={clearFilters}
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                  >
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <>
-                {/* Show loading indicator for page changes */}
-                {loading && isPlaceholderData && (
-                  <div className="space-y-2 mb-4">
-                    {Array.from({ length: 3 }).map((_, idx) => (
-                      <AppointmentSkeleton key={`loading-${idx}`} />
-                    ))}
-                  </div>
-                )}
 
-                {appointments.map((appointment: DesktopAppointment) => (
-                  <div
-                    key={appointment.id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent dark:hover:bg-accent cursor-pointer transition-colors"
-                    style={{
-                      opacity: loading && isPlaceholderData ? 0.7 : 1,
-                      transition: "opacity 0.2s ease-in-out",
-                    }}
-                    onClick={() => handleAppointmentClick(appointment)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="text-center min-w-[60px]">
-                        <div className="text-sm font-medium">
-                          {new Date(appointment.date).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                            }
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Slot {appointment.slotNumber}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium truncate">
-                            {appointment.clientName}
-                          </span>
-                          <span className="text-sm text-muted-foreground shrink-0">
-                            ({appointment.clientXNumber})
-                          </span>
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            {appointment.category}
-                          </Badge>
-                        </div>
-                        <div className="text-sm text-muted-foreground truncate">
-                          {appointment.doctorName} •{" "}
-                          {appointment.departmentName} • {appointment.phone}
-                        </div>
-                        {appointment.notes && (
-                          <div className="text-xs text-muted-foreground truncate">
-                            {appointment.notes}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge
-                        style={{
-                          backgroundColor: appointment.statusColor + "20",
-                          color: appointment.statusColor,
-                          borderColor: appointment.statusColor + "40",
-                        }}
-                        className="capitalize text-xs"
-                      >
-                        {appointment.status.replace("_", " ")}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAppointmentClick(appointment);
-                        }}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAppointmentDelete(appointment.id);
-                        }}
-                        disabled={deleteAppointmentMutation.isPending}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        {deleteAppointmentMutation.isPending &&
-                        deleteAppointmentMutation.variables ===
-                          appointment.id ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
+              {/* Show loading indicator for page changes */}
+              {loading && isPlaceholderData && (
+                <div className="space-y-2 mb-4">
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <AppointmentSkeleton key={`loading-${idx}`} />
+                  ))}
+                </div>
+              )}
+
+              {appointments.map((appointment: DesktopAppointment) => (
+                <div
+                  key={appointment.id}
+                  className="grid items-center gap-3 p-3 border rounded-lg hover:bg-accent dark:hover:bg-accent cursor-pointer transition-colors"
+                  style={{
+                    opacity: loading && isPlaceholderData ? 0.7 : 1,
+                    transition: "opacity 0.2s ease-in-out",
+                    gridTemplateColumns:
+                      "100px 70px 250px 100px 150px 150px 130px 120px 110px 150px",
+                  }}
+                  onClick={() => handleAppointmentClick(appointment)}
+                >
+                  <div className="text-sm font-medium truncate">
+                    {new Date(appointment.date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
                   </div>
-                ))}
-              </>
-            )}
-          </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    Slot {appointment.slotNumber}
+                  </div>
+                  <div className="font-medium truncate">
+                    {appointment.clientName}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {appointment.clientXNumber}
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="text-xs truncate justify-center"
+                  >
+                    {appointment.category}
+                  </Badge>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {appointment.doctorName}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {appointment.doctorName}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {appointment.phone}
+                  </div>
+                  <Badge
+                    style={{
+                      backgroundColor: appointment.statusColor + "20",
+                      color: appointment.statusColor,
+                      borderColor: appointment.statusColor + "40",
+                    }}
+                    className="capitalize text-xs truncate justify-center"
+                  >
+                    {appointment.status.replace("_", " ")}
+                  </Badge>
+                  <div className="flex items-center gap-1 justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAppointmentClick(appointment);
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAppointmentDelete(appointment.id);
+                      }}
+                      disabled={deleteAppointmentMutation.isPending}
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      {deleteAppointmentMutation.isPending &&
+                      deleteAppointmentMutation.variables === appointment.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>X-Number</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {appointments.map((appointment: DesktopAppointment) => (
+                    <TableRow
+                      key={appointment.id}
+                      className="cursor-pointer"
+                      onClick={() => handleAppointmentClick(appointment)}
+                    >
+                      <TableCell className="font-medium">
+                        {new Date(appointment.date).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                          }
+                        )}
+                      </TableCell>
+                      <TableCell>Slot {appointment.slotNumber}</TableCell>
+                      <TableCell>{appointment.clientName}</TableCell>
+                      <TableCell>{appointment.clientXNumber}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {appointment.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{appointment.doctorName}</TableCell>
+                      <TableCell>{appointment.phone}</TableCell>
+                      <TableCell>
+                        <Badge
+                          style={{
+                            backgroundColor: appointment.statusColor + "20",
+                            color: appointment.statusColor,
+                            borderColor: appointment.statusColor + "40",
+                          }}
+                          className="capitalize text-xs"
+                        >
+                          {appointment.status.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentClick(appointment);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentDelete(appointment.id);
+                            }}
+                            disabled={deleteAppointmentMutation.isPending}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            {deleteAppointmentMutation.isPending &&
+                            deleteAppointmentMutation.variables ===
+                              appointment.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           {/* Pagination Controls with TanStack Query features */}
           {pagination.totalPages > 1 && !loading && (
-            <DataPagination
-              currentPage={pagination.currentPage}
-              totalPages={pagination.totalPages}
-              totalCount={pagination.totalCount}
-              itemsPerPage={itemsPerPage}
-              onPageChange={handlePageChange}
-            />
+            <div className="mt-4">
+              <DataPagination
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalCount={pagination.totalCount}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+              />
+            </div>
           )}
         </CardContent>
       </Card>

@@ -83,20 +83,20 @@ export async function query(text: string, params?: any[]): Promise<any> {
         const duration = Date.now() - startTime;
 
         // Log slow queries for optimization
-        if (duration > 100) {
-          console.warn(`🐌 Slow query detected: ${duration}ms`, {
-            query: text.substring(0, 100) + "...",
-            params: params?.length || 0,
-            rows: result.rows?.length || 0,
-          });
-        }
+        // if (duration > 100) {
+        //   console.warn(`🐌 Slow query detected: ${duration}ms`, {
+        //     query: text.substring(0, 100) + "...",
+        //     params: params?.length || 0,
+        //     rows: result.rows?.length || 0,
+        //   });
+        // }
 
         // Log performance in development
-        if (process.env.NODE_ENV === "development" && duration > 50) {
-          console.log(
-            `⚡ Query: ${duration}ms | Rows: ${result.rows?.length || 0}`
-          );
-        }
+        // if (process.env.NODE_ENV === "development" && duration > 50) {
+        //   console.log(
+        //     `⚡ Query: ${duration}ms | Rows: ${result.rows?.length || 0}`
+        //   );
+        // }
 
         return result;
       } finally {

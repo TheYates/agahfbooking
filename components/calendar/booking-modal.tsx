@@ -27,11 +27,15 @@ import { Combobox } from "@/components/ui/combobox";
 import { isWorkingDay } from "@/lib/working-days-utils";
 import { toast } from "sonner";
 
-interface Doctor {
+interface Department {
   id: number;
   name: string;
-  specialization: string;
-  departmentId?: number;
+  description: string;
+  slots_per_day: number;
+  working_days: string[];
+  working_hours: { start: string; end: string };
+  color: string;
+  is_active: boolean;
 }
 
 interface Client {
@@ -61,18 +65,19 @@ export function BookingModal({
   currentUserId,
   onAppointmentBooked,
 }: BookingModalProps) {
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch data from API
   useEffect(() => {
     if (isOpen) {
-      fetchDoctors();
+      fetchDepartments();
       if (userRole === "receptionist" || userRole === "admin") {
         fetchClients();
       } else if (userRole === "client" && currentUserId) {
@@ -81,21 +86,26 @@ export function BookingModal({
     }
   }, [isOpen, userRole, currentUserId]);
 
-  const fetchDoctors = async () => {
+  // Debounced search for clients
+  useEffect(() => {
+    if (!isOpen || userRole === "client") return;
+
+    const timeoutId = setTimeout(() => {
+      fetchClients(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, isOpen, userRole]);
+
+  const fetchDepartments = async () => {
     try {
-      const response = await fetch("/api/doctors");
+      const response = await fetch("/api/departments");
       const data = await response.json();
       if (data.success) {
-        const transformedDoctors = data.data.map((doctor: any) => ({
-          id: doctor.id,
-          name: doctor.name,
-          specialization: doctor.department_name || "General",
-          departmentId: doctor.department_id,
-        }));
-        setDoctors(transformedDoctors);
+        setDepartments(data.data);
       }
     } catch (error) {
-      console.error("Error fetching doctors:", error);
+      console.error("Error fetching departments:", error);
     }
   };
 
@@ -124,14 +134,27 @@ export function BookingModal({
   // Reset form when modal opens/closes
   useEffect(() => {
     if (!isOpen) {
-      setSelectedDoctorId("");
+      setSelectedDepartmentId("");
       if (userRole !== "client") {
         setSelectedClientId("");
       }
       setNotes("");
       setError("");
+      setSearchTerm("");
     }
   }, [isOpen, userRole]);
+
+  // Clear selected department if it's no longer available on the selected date
+  useEffect(() => {
+    if (selectedDepartmentId && selectedDate && departments.length > 0) {
+      const selectedDept = departments.find(
+        (d) => d.id === Number.parseInt(selectedDepartmentId)
+      );
+      if (selectedDept && !isWorkingDay(selectedDept as any, selectedDate)) {
+        setSelectedDepartmentId("");
+      }
+    }
+  }, [selectedDate, selectedDepartmentId, departments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,8 +162,8 @@ export function BookingModal({
     setError("");
 
     try {
-      if (!selectedDoctorId) {
-        throw new Error("Please select a doctor");
+      if (!selectedDepartmentId) {
+        throw new Error("Please select a department");
       }
 
       if (!selectedClientId) {
@@ -161,30 +184,12 @@ export function BookingModal({
         throw new Error("Cannot book appointments in the past");
       }
 
-      // Find doctor data to get department_id
-      const doctor = doctors.find(
-        (d) => d.id === Number.parseInt(selectedDoctorId)
+      // Find department data
+      const department = departments.find(
+        (d) => d.id === Number.parseInt(selectedDepartmentId)
       );
-      if (!doctor) {
-        throw new Error("Doctor not found");
-      }
-
-      // Check if the selected date is a working day for the department
-      if (doctor.departmentId) {
-        const departmentResponse = await fetch(
-          `/api/departments/${doctor.departmentId}`
-        );
-        if (departmentResponse.ok) {
-          const departmentData = await departmentResponse.json();
-          if (departmentData.success && departmentData.data) {
-            const department = departmentData.data;
-            if (!isWorkingDay(department, selectedDate)) {
-              throw new Error(
-                "Selected date is not a working day for this department"
-              );
-            }
-          }
-        }
+      if (!department) {
+        throw new Error("Department not found");
       }
 
       // For client role, use currentUserId; for staff roles, use selectedClientId
@@ -202,8 +207,7 @@ export function BookingModal({
         },
         body: JSON.stringify({
           client_id: clientId,
-          department_id: doctor.departmentId || 1, // Use doctor's department or default to 1
-          doctor_id: Number.parseInt(selectedDoctorId),
+          department_id: Number.parseInt(selectedDepartmentId),
           appointment_date: selectedDate.toISOString().split("T")[0],
           slot_number: selectedSlot,
           notes: notes || null,
@@ -220,14 +224,11 @@ export function BookingModal({
 
       // Show success toast
       const selectedClient = clients.find((c) => c.id === clientId);
-      const selectedDoctor = doctors.find(
-        (d) => d.id === Number.parseInt(selectedDoctorId)
-      );
       const formattedDate = selectedDate.toLocaleDateString();
 
       toast.success("Appointment Booked Successfully! 🎉", {
-        description: `${selectedClient?.name || "Client"} with ${
-          selectedDoctor?.name || "Doctor"
+        description: `${selectedClient?.name || "Client"} - ${
+          department.name
         } on ${formattedDate}, Slot ${selectedSlot}`,
         duration: 5000,
       });
@@ -251,6 +252,12 @@ export function BookingModal({
       setLoading(false);
     }
   };
+
+  // Filter departments based on working days for selected date
+  const availableDepartments = departments.filter((department) => {
+    if (!selectedDate) return false;
+    return isWorkingDay(department as any, selectedDate);
+  });
 
   // Prepare client options for combobox
   const clientOptions = clients.map((client) => ({
@@ -285,21 +292,33 @@ export function BookingModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="doctor">Doctor *</Label>
+            <Label htmlFor="department">Department *</Label>
             <Select
-              value={selectedDoctorId}
-              onValueChange={setSelectedDoctorId}
+              value={selectedDepartmentId}
+              onValueChange={setSelectedDepartmentId}
               required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a doctor" />
+                <SelectValue placeholder="Select a department" />
               </SelectTrigger>
               <SelectContent>
-                {doctors.map((doctor) => (
-                  <SelectItem key={doctor.id} value={doctor.id.toString()}>
-                    {doctor.name} - {doctor.specialization}
-                  </SelectItem>
-                ))}
+                {availableDepartments.length > 0 ? (
+                  availableDepartments.map((department) => (
+                    <SelectItem key={department.id} value={department.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: department.color }}
+                        />
+                        {department.name}
+                      </div>
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                    No departments available on this date
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -311,6 +330,7 @@ export function BookingModal({
                 options={clientOptions}
                 value={selectedClientId}
                 onValueChange={setSelectedClientId}
+                onSearchChange={setSearchTerm}
                 placeholder="Select a client..."
                 searchPlaceholder="Search by X-number or name..."
                 emptyText="No clients found."

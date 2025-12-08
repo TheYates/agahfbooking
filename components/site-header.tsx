@@ -1,6 +1,5 @@
 "use client"
 
-import { SidebarIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 import { SearchForm } from "@/components/search-form"
@@ -12,12 +11,10 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { useSidebar } from "@/components/ui/sidebar"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function SiteHeader() {
-  const { toggleSidebar } = useSidebar()
   const pathname = usePathname()
 
   // Generate breadcrumbs based on current path
@@ -40,9 +37,11 @@ export function SiteHeader() {
         'calendar': 'Calendar',
         'clients': 'Clients',
         'departments': 'Departments',
+        'users': 'Users',
         'reports': 'Reports',
         'settings': 'Settings',
-        'profile': 'Profile'
+        'profile': 'Profile',
+        'test-sms': 'Test SMS'
       }
 
       if (sectionLabels[section]) {
@@ -78,33 +77,11 @@ export function SiteHeader() {
   return (
     <header className="bg-background sticky top-0 z-50 flex w-full items-center border-b">
       <div className="flex h-14 w-full items-center gap-2 px-4">
-        <Button
-          className="h-8 w-8"
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-        >
-          <SidebarIcon />
-        </Button>
+        <SidebarTrigger className="h-8 w-8" />
         <Separator orientation="vertical" className="mr-2 h-4" />
 
-        {/* Logo - visible on all screen sizes */}
-        <div className="flex items-center gap-2">
-          <img
-            src="/agahflogo.svg"
-            alt="AGAHF Logo"
-            className="h-6 w-6 dark:hidden"
-          />
-          <img
-            src="/agahflogo white.svg"
-            alt="AGAHF Logo"
-            className="h-6 w-6 hidden dark:block"
-          />
-          <span className="font-semibold text-sm hidden sm:inline">AGAHF BOOKING</span>
-        </div>
-        
         {breadcrumbs && breadcrumbs.length > 0 && (
-          <Breadcrumb className="hidden sm:block">
+          <Breadcrumb>
             <BreadcrumbList>
               {breadcrumbs.map((crumb, index) => (
                 <div key={crumb.href} className="flex items-center">
@@ -123,7 +100,7 @@ export function SiteHeader() {
             </BreadcrumbList>
           </Breadcrumb>
         )}
-        
+
         <SearchForm className="w-full sm:ml-auto sm:w-auto" />
       </div>
     </header>

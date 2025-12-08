@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BookingModal } from "./booking-modal";
@@ -16,13 +16,12 @@ import {
   isWorkingDayForAnyDepartment,
 } from "@/lib/working-days-utils";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Import TanStack Query hooks
 import {
   useCalendarData,
   type CalendarAppointment,
-  type Doctor,
-  type Department,
 } from "@/hooks/use-hospital-queries";
 
 interface CalendarViewTanstackProps {
@@ -33,7 +32,7 @@ interface CalendarViewTanstackProps {
 export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTanstackProps) {
   // Local state - much simpler now!
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<"month" | "week" | "day">("month");
+  const [view, setView] = useState<"month" | "week">("month");
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
   const [bookingModal, setBookingModal] = useState({
     isOpen: false,
@@ -48,27 +47,12 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
   // TanStack Query hook - This replaces ALL the useEffect and fetch logic!
   const {
     departments,
-    doctors,
     appointments,
     isLoading: loading,
     error,
     isRefetching,
     refetch,
   } = useCalendarData(userRole, currentUserId, view, currentDate);
-
-  // Helper functions (same as original but using TanStack data)
-  const getStatusColor = (status: string) => {
-    const statusColors: { [key: string]: string } = {
-      booked: "#3B82F6",
-      arrived: "#10B981",
-      waiting: "#F59E0B",
-      completed: "#059669",
-      no_show: "#EF4444",
-      cancelled: "#6B7280",
-      rescheduled: "#8B5CF6",
-    };
-    return statusColors[status] || "#6B7280";
-  };
 
   const isPastDate = (date: Date) => {
     const today = new Date();
@@ -89,17 +73,26 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
+    const endingDayOfWeek = lastDay.getDay();
 
     const days = [];
 
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
+    // Add days from previous month to complete the first week
+    const prevMonthLastDay = new Date(year, month, 0);
+    const prevMonthDays = prevMonthLastDay.getDate();
+    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+      days.push(new Date(year, month - 1, prevMonthDays - i));
     }
 
-    // Add all days of the month
+    // Add all days of current month
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day));
+    }
+
+    // Add days from next month to complete the last week
+    const daysToAdd = endingDayOfWeek === 6 ? 0 : 6 - endingDayOfWeek;
+    for (let day = 1; day <= daysToAdd; day++) {
+      days.push(new Date(year, month + 1, day));
     }
 
     return days;
@@ -128,26 +121,23 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
 
   // Get maximum slots across all departments for calendar display
   const getMaxSlots = () => {
-    if (departments.length === 0) return 10; // fallback
-    return Math.max(...departments.map((d) => d.slots_per_day));
+    if (!Array.isArray(departments) || departments.length === 0) return 10; // fallback
+    const slots = departments.map((d) => d.slots_per_day ?? 10);
+    return Math.max(...slots);
   };
 
   // Check if a slot is valid for a specific department
   const isSlotValidForDepartment = (slotNumber: number, departmentId: number) => {
+    if (!Array.isArray(departments)) return false;
     const department = departments.find((d) => d.id === departmentId);
-    return department ? slotNumber <= department.slots_per_day : false;
+    return department ? slotNumber <= (department.slots_per_day ?? 10) : false;
   };
 
-  // Get department color for visual coding
+  // Get department color from database
   const getDepartmentColor = (departmentId: number) => {
-    const colors: { [key: number]: string } = {
-      1: "#3B82F6", // General Medicine - Blue
-      2: "#EF4444", // Cardiology - Red
-      3: "#10B981", // Pediatrics - Green
-      4: "#8B5CF6", // Orthopedics - Purple
-      5: "#F59E0B", // Dermatology - Orange
-    };
-    return colors[departmentId] || "#6B7280"; // Default gray
+    if (!Array.isArray(departments)) return "#6B7280"; // Default gray
+    const department = departments.find((d) => d.id === departmentId);
+    return department?.color || "#6B7280"; // Default gray if not found
   };
 
   const maskXNumber = (xNumber: string, isOwnAppointment: boolean) => {
@@ -181,21 +171,9 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     });
   };
 
-  const navigateDay = (direction: "prev" | "next") => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev);
-      if (direction === "prev") {
-        newDate.setDate(prev.getDate() - 1);
-      } else {
-        newDate.setDate(prev.getDate() + 1);
-      }
-      return newDate;
-    });
-  };
-
   const handleBookSlot = (date: Date, slotNumber: number) => {
     // Check if the date is valid for booking (not in past and is a working day)
-    if (!isValidBookingDate(date, undefined, departments)) {
+    if (!isValidBookingDate(date, undefined, departments as any)) {
       return;
     }
 
@@ -223,7 +201,7 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     });
   };
 
-  const handleAppointmentUpdate = (updatedAppointment: CalendarAppointment) => {
+  const handleAppointmentUpdate = () => {
     // TanStack Query will handle cache updates automatically
     // through query invalidation in the mutation
     toast.success("Appointment Updated! ✅", {
@@ -232,7 +210,7 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     });
   };
 
-  const handleAppointmentDelete = (appointmentId: number) => {
+  const handleAppointmentDelete = () => {
     // TanStack Query will handle optimistic updates and cache invalidation
     toast.success("Appointment Deleted! ✅", {
       description: "Calendar updated automatically",
@@ -299,17 +277,81 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     setDraggedAppointment(null);
   };
 
-  // Loading state
+  // Loading state with skeletons
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading calendar data...</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            TanStack Query is fetching departments, doctors, and appointments
-          </p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <Skeleton className="h-8 w-48" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Skeleton className="h-9 w-9" />
+              <Skeleton className="h-9 w-9" />
+              <Skeleton className="h-9 w-16" />
+            </div>
+            <Skeleton className="h-9 w-32" />
+          </div>
         </div>
+
+        {view === "month" ? (
+          <div
+            className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
+            style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
+          >
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div
+                key={day}
+                className="p-2 text-center font-medium text-sm text-muted-foreground h-8"
+              >
+                {day}
+              </div>
+            ))}
+
+            {Array.from({ length: 42 }).map((_, index) => (
+              <div
+                key={index}
+                className="p-2 h-full border rounded-lg flex flex-col min-h-0"
+              >
+                <Skeleton className="h-5 w-6 mb-2" />
+                <div className="space-y-1">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            <div className="grid grid-cols-8 gap-2 mb-2">
+              <div className="h-16 flex items-center justify-center">
+                <Skeleton className="h-4 w-12" />
+              </div>
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="h-16 p-2 border rounded-lg flex flex-col items-center justify-center">
+                  <Skeleton className="h-3 w-8 mb-1" />
+                  <Skeleton className="h-6 w-6" />
+                </div>
+              ))}
+            </div>
+
+            <ScrollArea className="h-[calc(100vh-20rem)]">
+              <div className="grid grid-cols-8 gap-2">
+                <div className="space-y-2">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded" />
+                  ))}
+                </div>
+                {Array.from({ length: 7 }).map((_, dayIndex) => (
+                  <div key={dayIndex} className="space-y-2">
+                    {Array.from({ length: 10 }).map((_, slotIndex) => (
+                      <Skeleton key={slotIndex} className="h-16 w-full rounded" />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
       </div>
     );
   }
@@ -339,6 +381,10 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
       month: "long",
       year: "numeric",
     });
+
+    // Calculate number of rows (excluding header row)
+    const numWeeks = Math.ceil(days.length / 7);
+    const gridRows = `auto ${Array(numWeeks).fill("1fr").join(" ")}`;
 
     return (
       <div className="space-y-4">
@@ -382,7 +428,7 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
 
         <div
           className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
-          style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
+          style={{ gridTemplateRows: gridRows }}
         >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
@@ -394,21 +440,19 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
           ))}
 
           {days.map((day, index) => {
-            if (!day) {
-              return <div key={index} className="p-2 h-full" />;
-            }
-
             const dayAppointments = getAppointmentsForDate(day);
             const isToday = new Date().toDateString() === day.toDateString();
             const isPast = isPastDate(day);
-            const isWorkingDay = isWorkingDayForAnyDepartment(departments, day);
-            const isValidForBooking = isValidBookingDate(day, undefined, departments);
+            const isWorkingDay = isWorkingDayForAnyDepartment(departments as any, day);
+            const isValidForBooking = isValidBookingDate(day, undefined, departments as any);
+            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
 
             return (
               <div
                 key={index}
                 className={cn(
                   "p-2 h-full border rounded-lg transition-colors flex flex-col min-h-0",
+                  !isCurrentMonth && "opacity-40",
                   isPast
                     ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20"
                     : !isWorkingDay
@@ -442,7 +486,7 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
                         backgroundColor: getDepartmentColor(apt.departmentId) + "20",
                         color: getDepartmentColor(apt.departmentId),
                         borderLeftColor: getDepartmentColor(apt.departmentId),
-                        opacity: loading ? 0.8 : 1, // Slight fade during refresh
+                        opacity: loading ? 0.8 : isPastAppointment(apt) ? 0.5 : 1,
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -486,25 +530,268 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     );
   };
 
-  // Week and Day views would follow similar patterns with background refresh indicators
   const renderWeekView = () => {
-    // Similar to original but with loading states and background refresh indicators
-    // Implementation would be similar to month view but with week layout
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Week view implementation with TanStack Query</p>
-        <p className="text-xs mt-2">Real-time updates every 30 seconds</p>
-      </div>
-    );
-  };
+    const weekDays = getWeekDays(currentDate);
+    const weekStart = weekDays[0];
+    const weekEnd = weekDays[6];
+    const weekRange = `${weekStart.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    })} - ${weekEnd.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })}`;
 
-  const renderDayView = () => {
-    // Similar to original but with loading states and background refresh indicators
-    // Implementation would be similar to month view but with day layout
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Day view implementation with TanStack Query</p>
-        <p className="text-xs mt-2">Real-time updates every 30 seconds</p>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h2 className="text-xl sm:text-2xl font-bold">{weekRange}</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("prev")}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigateWeek("next")}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentDate(new Date())}
+              >
+                Today
+              </Button>
+            </div>
+            <ViewSwitcher currentView={view} onViewChange={setView} />
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          {/* Headers */}
+          <div className="grid grid-cols-8 gap-2 mb-2">
+            <div className="h-16 flex items-center justify-center font-medium text-sm text-muted-foreground">
+              Slots
+            </div>
+            {weekDays.map((day, dayIndex) => {
+              const isToday = new Date().toDateString() === day.toDateString();
+              const isPast = isPastDate(day);
+              const isWorkingDay = isWorkingDayForAnyDepartment(
+                departments as any,
+                day
+              );
+              const isValidForBooking = isValidBookingDate(
+                day,
+                undefined,
+                departments as any
+              );
+
+              return (
+                <div
+                  key={dayIndex}
+                  className={cn(
+                    "h-16 p-2 border rounded-lg transition-colors flex flex-col items-center justify-center",
+                    isPast
+                      ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-600"
+                      : !isWorkingDay
+                      ? "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60"
+                      : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600",
+                    isToday &&
+                      !isPast &&
+                      isWorkingDay &&
+                      "bg-blue-50 dark:bg-blue-900/20"
+                  )}
+                  onClick={() => isValidForBooking && handleBookSlot(day, 1)}
+                >
+                  <div className="text-xs text-muted-foreground">
+                    {day.toLocaleDateString("en-US", { weekday: "short" })}
+                  </div>
+                  <div
+                    className={cn(
+                      "text-lg font-semibold text-foreground",
+                      isToday && "text-blue-600 dark:text-blue-400",
+                      isPast && "text-gray-400 dark:text-gray-500"
+                    )}
+                  >
+                    {day.getDate()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Scrollable Content */}
+          <ScrollArea className="h-[calc(100vh-20rem)]">
+            <div className="grid grid-cols-8 gap-2">
+              {/* Slot Numbers Column */}
+              <div className="space-y-2">
+                {Array.from({ length: getMaxSlots() }, (_, i) => (
+                  <div
+                    key={i}
+                    className="h-16 flex items-center justify-center text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded"
+                  >
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+
+              {/* Day Columns */}
+              {weekDays.map((day, dayIndex) => {
+                const dayAppointments = getAppointmentsForDate(day);
+                const isPast = isPastDate(day);
+                const isWorkingDay = isWorkingDayForAnyDepartment(
+                  departments as any,
+                  day
+                );
+                const isValidForBooking = isValidBookingDate(
+                  day,
+                  undefined,
+                  departments as any
+                );
+
+                return (
+                  <div key={dayIndex} className="space-y-2">
+                    {Array.from({ length: getMaxSlots() }, (_, slotIndex) => {
+                      const slotNumber = slotIndex + 1;
+                      const slotAppointments = dayAppointments.filter(
+                        (apt) => apt.slotNumber === slotNumber
+                      );
+                      const appointment = slotAppointments[0];
+
+                      const isSlotDisabled =
+                        appointment &&
+                        !isSlotValidForDepartment(
+                          slotNumber,
+                          appointment.departmentId
+                        );
+
+                      return (
+                        <div
+                          key={slotIndex}
+                          className={cn(
+                            "h-16 p-2 border rounded transition-colors",
+                            appointment
+                              ? "border-l-4 cursor-pointer"
+                              : isPast
+                              ? "cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-600"
+                              : !isWorkingDay
+                              ? "cursor-not-allowed bg-gray-50 dark:bg-gray-800 opacity-60"
+                              : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600",
+                            isSlotDisabled && "opacity-50 cursor-not-allowed"
+                          )}
+                          style={
+                            appointment
+                              ? {
+                                  borderLeftColor: getDepartmentColor(
+                                    appointment.departmentId
+                                  ),
+                                  backgroundColor:
+                                    getDepartmentColor(
+                                      appointment.departmentId
+                                    ) + "10",
+                                  opacity: isPastAppointment(appointment) ? 0.5 : 1,
+                                }
+                              : {}
+                          }
+                          onClick={() => {
+                            if (isSlotDisabled || !isValidForBooking) return;
+                            if (appointment && slotAppointments.length === 1) {
+                              handleAppointmentClick(appointment);
+                            } else if (!appointment) {
+                              handleBookSlot(day, slotNumber);
+                            }
+                          }}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, day, slotNumber)}
+                        >
+                          {appointment ? (
+                            slotAppointments.length > 1 ? (
+                              <DayAppointmentsPopover
+                                appointments={slotAppointments}
+                                date={day}
+                                getDepartmentColor={getDepartmentColor}
+                                maskXNumber={maskXNumber}
+                                currentUserId={currentUserId}
+                                userRole={userRole}
+                                onAppointmentClick={handleAppointmentClick}
+                                onDragStart={handleDragStart}
+                              >
+                                <div className="h-full flex flex-col justify-center relative cursor-pointer">
+                                  <div className="text-xs font-medium truncate">
+                                    {maskXNumber(
+                                      appointment.clientXNumber,
+                                      appointment.clientId === currentUserId
+                                    )}
+                                  </div>
+                                  <div
+                                    className="text-xs truncate"
+                                    style={{
+                                      color: getDepartmentColor(
+                                        appointment.departmentId
+                                      ),
+                                    }}
+                                  >
+                                    {appointment.departmentName}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {appointment.doctorName.split(" ")[1]}
+                                  </div>
+                                  <div className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                                    {slotAppointments.length}
+                                  </div>
+                                </div>
+                              </DayAppointmentsPopover>
+                            ) : (
+                              <div
+                                className="h-full flex flex-col justify-center"
+                                draggable={!isPastAppointment(appointment)}
+                                onDragStart={(e) =>
+                                  handleDragStart(e, appointment)
+                                }
+                              >
+                                <div className="text-xs font-medium truncate">
+                                  {maskXNumber(
+                                    appointment.clientXNumber,
+                                    appointment.clientId === currentUserId
+                                  )}
+                                </div>
+                                <div
+                                  className="text-xs truncate"
+                                  style={{
+                                    color: getDepartmentColor(
+                                      appointment.departmentId
+                                    ),
+                                  }}
+                                >
+                                  {appointment.departmentName}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {appointment.doctorName.split(" ")[1]}
+                                </div>
+                              </div>
+                            )
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                              {isPast ? "Empty" : "Available"}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
       </div>
     );
   };
@@ -521,7 +808,6 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
 
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
-      {view === "day" && renderDayView()}
 
       <BookingModal
         isOpen={bookingModal.isOpen}

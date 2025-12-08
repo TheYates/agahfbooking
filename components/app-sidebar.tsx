@@ -25,6 +25,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import type { User } from "@/lib/types";
@@ -36,6 +38,7 @@ interface AppSidebarProps {
 export function AppSidebar({ user }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { state } = useSidebar();
 
   const clientMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -102,19 +105,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
   };
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex aspect-square size-10 items-center justify-center">
+          <div className="flex aspect-square size-8 items-center justify-center">
             <img
               src="/agahflogo.svg"
               alt="AGAHF Logo"
-              className="size-10 dark:hidden"
+              className="size-8 dark:hidden"
             />
             <img
               src="/agahflogo white.svg"
               alt="AGAHF Logo"
-              className="size-10 hidden dark:block"
+              className="size-8 hidden dark:block"
             />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
@@ -133,7 +136,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
             <SidebarMenu>
               {getMenuItems().map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url}
+                    tooltip={item.title}
+                  >
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -146,16 +153,20 @@ export function AppSidebar({ user }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
-        <Button
-          variant="outline"
-          onClick={handleLogout}
-          className="w-full justify-start"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </Button>
+      <SidebarFooter className="p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              tooltip="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

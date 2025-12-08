@@ -75,6 +75,7 @@ export function AppointmentModal({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [statusChanged, setStatusChanged] = useState(false);
 
   useEffect(() => {
     if (appointment) {
@@ -82,6 +83,7 @@ export function AppointmentModal({
       setNotes(appointment.notes || "");
       setIsEditing(false);
       setError("");
+      setStatusChanged(false);
     }
   }, [appointment]);
 
@@ -105,12 +107,85 @@ export function AppointmentModal({
     !isPastAppointment() &&
     (userRole === "receptionist" || userRole === "admin");
 
+  const handleStatusChange = (newStatus: string) => {
+    setStatus(newStatus);
+    setStatusChanged(newStatus !== appointment.status);
+  };
+
+  const handleQuickSave = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/appointments", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: appointment.id,
+          status,
+          notes: appointment.notes,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to update status");
+      }
+
+      const statusOption = statusOptions.find((s) => s.value === status);
+      const updatedAppointment = {
+        ...appointment,
+        status,
+        statusColor: statusOption?.color || appointment.statusColor,
+      };
+
+      onAppointmentUpdate(updatedAppointment);
+      setStatusChanged(false);
+
+      // Show success toast
+      toast.success("Status Updated! ✅", {
+        description: `Status changed to ${statusOption?.label}`,
+        duration: 3000,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update status";
+      setError(errorMessage);
+
+      // Show error toast
+      toast.error("Update Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     setLoading(true);
     setError("");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const response = await fetch("/api/appointments", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: appointment.id,
+          status,
+          notes,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to update appointment");
+      }
 
       const statusOption = statusOptions.find((s) => s.value === status);
       const updatedAppointment = {
@@ -122,6 +197,7 @@ export function AppointmentModal({
 
       onAppointmentUpdate(updatedAppointment);
       setIsEditing(false);
+      setStatusChanged(false);
 
       // Show success toast
       toast.success("Appointment Updated! ✅", {
@@ -129,7 +205,7 @@ export function AppointmentModal({
         duration: 3000,
       });
     } catch (err) {
-      const errorMessage = "Failed to update appointment";
+      const errorMessage = err instanceof Error ? err.message : "Failed to update appointment";
       setError(errorMessage);
 
       // Show error toast
@@ -263,9 +339,21 @@ export function AppointmentModal({
           </div>
 
           <div>
-            <Label>Status</Label>
-            {isEditing ? (
-              <Select value={status} onValueChange={setStatus}>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Status</Label>
+              {userRole === "admin" && statusChanged && !isEditing && (
+                <Button
+                  size="sm"
+                  onClick={handleQuickSave}
+                  disabled={loading}
+                  className="h-7"
+                >
+                  {loading ? "Saving..." : "Save Status"}
+                </Button>
+              )}
+            </div>
+            {isEditing || userRole === "admin" ? (
+              <Select value={status} onValueChange={handleStatusChange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

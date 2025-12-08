@@ -1,12 +1,12 @@
 // 🚀 Redis Caching for Sub-10ms Performance
 // Multi-layer cache with fallback strategies
 
-import Redis from 'ioredis';
+import Redis from "ioredis";
 
 // Redis client configuration
 const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  host: process.env.REDIS_HOST || "localhost",
+  port: parseInt(process.env.REDIS_PORT || "6379"),
   password: process.env.REDIS_PASSWORD,
   db: 0,
   retryDelayOnFailover: 100,
@@ -24,30 +24,29 @@ const memoryCache = new Map<string, { data: any; expires: number }>();
 
 // Cache strategies by data type (in seconds)
 export const CACHE_STRATEGIES = {
-  departments: 3600,      // 1 hour - rarely change
-  userStats: 30,          // 30 seconds - real-time feel  
-  appointments: 10,       // 10 seconds - near real-time
-  calendar: 5,            // 5 seconds - ultra fresh
-  availableSlots: 15,     // 15 seconds - booking critical
-  recentActivity: 60,     // 1 minute - activity feed
-  monthlyStats: 300,      // 5 minutes - historical data
-  dashboardStats: 30,     // 30 seconds - main dashboard
+  departments: 3600, // 1 hour - rarely change
+  userStats: 30, // 30 seconds - real-time feel
+  appointments: 10, // 10 seconds - near real-time
+  calendar: 5, // 5 seconds - ultra fresh
+  availableSlots: 15, // 15 seconds - booking critical
+  recentActivity: 60, // 1 minute - activity feed
+  monthlyStats: 300, // 5 minutes - historical data
+  dashboardStats: 30, // 30 seconds - main dashboard
 } as const;
 
 export type CacheStrategy = keyof typeof CACHE_STRATEGIES;
 
 // Advanced multi-layer cache class
 export class AdvancedCache {
-  
   // Multi-layer cache with fallback (Memory → Redis → Database)
   static async get<T>(
-    key: string, 
-    fallback: () => Promise<T>, 
-    strategy: CacheStrategy = 'userStats'
+    key: string,
+    fallback: () => Promise<T>,
+    strategy: CacheStrategy = "userStats"
   ): Promise<T> {
     const ttl = CACHE_STRATEGIES[strategy];
     const startTime = Date.now();
-    
+
     try {
       // Layer 1: Memory cache (< 1ms) - Fastest
       const memoryResult = this.getFromMemory<T>(key);
@@ -55,7 +54,7 @@ export class AdvancedCache {
         console.log(`🔥 Memory hit: ${key} (${Date.now() - startTime}ms)`);
         return memoryResult;
       }
-      
+
       // Layer 2: Redis cache (2-5ms) - Very fast
       const redisResult = await this.getFromRedis<T>(key);
       if (redisResult) {
@@ -64,21 +63,19 @@ export class AdvancedCache {
         console.log(`⚡ Redis hit: ${key} (${Date.now() - startTime}ms)`);
         return redisResult;
       }
-      
+
       // Layer 3: Database fallback (5-100ms) - Last resort
       console.log(`🔍 Cache miss: ${key}, fetching from DB...`);
       const result = await fallback();
       const dbTime = Date.now() - startTime;
-      
+
       // Store in both caches (fire and forget)
       Promise.all([
         this.setInRedis(key, result, ttl),
-        this.setInMemory(key, result, Math.min(ttl, 60))
-      ]).catch(err => console.warn('Cache storage error:', err));
-      
-      console.log(`💾 DB fetch: ${key} (${dbTime}ms)`);
+        this.setInMemory(key, result, Math.min(ttl, 60)),
+      ]).catch((err) => console.warn("Cache storage error:", err));
+
       return result;
-      
     } catch (error) {
       console.error(`❌ Cache error for ${key}:`, error);
       // Always fallback to database on cache errors
@@ -99,10 +96,14 @@ export class AdvancedCache {
   }
 
   // Set in memory cache
-  private static setInMemory<T>(key: string, data: T, ttlSeconds: number): void {
-    const expires = Date.now() + (ttlSeconds * 1000);
+  private static setInMemory<T>(
+    key: string,
+    data: T,
+    ttlSeconds: number
+  ): void {
+    const expires = Date.now() + ttlSeconds * 1000;
     memoryCache.set(key, { data, expires });
-    
+
     // Cleanup old entries periodically
     if (memoryCache.size > 100) {
       this.cleanupMemoryCache();
@@ -115,17 +116,21 @@ export class AdvancedCache {
       const result = await redis.get(key);
       return result ? JSON.parse(result) : null;
     } catch (error) {
-      console.warn('Redis get error:', error);
+      console.warn("Redis get error:", error);
       return null;
     }
   }
 
   // Set in Redis cache
-  private static async setInRedis<T>(key: string, data: T, ttlSeconds: number): Promise<void> {
+  private static async setInRedis<T>(
+    key: string,
+    data: T,
+    ttlSeconds: number
+  ): Promise<void> {
     try {
       await redis.setex(key, ttlSeconds, JSON.stringify(data));
     } catch (error) {
-      console.warn('Redis set error:', error);
+      console.warn("Redis set error:", error);
     }
   }
 
@@ -138,58 +143,71 @@ export class AdvancedCache {
           memoryCache.delete(key);
         }
       }
-      
+
       // Clear from Redis
       const keys = await redis.keys(`*${pattern}*`);
       if (keys.length > 0) {
         await redis.del(...keys);
       }
-      
-      console.log(`🧹 Invalidated cache pattern: ${pattern} (${keys.length} keys)`);
+
+      console.log(
+        `🧹 Invalidated cache pattern: ${pattern} (${keys.length} keys)`
+      );
     } catch (error) {
-      console.warn('Cache invalidation error:', error);
+      console.warn("Cache invalidation error:", error);
     }
   }
 
   // Cache warming for critical data
   static async warmCache(): Promise<void> {
-    console.log('🔥 Warming cache with critical data...');
-    
-    const warmTasks = [
-      this.warmDepartments(),
-      this.warmSystemSettings(),
-    ];
-    
+    console.log("🔥 Warming cache with critical data...");
+
+    const warmTasks = [this.warmDepartments(), this.warmSystemSettings()];
+
     const results = await Promise.allSettled(warmTasks);
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    console.log(`🎯 Cache warmed: ${successful}/${warmTasks.length} tasks completed`);
+    const successful = results.filter((r) => r.status === "fulfilled").length;
+    console.log(
+      `🎯 Cache warmed: ${successful}/${warmTasks.length} tasks completed`
+    );
   }
 
   private static async warmDepartments(): Promise<void> {
     try {
       // This would use your actual query function
-      const { query } = await import('./db');
-      await this.get('departments', async () => {
-        const result = await query('SELECT * FROM departments WHERE is_active = true ORDER BY name');
-        return result.rows;
-      }, 'departments');
+      const { query } = await import("./db");
+      await this.get(
+        "departments",
+        async () => {
+          const result = await query(
+            "SELECT * FROM departments WHERE is_active = true ORDER BY name"
+          );
+          return result.rows;
+        },
+        "departments"
+      );
     } catch (error) {
-      console.warn('Department cache warming failed:', error);
+      console.warn("Department cache warming failed:", error);
     }
   }
 
   private static async warmSystemSettings(): Promise<void> {
     try {
-      const { query } = await import('./db');
-      await this.get('system_settings', async () => {
-        const result = await query('SELECT setting_key, setting_value FROM system_settings');
-        return result.rows.reduce((acc: any, row: any) => {
-          acc[row.setting_key] = row.setting_value;
-          return acc;
-        }, {});
-      }, 'departments');
+      const { query } = await import("./db");
+      await this.get(
+        "system_settings",
+        async () => {
+          const result = await query(
+            "SELECT setting_key, setting_value FROM system_settings"
+          );
+          return result.rows.reduce((acc: any, row: any) => {
+            acc[row.setting_key] = row.setting_value;
+            return acc;
+          }, {});
+        },
+        "departments"
+      );
     } catch (error) {
-      console.warn('System settings cache warming failed:', error);
+      console.warn("System settings cache warming failed:", error);
     }
   }
 
@@ -209,49 +227,56 @@ export class AdvancedCache {
     redis: { memory: string; keys: number };
   }> {
     try {
-      const redisInfo = await redis.info('memory');
+      const redisInfo = await redis.info("memory");
       const redisDbSize = await redis.dbsize();
-      
+
       return {
         memory: {
           size: memoryCache.size,
-          keys: Array.from(memoryCache.keys())
+          keys: Array.from(memoryCache.keys()),
         },
         redis: {
-          memory: redisInfo.split('\n').find(line => line.startsWith('used_memory_human:'))?.split(':')[1] || 'unknown',
-          keys: redisDbSize
-        }
+          memory:
+            redisInfo
+              .split("\n")
+              .find((line) => line.startsWith("used_memory_human:"))
+              ?.split(":")[1] || "unknown",
+          keys: redisDbSize,
+        },
       };
     } catch (error) {
       return {
-        memory: { size: memoryCache.size, keys: Array.from(memoryCache.keys()) },
-        redis: { memory: 'error', keys: 0 }
+        memory: {
+          size: memoryCache.size,
+          keys: Array.from(memoryCache.keys()),
+        },
+        redis: { memory: "error", keys: 0 },
       };
     }
   }
 }
 
 // Connection event handlers
-redis.on('connect', () => {
-  console.log('🔗 Redis connected');
+redis.on("connect", () => {
+  console.log("🔗 Redis connected");
 });
 
-redis.on('ready', () => {
-  console.log('⚡ Redis ready for caching');
+redis.on("ready", () => {
+  console.log("⚡ Redis ready for caching");
   // Warm cache on startup
   AdvancedCache.warmCache().catch(console.warn);
 });
 
-redis.on('error', (err) => {
-  console.warn('🔴 Redis error (falling back to database):', err.message);
+redis.on("error", (err) => {
+  console.warn("🔴 Redis error (falling back to database):", err.message);
 });
 
-redis.on('close', () => {
-  console.log('📴 Redis connection closed');
+redis.on("close", () => {
+  console.log("📴 Redis connection closed");
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on("SIGTERM", () => {
   redis.disconnect();
 });
 
