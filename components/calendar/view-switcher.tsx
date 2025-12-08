@@ -14,10 +14,11 @@ export function ViewSwitcher({
   onViewChange,
   disabled = false,
 }: ViewSwitcherProps) {
+  // All views are now available
   const views = [
-    { key: "month" as const, label: "Month" },
-    { key: "week" as const, label: "Week" },
-    { key: "day" as const, label: "Day" },
+    { key: "month" as const, label: "Month", enabled: true },
+    { key: "week" as const, label: "Week", enabled: true },
+    { key: "day" as const, label: "Day", enabled: true },
   ];
 
   return (
@@ -27,14 +28,16 @@ export function ViewSwitcher({
           key={view.key}
           variant={currentView === view.key ? "default" : "ghost"}
           size="sm"
-          onClick={() => onViewChange(view.key)}
-          disabled={disabled && view.key === "day"}
+          onClick={() => view.enabled && onViewChange(view.key)}
+          disabled={!view.enabled || (disabled && view.key === "day")}
           className={cn(
             "h-7 sm:h-8 px-2 sm:px-3 text-xs sm:text-sm transition-all",
             currentView === view.key
               ? "bg-background shadow-sm text-foreground font-medium"
-              : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+              : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+            !view.enabled && "opacity-40 cursor-not-allowed"
           )}
+          title={!view.enabled ? "Coming soon" : undefined}
         >
           {view.label}
         </Button>

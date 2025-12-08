@@ -30,7 +30,7 @@ interface DayAppointmentsPopoverProps {
   appointments: Appointment[];
   date: Date;
   getDepartmentColor: (departmentId: number) => string;
-  maskXNumber: (xNumber: string, isOwn: boolean) => string;
+  maskXNumber: (xNumber: string, clientId: number) => string;
   currentUserId?: number;
   userRole: "client" | "receptionist" | "admin";
   onAppointmentClick: (appointment: Appointment) => void;
@@ -98,12 +98,12 @@ export function DayAppointmentsPopover({
                 onDragStart={(e) => onDragStart(e, apt)}
               >
                 <div className="font-xs text-xs truncate">
-                  {userRole === "client" && apt.clientId !== currentUserId
-                    ? maskXNumber(apt.clientXNumber, false)
+                  {userRole === "client" && currentUserId !== undefined && apt.clientId !== currentUserId
+                    ? maskXNumber(apt.clientXNumber, apt.clientId)
                     : apt.clientXNumber}
                 </div>
                 <div className="font-semibold text-xs truncate">
-                  {userRole === "client" && apt.clientId !== currentUserId
+                  {userRole === "client" && currentUserId !== undefined && apt.clientId !== currentUserId
                     ? "***"
                     : apt.clientName}
                 </div>

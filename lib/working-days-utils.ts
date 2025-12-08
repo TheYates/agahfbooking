@@ -16,8 +16,16 @@ export interface Department {
  * @returns boolean - true if it's a working day
  */
 export function isWorkingDay(department: Department, date: Date | string): boolean {
-  if (!department || !department.working_days) {
+  if (!department) {
     return false;
+  }
+
+  // If working_days is not set, assume Monday-Friday as default
+  if (!department.working_days || !Array.isArray(department.working_days) || department.working_days.length === 0) {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dayOfWeek = dateObj.getDay();
+    // Default: Monday (1) to Friday (5)
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
   }
 
   const dateObj = typeof date === 'string' ? new Date(date) : date;
@@ -37,9 +45,12 @@ export function isWorkingDay(department: Department, date: Date | string): boole
  * @returns boolean - true if it's a working day for at least one department
  */
 export function isWorkingDayForAnyDepartment(departments: Department[] | undefined | null, date: Date | string): boolean {
-  // Safeguard: ensure departments is a valid array
+  // If no departments provided, assume Monday-Friday as default
   if (!departments || !Array.isArray(departments) || departments.length === 0) {
-    return false;
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dayOfWeek = dateObj.getDay();
+    // Default: Monday (1) to Friday (5)
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
   }
 
   return departments.some(dept => isWorkingDay(dept, date));

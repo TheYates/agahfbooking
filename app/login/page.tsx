@@ -220,7 +220,7 @@ export default function LoginPage() {
                         alt="AGAHF Logo"
                         className="h-20 w-20 object-contain hidden dark:block"
                       />
-                      <h2 className="text-lg font-bold tracking-tight">AGAHF BOOKING</h2>
+                      {/* <h2 className="text-lg font-bold tracking-tight">AGAHF BOOKING</h2> */}
                     </div>
                     <h1 className="text-2xl font-bold">
                       {step === "xnumber" ? "Welcome back" : "Verify OTP"}
