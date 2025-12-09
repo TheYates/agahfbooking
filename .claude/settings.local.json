@@ -9,7 +9,10 @@
       "Bash(test:*)",
       "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\calendar\")",
       "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\api\\appointments\")",
-      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\appointments\")"
+      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\appointments\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
