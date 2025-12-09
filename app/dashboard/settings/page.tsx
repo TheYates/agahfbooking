@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -22,6 +22,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Settings,
   Calendar,
@@ -32,8 +33,16 @@ import {
   CheckCircle,
   Shield,
   MessageSquare,
+  Loader2,
 } from "lucide-react";
 import { CalendarConfigurationTab } from "@/components/settings/calendar-configuration-tab";
+import {
+  useSystemSettings,
+  useUpdateSystemSettings,
+  useOTPConfig,
+  useUpdateOTPConfig,
+  useTestOTPService,
+} from "@/hooks/use-hospital-queries";
 
 interface SystemSettings {
   maxAdvanceBookingDays: number;
@@ -62,57 +71,25 @@ interface Doctor {
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  // TanStack Query hooks - replaces all the fetch logic!
+  const {
+    data: settings,
+    isLoading: settingsLoading,
+    error: settingsError,
+  } = useSystemSettings();
+
+  const updateSettingsMutation = useUpdateSystemSettings();
+
+  // Local state for UI updates (optimistic updates handled by TanStack Query)
+  const [localSettings, setLocalSettings] = useState<SystemSettings | null>(null);
   const [statuses, setStatuses] = useState<AppointmentStatus[]>([]);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
 
-  // Load settings from database
-  useEffect(() => {
-    // Check user role first
-    fetch("/api/auth/session")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.user?.role !== "admin") {
-          setError("You must be an admin to access system settings");
-          return;
-        }
-        loadSettings();
-      })
-      .catch((err) => {
-        setError("Failed to verify user permissions");
-      });
-  }, []);
+  // Initialize local settings when data loads
+  if (settings && !localSettings) {
+    setLocalSettings(settings);
 
-  const loadSettings = async () => {
-    try {
-      setLoading(true);
-
-      // Load system settings
-      const settingsResponse = await fetch("/api/settings/system");
-      const settingsData = await settingsResponse.json();
-
-      if (settingsData.success) {
-        setSettings(settingsData.data);
-      } else {
-        // Use default settings if loading fails
-        const defaultSettings: SystemSettings = {
-          maxAdvanceBookingDays: 14,
-          multipleAppointmentsAllowed: false,
-          sameDayBookingAllowed: false,
-          defaultSlotsPerDay: 10,
-          sessionDurationHours: 24,
-          sessionTimeoutMinutes: 60,
-          recurringAppointmentsEnabled: false,
-          waitlistEnabled: false,
-          emergencySlotsEnabled: false,
-        };
-        setSettings(defaultSettings);
-      }
-
-      // Mock data for statuses and doctors (these can be implemented later)
+    // Initialize mock statuses (these can be implemented later)
+    if (statuses.length === 0) {
       const mockStatuses: AppointmentStatus[] = [
         { id: 1, name: "booked", color: "#3B82F6", isActive: true },
         { id: 2, name: "confirmed", color: "#8B5CF6", isActive: true },
@@ -123,76 +100,13 @@ export default function SettingsPage() {
         { id: 7, name: "no_show", color: "#EF4444", isActive: true },
         { id: 8, name: "cancelled", color: "#6B7280", isActive: true },
       ];
-
-      const mockDoctors: Doctor[] = [
-        {
-          id: 1,
-          name: "Dr. Sarah Wilson",
-          specialization: "General Medicine",
-          isActive: true,
-        },
-        {
-          id: 2,
-          name: "Dr. Michael Brown",
-          specialization: "Cardiology",
-          isActive: true,
-        },
-        {
-          id: 3,
-          name: "Dr. Emily Davis",
-          specialization: "Pediatrics",
-          isActive: true,
-        },
-        {
-          id: 4,
-          name: "Dr. James Miller",
-          specialization: "Orthopedics",
-          isActive: true,
-        },
-        {
-          id: 5,
-          name: "Dr. Lisa Anderson",
-          specialization: "Dermatology",
-          isActive: false,
-        },
-      ];
-
       setStatuses(mockStatuses);
-      setDoctors(mockDoctors);
-    } catch (error) {
-      console.error("Error loading settings:", error);
-      setError("Failed to load settings");
-    } finally {
-      setLoading(false);
     }
-  };
+  }
 
-  const handleSaveSettings = async () => {
-    if (!settings) return;
-
-    setLoading(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const response = await fetch("/api/settings/system", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setSuccess("Settings saved successfully!");
-      } else {
-        throw new Error(data.error || "Failed to save settings");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save settings");
-    } finally {
-      setLoading(false);
-    }
+  const handleSaveSettings = () => {
+    if (!localSettings) return;
+    updateSettingsMutation.mutate(localSettings);
   };
 
   const handleAddStatus = () => {
@@ -220,30 +134,33 @@ export default function SettingsPage() {
     setStatuses(statuses.filter((status) => status.id !== id));
   };
 
-  const handleAddDoctor = () => {
-    const newDoctor: Doctor = {
-      id: Date.now(),
-      name: "New Doctor",
-      specialization: "General Medicine",
-      isActive: true,
-    };
-    setDoctors([...doctors, newDoctor]);
-  };
-
-  const handleUpdateDoctor = (id: number, updates: Partial<Doctor>) => {
-    setDoctors(
-      doctors.map((doctor) =>
-        doctor.id === id ? { ...doctor, ...updates } : doctor
-      )
+  // Loading state with skeleton
+  if (settingsLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-5 w-96" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
-  };
+  }
 
-  const handleDeleteDoctor = (id: number) => {
-    setDoctors(doctors.filter((doctor) => doctor.id !== id));
-  };
-
-  if (!settings) {
-    return <div>Loading...</div>;
+  if (!localSettings) {
+    return null;
   }
 
   return (
@@ -255,16 +172,18 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {error && (
+      {settingsError && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {settingsError instanceof Error ? settingsError.message : "Failed to load settings"}
+          </AlertDescription>
         </Alert>
       )}
 
-      {success && (
+      {updateSettingsMutation.isSuccess && (
         <Alert>
           <CheckCircle className="h-4 w-4" />
-          <AlertDescription>{success}</AlertDescription>
+          <AlertDescription>Settings saved successfully!</AlertDescription>
         </Alert>
       )}
 
@@ -318,10 +237,10 @@ export default function SettingsPage() {
                   <Input
                     id="sessionDuration"
                     type="number"
-                    value={settings.sessionDurationHours}
+                    value={localSettings.sessionDurationHours}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
+                      setLocalSettings({
+                        ...localSettings,
                         sessionDurationHours:
                           Number.parseInt(e.target.value) || 24,
                       })
@@ -337,10 +256,10 @@ export default function SettingsPage() {
                     type="number"
                     min="5"
                     max="480"
-                    value={settings.sessionTimeoutMinutes}
+                    value={localSettings.sessionTimeoutMinutes}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
+                      setLocalSettings({
+                        ...localSettings,
                         sessionTimeoutMinutes:
                           Number.parseInt(e.target.value) || 60,
                       })
@@ -358,10 +277,10 @@ export default function SettingsPage() {
                   <Input
                     id="defaultSlots"
                     type="number"
-                    value={settings.defaultSlotsPerDay}
+                    value={localSettings.defaultSlotsPerDay}
                     onChange={(e) =>
-                      setSettings({
-                        ...settings,
+                      setLocalSettings({
+                        ...localSettings,
                         defaultSlotsPerDay:
                           Number.parseInt(e.target.value) || 10,
                       })
@@ -407,10 +326,10 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <Switch
-                    checked={settings.recurringAppointmentsEnabled}
+                    checked={localSettings.recurringAppointmentsEnabled}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
+                      setLocalSettings({
+                        ...localSettings,
                         recurringAppointmentsEnabled: checked,
                       })
                     }
@@ -425,10 +344,10 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <Switch
-                    checked={settings.waitlistEnabled}
+                    checked={localSettings.waitlistEnabled}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
+                      setLocalSettings({
+                        ...localSettings,
                         waitlistEnabled: checked,
                       })
                     }
@@ -443,10 +362,10 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <Switch
-                    checked={settings.emergencySlotsEnabled}
+                    checked={localSettings.emergencySlotsEnabled}
                     onCheckedChange={(checked) =>
-                      setSettings({
-                        ...settings,
+                      setLocalSettings({
+                        ...localSettings,
                         emergencySlotsEnabled: checked,
                       })
                     }
@@ -735,8 +654,18 @@ export default function SettingsPage() {
         </TabsContent>
 
         <div className="flex justify-end">
-          <Button onClick={handleSaveSettings} disabled={loading}>
-            {loading ? "Saving..." : "Save Settings"}
+          <Button
+            onClick={handleSaveSettings}
+            disabled={updateSettingsMutation.isPending}
+          >
+            {updateSettingsMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Settings"
+            )}
           </Button>
         </div>
       </Tabs>
@@ -744,94 +673,59 @@ export default function SettingsPage() {
   );
 }
 
-// OTP Configuration Component
+// OTP Configuration Component - Optimized with TanStack Query
 function OTPConfigurationTab() {
-  const [config, setConfig] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [testPhone, setTestPhone] = useState("");
 
-  // Fetch current configuration
-  const fetchConfig = async () => {
-    try {
-      const response = await fetch("/api/settings/otp-config");
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(
-            "Admin authentication required. Please log in as an administrator."
-          );
-        }
-        throw new Error("Failed to fetch configuration");
-      }
-      const data = await response.json();
-      setConfig(data.data);
-    } catch (error) {
-      console.error("Error fetching config:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // TanStack Query hooks
+  const { data: config, isLoading, error } = useOTPConfig();
+  const updateModeMutation = useUpdateOTPConfig();
+  const testServiceMutation = useTestOTPService();
 
   // Update OTP mode
-  const updateMode = async (newMode: "hubtel" | "mock") => {
-    setUpdating(true);
-    try {
-      const response = await fetch("/api/settings/otp-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: newMode }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(
-            "Admin authentication required. Please log in as an administrator."
-          );
-        }
-        throw new Error(data.error || "Failed to update mode");
-      }
-      setConfig(data.data);
-    } catch (error) {
-      console.error("Error updating mode:", error);
-    } finally {
-      setUpdating(false);
-    }
+  const updateMode = (newMode: "hubtel" | "mock") => {
+    updateModeMutation.mutate(newMode);
   };
 
   // Test service
-  const testService = async () => {
+  const testService = () => {
     if (!testPhone.trim()) return;
-    setTesting(true);
-    try {
-      const response = await fetch("/api/settings/otp-config/test", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: testPhone }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(
-            "Admin authentication required. Please log in as an administrator."
-          );
-        }
-        throw new Error(data.error || "Failed to test service");
-      }
-      console.log("Test result:", data);
-    } catch (error) {
-      console.error("Error testing service:", error);
-    } finally {
-      setTesting(false);
-    }
+    testServiceMutation.mutate(testPhone);
   };
 
-  useEffect(() => {
-    fetchConfig();
-  }, []);
+  if (isLoading || !config) {
+    return (
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-48 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
-  if (loading || !config) {
-    return <div>Loading OTP configuration...</div>;
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>OTP Configuration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertDescription>
+              {error instanceof Error ? error.message : "Failed to load OTP configuration"}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -870,7 +764,7 @@ function OTPConfigurationTab() {
             <Switch
               checked={config.currentMode === "hubtel"}
               onCheckedChange={(checked) => checked && updateMode("hubtel")}
-              disabled={updating || !config.canSwitchToHubtel}
+              disabled={updateModeMutation.isPending || !config.canSwitchToHubtel}
             />
           </div>
 
@@ -884,7 +778,7 @@ function OTPConfigurationTab() {
             <Switch
               checked={config.currentMode === "mock"}
               onCheckedChange={(checked) => checked && updateMode("mock")}
-              disabled={updating}
+              disabled={updateModeMutation.isPending}
             />
           </div>
         </div>
@@ -900,9 +794,16 @@ function OTPConfigurationTab() {
             />
             <Button
               onClick={testService}
-              disabled={testing || !testPhone.trim()}
+              disabled={testServiceMutation.isPending || !testPhone.trim()}
             >
-              {testing ? "Testing..." : "Test"}
+              {testServiceMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                "Test"
+              )}
             </Button>
           </div>
         </div>

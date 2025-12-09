@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppointmentService } from "@/lib/db-services";
+import { AdvancedCache } from "@/lib/redis-cache";
 
 export async function GET(request: Request) {
   try {
@@ -97,6 +98,13 @@ export async function POST(request: Request) {
       booked_by,
     });
 
+    // Invalidate related caches
+    await Promise.all([
+      AdvancedCache.invalidate("appointments"),
+      AdvancedCache.invalidate("available_slots"),
+      AdvancedCache.invalidate("calendar"),
+    ]);
+
     return NextResponse.json({
       success: true,
       data: appointment,
@@ -125,10 +133,16 @@ export async function PUT(request: Request) {
       );
     }
 
-    const appointment = await AppointmentService.update(id, {
+    const appointment = await AppointmentService.updateStatus(id, {
       status,
       notes,
     });
+
+    // Invalidate related caches immediately
+    await Promise.all([
+      AdvancedCache.invalidate("appointments"),
+      AdvancedCache.invalidate("calendar"),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -159,6 +173,13 @@ export async function DELETE(request: Request) {
     }
 
     await AppointmentService.delete(parseInt(id));
+
+    // Invalidate related caches
+    await Promise.all([
+      AdvancedCache.invalidate("appointments"),
+      AdvancedCache.invalidate("available_slots"),
+      AdvancedCache.invalidate("calendar"),
+    ]);
 
     return NextResponse.json({
       success: true,

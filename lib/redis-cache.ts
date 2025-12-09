@@ -9,14 +9,16 @@ const redis = new Redis({
   port: parseInt(process.env.REDIS_PORT || "6379"),
   password: process.env.REDIS_PASSWORD,
   db: 0,
-  retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
   lazyConnect: true,
   // Optimizations for speed
   enableReadyCheck: false,
-  maxLoadingTimeout: 1000,
   commandTimeout: 5000,
   connectTimeout: 10000,
+  retryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
 });
 
 // Memory cache for ultra-fast access (< 1ms)

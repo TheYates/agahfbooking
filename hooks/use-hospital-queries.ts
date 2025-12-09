@@ -1617,6 +1617,244 @@ export const useDeleteUser = () => {
 }
 
 // ==========================================
+// ⚙️ SETTINGS MANAGEMENT HOOKS
+// ==========================================
+
+interface SystemSettings {
+  maxAdvanceBookingDays: number
+  multipleAppointmentsAllowed: boolean
+  sameDayBookingAllowed: boolean
+  defaultSlotsPerDay: number
+  sessionDurationHours: number
+  sessionTimeoutMinutes: number
+  recurringAppointmentsEnabled: boolean
+  waitlistEnabled: boolean
+  emergencySlotsEnabled: boolean
+}
+
+interface OTPConfig {
+  currentMode: 'hubtel' | 'mock'
+  hubtelConfigured: boolean
+  canSwitchToHubtel: boolean
+}
+
+// Fetch System Settings
+const fetchSystemSettings = async (): Promise<SystemSettings> => {
+  const response = await fetch('/api/settings/system')
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch system settings')
+  }
+
+  const data = await response.json()
+  if (!data.success) {
+    // Return default settings if loading fails
+    return {
+      maxAdvanceBookingDays: 14,
+      multipleAppointmentsAllowed: false,
+      sameDayBookingAllowed: false,
+      defaultSlotsPerDay: 10,
+      sessionDurationHours: 24,
+      sessionTimeoutMinutes: 60,
+      recurringAppointmentsEnabled: false,
+      waitlistEnabled: false,
+      emergencySlotsEnabled: false,
+    }
+  }
+
+  return data.data
+}
+
+// useSystemSettings Hook
+export const useSystemSettings = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['settings', 'system'],
+    queryFn: fetchSystemSettings,
+    enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes - settings don't change frequently
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+// Update System Settings Mutation
+const updateSystemSettings = async (settings: SystemSettings) => {
+  const response = await fetch('/api/settings/system', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update system settings')
+  }
+
+  const data = await response.json()
+  if (!data.success) throw new Error(data.error || 'Failed to update system settings')
+  return data
+}
+
+export const useUpdateSystemSettings = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateSystemSettings,
+    onMutate: async (newSettings) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['settings', 'system'] })
+
+      // Snapshot previous data
+      const previousSettings = queryClient.getQueryData(['settings', 'system'])
+
+      // Optimistically update
+      queryClient.setQueryData(['settings', 'system'], newSettings)
+
+      return { previousSettings }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousSettings) {
+        queryClient.setQueryData(['settings', 'system'], context.previousSettings)
+      }
+
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update settings. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'system'] })
+
+      toast.success('Settings Updated! ✅', {
+        description: 'System settings have been successfully updated.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Fetch OTP Configuration
+const fetchOTPConfig = async (): Promise<OTPConfig> => {
+  const response = await fetch('/api/settings/otp-config')
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Admin authentication required. Please log in as an administrator.')
+    }
+    throw new Error('Failed to fetch OTP configuration')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+// useOTPConfig Hook
+export const useOTPConfig = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['settings', 'otp'],
+    queryFn: fetchOTPConfig,
+    enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+// Update OTP Configuration Mutation
+const updateOTPConfig = async (mode: 'hubtel' | 'mock') => {
+  const response = await fetch('/api/settings/otp-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    if (response.status === 401) {
+      throw new Error('Admin authentication required. Please log in as an administrator.')
+    }
+    throw new Error(error.error || 'Failed to update OTP mode')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+export const useUpdateOTPConfig = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateOTPConfig,
+    onMutate: async (newMode) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['settings', 'otp'] })
+
+      // Snapshot previous data
+      const previousConfig = queryClient.getQueryData(['settings', 'otp'])
+
+      // Optimistically update
+      queryClient.setQueryData(['settings', 'otp'], (old: OTPConfig | undefined) => {
+        if (!old) return old
+        return { ...old, currentMode: newMode }
+      })
+
+      return { previousConfig }
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousConfig) {
+        queryClient.setQueryData(['settings', 'otp'], context.previousConfig)
+      }
+
+      toast.error('Update Failed', {
+        description: err.message || 'Failed to update OTP mode. Please try again.',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'otp'] })
+
+      toast.success('OTP Mode Updated! ✅', {
+        description: 'OTP configuration has been successfully updated.',
+        duration: 4000,
+      })
+    },
+  })
+}
+
+// Test OTP Service Mutation
+const testOTPService = async (phone: string) => {
+  const response = await fetch('/api/settings/otp-config/test', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    if (response.status === 401) {
+      throw new Error('Admin authentication required. Please log in as an administrator.')
+    }
+    throw new Error(error.error || 'Failed to test service')
+  }
+
+  return response.json()
+}
+
+export const useTestOTPService = () => {
+  return useMutation({
+    mutationFn: testOTPService,
+    onSuccess: (data) => {
+      toast.success('Test Successful! ✅', {
+        description: 'OTP test message has been sent.',
+        duration: 4000,
+      })
+    },
+    onError: (err: Error) => {
+      toast.error('Test Failed', {
+        description: err.message || 'Failed to send test message. Please try again.',
+      })
+    },
+  })
+}
+
+// ==========================================
 // 🏥 DEPARTMENTS & DOCTORS MANAGEMENT HOOKS
 // ==========================================
 

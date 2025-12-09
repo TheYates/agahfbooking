@@ -23,6 +23,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Appointment {
   id: number;
@@ -70,6 +71,7 @@ export function AppointmentModal({
   onAppointmentUpdate,
   onAppointmentDelete,
 }: AppointmentModalProps) {
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [status, setStatus] = useState("");
   const [notes, setNotes] = useState("");
@@ -145,6 +147,11 @@ export function AppointmentModal({
       onAppointmentUpdate(updatedAppointment);
       setStatusChanged(false);
 
+      // Invalidate TanStack Query cache immediately
+      queryClient.invalidateQueries({ queryKey: ['appointments', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+
       // Show success toast
       toast.success("Status Updated! ✅", {
         description: `Status changed to ${statusOption?.label}`,
@@ -198,6 +205,11 @@ export function AppointmentModal({
       onAppointmentUpdate(updatedAppointment);
       setIsEditing(false);
       setStatusChanged(false);
+
+      // Invalidate TanStack Query cache immediately
+      queryClient.invalidateQueries({ queryKey: ['appointments', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
 
       // Show success toast
       toast.success("Appointment Updated! ✅", {

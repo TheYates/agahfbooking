@@ -7,6 +7,9 @@ import { MobileLayout } from "@/components/mobile-layout";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 
+// Force dynamic rendering for all dashboard pages since they use authentication
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {

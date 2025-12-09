@@ -8,7 +8,8 @@
       "Bash(\"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\api\\doctors\\[id]\\route.ts\")",
       "Bash(test:*)",
       "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\calendar\")",
-      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\api\\appointments\")"
+      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\api\\appointments\")",
+      "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\appointments\")"
     ],
     "deny": [],
     "ask": []

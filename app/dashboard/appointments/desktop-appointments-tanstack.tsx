@@ -453,7 +453,7 @@ export default function DesktopAppointmentsTanstackPage() {
                 className="grid items-center gap-3 px-3 py-2 bg-muted/50 rounded-lg font-medium text-sm"
                 style={{
                   gridTemplateColumns:
-                    "100px 70px 250px 100px 150px 150px 130px 120px 110px 150px",
+                    "80px 50px 250px 100px 200px 150px 130px 150px 110px 150px",
                 }}
               >
                 <div>Date</div>
@@ -485,7 +485,7 @@ export default function DesktopAppointmentsTanstackPage() {
                     opacity: loading && isPlaceholderData ? 0.7 : 1,
                     transition: "opacity 0.2s ease-in-out",
                     gridTemplateColumns:
-                      "100px 70px 250px 100px 150px 150px 130px 120px 110px 150px",
+                      "80px 50px 250px 100px 200px 150px 130px 150px 110px 150px",
                   }}
                   onClick={() => handleAppointmentClick(appointment)}
                 >
@@ -519,16 +519,14 @@ export default function DesktopAppointmentsTanstackPage() {
                   <div className="text-sm text-muted-foreground truncate">
                     {appointment.phone}
                   </div>
-                  <Badge
+                  <div
                     style={{
-                      backgroundColor: appointment.statusColor + "20",
                       color: appointment.statusColor,
-                      borderColor: appointment.statusColor + "40",
                     }}
-                    className="capitalize text-xs truncate justify-center"
+                    className="capitalize text-sm font-medium truncate text-center"
                   >
                     {appointment.status.replace("_", " ")}
-                  </Badge>
+                  </div>
                   <div className="flex items-center gap-1 justify-end">
                     <Button
                       variant="ghost"
@@ -604,16 +602,14 @@ export default function DesktopAppointmentsTanstackPage() {
                       <TableCell>{appointment.doctorName}</TableCell>
                       <TableCell>{appointment.phone}</TableCell>
                       <TableCell>
-                        <Badge
+                        <div
                           style={{
-                            backgroundColor: appointment.statusColor + "20",
                             color: appointment.statusColor,
-                            borderColor: appointment.statusColor + "40",
                           }}
-                          className="capitalize text-xs"
+                          className="capitalize text-sm font-medium"
                         >
                           {appointment.status.replace("_", " ")}
-                        </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
