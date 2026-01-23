@@ -1,5 +1,6 @@
 "use client";
 
+// This component is BetterAuth-ready and uses the updated API endpoints
 import React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,19 +16,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield } from "lucide-react";
 import Link from "next/link";
-import { useConvexAuth } from "@/hooks/use-convex-auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { sendOTP, verifyOTP } = useConvexAuth();
-  
   const [step, setStep] = useState<"xnumber" | "otp">("xnumber");
   const [xNumber, setXNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [maskedPhone, setMaskedPhone] = useState("");
   const [mockOtp, setMockOtp] = useState("");
-  const [isMockMode, setIsMockMode] = useState(false);
+  const [otpToken, setOtpToken] = useState(""); // JWT token for OTP verification
+  const [isMockMode, setIsMockMode] = useState(false); // Track if we're in mock mode
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    remainingAttempts?: number;
+    requiresCaptcha?: boolean;
+    resetTime?: number;
+  } | null>(null);
 
   const handleXNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^0-9]/g, "");
@@ -64,15 +69,58 @@ export default function LoginPage() {
     }
 
     try {
-      // Call Convex OTP function
-      const result = await sendOTP(xNumber, "client");
+      const response = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ xNumber }),
+      });
 
-      // Check if we're in development mode (mock OTP)
-      if (result.otp) {
-        setMockOtp(result.otp);
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Handle rate limiting specifically
+        if (response.status === 429 && data.rateLimited) {
+          const resetTime = data.resetTime ? new Date(data.resetTime) : null;
+          const resetTimeStr = resetTime
+            ? resetTime.toLocaleTimeString()
+            : "later";
+
+          if (data.blockDuration) {
+            throw new Error(
+              `Too many attempts. Please wait ${data.blockDuration} minutes before trying again.`
+            );
+          } else {
+            throw new Error(
+              `Rate limit exceeded. Please try again at ${resetTimeStr}.`
+            );
+          }
+        }
+
+        throw new Error(data.error || "Failed to send OTP");
+      }
+
+      if (data.maskedPhone) {
+        setMaskedPhone(data.maskedPhone);
+      }
+
+      // Store JWT token for OTP verification
+      if (data.token) {
+        setOtpToken(data.token);
+      }
+
+      // Check if we're in mock mode and store OTP for display
+      if (data.otp) {
+        setMockOtp(data.otp);
         setIsMockMode(true);
       } else {
         setIsMockMode(false);
+      }
+
+      // Store rate limiting information
+      if (data.rateLimitInfo) {
+        setRateLimitInfo(data.rateLimitInfo);
       }
 
       setStep("otp");
@@ -87,7 +135,7 @@ export default function LoginPage() {
     }
   };
 
-  const verifyOtpCode = async (otpValue: string) => {
+  const verifyOtp = async (otpValue: string) => {
     if (otpValue.length !== 6 || loading) {
       return;
     }
@@ -96,37 +144,23 @@ export default function LoginPage() {
     setError("");
 
     try {
-      console.log("Verifying OTP:", { xNumber, otpValue });
-      
-      // Call Convex OTP verification
-      const result = await verifyOTP(xNumber, otpValue, "client");
-      
-      console.log("Verification result:", result);
+      const response = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: otpToken, otp: otpValue }),
+      });
 
-      if (result.success && result.user) {
-        // User is automatically stored in localStorage by useConvexAuth
-        console.log("Login successful, setting cookie and redirecting...");
-        
-        // Format user data for middleware (expects xNumber not x_number)
-        const sessionData = {
-          id: result.user.id,
-          name: result.user.name,
-          phone: result.user.phone,
-          xNumber: result.user.x_number, // Middleware expects xNumber
-          category: result.user.category,
-          role: result.user.role,
-        };
-        
-        // Set session cookie for middleware
-        document.cookie = `session_token=${JSON.stringify(sessionData)}; path=/; max-age=86400`; // 24 hours
-        
-        router.push("/dashboard");
-        router.refresh();
-      } else {
-        throw new Error("Failed to verify OTP");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to verify OTP");
       }
+
+      router.push(data.redirectUrl || "/dashboard");
+      router.refresh();
     } catch (err) {
-      console.error("Verification error:", err);
       setError(
         err instanceof Error
           ? err.message
@@ -140,7 +174,7 @@ export default function LoginPage() {
     setOtp(value);
     if (value.length === 6) {
       setTimeout(() => {
-        verifyOtpCode(value);
+        verifyOtp(value);
       }, 500);
     }
   };
@@ -151,7 +185,7 @@ export default function LoginPage() {
       setError("Please enter a 6-digit OTP");
       return;
     }
-    await verifyOtpCode(otp);
+    await verifyOtp(otp);
   };
 
   return (
@@ -194,6 +228,8 @@ export default function LoginPage() {
                     <p className="text-muted-foreground text-balance">
                       {step === "xnumber"
                         ? "Login to your account"
+                        : maskedPhone
+                        ? `Enter the OTP sent to ${maskedPhone}`
                         : "Enter the OTP sent to your phone"}
                     </p>
                   </div>
@@ -285,11 +321,34 @@ export default function LoginPage() {
                                 </p>
                               </div>
                               <p className="text-xs text-blue-600">
-                                This OTP is displayed because you're in development mode
+                                This OTP is displayed because you're in mock
+                                mode
                               </p>
                             </div>
                           </div>
                         )}
+
+                        {rateLimitInfo &&
+                          rateLimitInfo.remainingAttempts !== undefined &&
+                          rateLimitInfo.remainingAttempts < 5 && (
+                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                              <div className="text-center">
+                                <p className="text-sm text-yellow-800">
+                                  ⚠️{" "}
+                                  <strong>
+                                    {rateLimitInfo.remainingAttempts}
+                                  </strong>{" "}
+                                  attempts remaining
+                                </p>
+                                {rateLimitInfo.requiresCaptcha && (
+                                  <p className="text-xs text-yellow-700 mt-1">
+                                    Additional verification may be required
+                                    after more failed attempts
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                       </div>
                       <Button
                         type="submit"
@@ -327,6 +386,23 @@ export default function LoginPage() {
               </form>
             </CardContent>
           </Card>
+          {/* <div className="text-muted-foreground text-center text-xs text-balance">
+            By clicking continue, you agree to our{" "}
+            <a
+              href="#"
+              className="underline underline-offset-4 hover:text-primary"
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="#"
+              className="underline underline-offset-4 hover:text-primary"
+            >
+              Privacy Policy
+            </a>
+            .
+          </div> */}
         </div>
       </div>
     </div>

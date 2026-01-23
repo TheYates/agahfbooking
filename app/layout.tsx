@@ -3,8 +3,9 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ConvexClientProvider } from "@/components/providers/convex-provider";
+// Legacy providers (keep during migration)
 import QueryProvider from "@/components/providers/query-provider";
-// import QueryProviderFallback from "@/components/providers/query-provider-fallback";
 
 export const metadata: Metadata = {
   title: "AGAHF Booking",
@@ -40,16 +41,18 @@ html {
         `}</style>
       </head>
       <body className="safe-area-inset">
-        <QueryProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            {children}
-          </ThemeProvider>
-        </QueryProvider>
+        <ConvexClientProvider>
+          <QueryProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              {children}
+            </ThemeProvider>
+          </QueryProvider>
+        </ConvexClientProvider>
       </body>
     </html>
   );
