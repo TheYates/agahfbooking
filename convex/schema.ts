@@ -99,6 +99,7 @@ export default defineSchema({
     slot_number: v.number(),
     status: v.union(
       v.literal("booked"),
+      v.literal("confirmed"),
       v.literal("arrived"),
       v.literal("waiting"),
       v.literal("completed"),

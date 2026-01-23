@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * Staff Authentication Action
  * 

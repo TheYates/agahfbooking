@@ -102,6 +102,7 @@ export default function LoginPage() {
       const result = await verifyOTP(xNumber, otpValue, "client");
       
       console.log("Verification result:", result);
+      console.log("Verification result.user:", JSON.stringify(result.user, null, 2));
 
       if (result.success && result.user) {
         // User is automatically stored in localStorage by useConvexAuth
@@ -112,10 +113,13 @@ export default function LoginPage() {
           id: result.user.id,
           name: result.user.name,
           phone: result.user.phone,
-          xNumber: result.user.x_number, // Middleware expects xNumber
+          xNumber: result.user.xNumber || result.user.x_number, // Middleware expects xNumber
           category: result.user.category,
           role: result.user.role,
+          convexId: result.user.convexId || result.user.id, // Use convexId if present, otherwise use id
         };
+
+        console.log("Setting session cookie. User data:", sessionData);
         
         // Set session cookie for middleware
         document.cookie = `session_token=${JSON.stringify(sessionData)}; path=/; max-age=86400`; // 24 hours

@@ -3,6 +3,9 @@
  * 
  * Handles authentication for hospital staff (receptionists and admins)
  * using username/password credentials with bcrypt password verification.
+ * 
+ * Note: This is a mutation (not action) so it can't use Node.js runtime.
+ * Password verification is done in the API route before calling this.
  */
 
 import { v } from "convex/values";

@@ -215,6 +215,7 @@ export const createDoctor = mutation({
   args: {
     name: v.string(),
     department_id: v.id("departments"),
+    specialty: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const doctorId = await ctx.db.insert("doctors", {
@@ -262,7 +263,19 @@ export const createAppointment = mutation({
     appointment_date: v.string(),
     slot_number: v.number(),
     notes: v.optional(v.string()),
-    booked_by: v.id("users"),
+    booked_by: v.optional(v.id("users")),
+    status: v.optional(
+      v.union(
+        v.literal("booked"),
+        v.literal("confirmed"),
+        v.literal("arrived"),
+        v.literal("waiting"),
+        v.literal("completed"),
+        v.literal("no_show"),
+        v.literal("cancelled"),
+        v.literal("rescheduled")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -282,15 +295,24 @@ export const createAppointment = mutation({
       throw new Error("This slot is already booked");
     }
 
+    // Get first user to use as booked_by if not provided
+    let bookedBy = args.booked_by;
+    if (!bookedBy) {
+      const firstUser = await ctx.db.query("users").first();
+      if (firstUser) {
+        bookedBy = firstUser._id;
+      }
+    }
+
     const appointmentId = await ctx.db.insert("appointments", {
       client_id: args.client_id,
       department_id: args.department_id,
       doctor_id: args.doctor_id,
       appointment_date: args.appointment_date,
       slot_number: args.slot_number,
-      status: "booked",
+      status: args.status || "booked",
       notes: args.notes,
-      booked_by: args.booked_by,
+      booked_by: bookedBy!, // Required by schema
       created_at: now,
       updated_at: now,
     });

@@ -169,18 +169,24 @@ export const verifyOTP = mutation({
         throw new Error("Client not found or inactive");
       }
 
-      console.log("Client found:", client);
+      console.log("Client found:", {
+        _id: client._id,
+        name: client.name,
+        x_number: client.x_number,
+      });
 
       const userData = {
         id: client._id,
         name: client.name,
         phone: client.phone,
         x_number: client.x_number,
+        xNumber: client.x_number, // Add both formats for compatibility
         category: client.category,
         role: "client" as const,
+        convexId: client._id, // ✅ Add convexId for dashboard queries
       };
 
-      console.log("Returning user data:", userData);
+      console.log("Returning user data:", JSON.stringify(userData, null, 2));
 
       return {
         success: true,
@@ -210,44 +216,7 @@ export const verifyOTP = mutation({
   },
 });
 
-/**
- * Staff login with employee_id and password
- */
-export const staffLogin = mutation({
-  args: {
-    employee_id: v.string(),
-    password: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const { employee_id, password } = args;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_employee_id", (q) => q.eq("employee_id", employee_id))
-      .first();
-
-    if (!user || !user.is_active) {
-      throw new Error("Invalid credentials");
-    }
-
-    // TODO: Implement password verification with bcrypt
-    // For now, basic comparison (should hash passwords in production)
-    if (user.password_hash !== password) {
-      throw new Error("Invalid credentials");
-    }
-
-    return {
-      success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        phone: user.phone,
-        employee_id: user.employee_id,
-        role: user.role,
-      },
-    };
-  },
-});
+// Staff login moved to convex/auth/staffLogin.ts to avoid export conflicts
 
 /**
  * Get current session (used for authentication checks)

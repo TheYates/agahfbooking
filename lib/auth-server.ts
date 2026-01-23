@@ -38,6 +38,13 @@ export async function getCurrentUser(): Promise<User | null> {
       return null;
     }
 
+    // For clients, validate convexId is present (required for Convex migration)
+    if (userData.role === "client" && !userData.convexId) {
+      // Return null to trigger redirect to login
+      // Cookie will be cleared by middleware
+      return null;
+    }
+
     return userData as User;
   } catch (error) {
     console.error("Error getting current user:", error);

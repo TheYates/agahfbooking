@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export async function GET(request: Request) {
   try {
@@ -8,71 +10,54 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = (page - 1) * limit;
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
-    if (!clientId) {
+    if (!clientId || clientId === "NaN" || clientId === "undefined" || clientId === "null") {
       return NextResponse.json(
         {
           success: false,
-          error: "Client ID is required",
+          error: "Valid Client ID is required",
         },
         { status: 400 }
       );
     }
 
-    // Get total count for pagination
-    const countResult = await query(
-      `SELECT COUNT(*) as total FROM appointments WHERE client_id = $1`,
-      [clientId]
-    );
-    const totalCount = parseInt(countResult.rows[0]?.total || "0");
+    // Fetch appointments using Convex
+    const result = await fetchQuery(api.queries.getClientAppointments, {
+      clientId: clientId as Id<"clients">,
+      limit,
+      offset,
+    });
+
+    // Filter by date range if provided
+    let filteredAppointments = result.appointments;
+    if (startDate || endDate) {
+      filteredAppointments = result.appointments.filter((apt: any) => {
+        if (startDate && apt.appointment_date < startDate) return false;
+        if (endDate && apt.appointment_date > endDate) return false;
+        return true;
+      });
+    }
+
+    const totalCount = filteredAppointments.length;
     const totalPages = Math.ceil(totalCount / limit);
 
-    // Fetch appointments for the specific client with pagination
-    const result = await query(
-      `
-      SELECT
-        a.id,
-        a.client_id,
-        c.name as client_name,
-        c.x_number as client_x_number,
-        a.appointment_date as date,
-        a.slot_number,
-        a.status,
-        a.notes,
-        a.created_at,
-        a.department_id,
-        d.name as department_name,
-        COALESCE(d.color, '#3B82F6') as department_color,
-        COALESCE(doc.name, 'Dr. Smith') as doctor_name
-      FROM appointments a
-      LEFT JOIN clients c ON a.client_id = c.id
-      LEFT JOIN departments d ON a.department_id = d.id
-      LEFT JOIN doctors doc ON a.doctor_id = doc.id
-      WHERE a.client_id = $1
-      ORDER BY a.appointment_date DESC, a.slot_number ASC
-      LIMIT $2 OFFSET $3
-    `,
-      [clientId, limit, offset]
-    );
-
     // Transform the data to match the expected format
-    const appointments = result.rows.map((row: any) => ({
-      id: row.id,
-      clientId: row.client_id,
-      clientName: row.client_name,
-      clientXNumber: row.client_x_number,
-      date:
-        row.date instanceof Date
-          ? row.date.toISOString().split("T")[0]
-          : row.date,
-      slotNumber: row.slot_number,
-      status: row.status,
-      notes: row.notes,
-      departmentId: row.department_id,
-      departmentName: row.department_name,
-      departmentColor: row.department_color,
-      doctorName: row.doctor_name,
-      createdAt: row.created_at,
+    const appointments = filteredAppointments.map((appointment: any) => ({
+      id: appointment._id,
+      clientId: appointment.client_id,
+      clientName: appointment.clientName,
+      clientXNumber: appointment.clientXNumber,
+      date: appointment.appointment_date,
+      slotNumber: appointment.slot_number,
+      status: appointment.status,
+      notes: appointment.notes,
+      departmentId: appointment.department_id,
+      departmentName: appointment.departmentName,
+      departmentColor: appointment.departmentColor,
+      doctorName: appointment.doctorName,
+      createdAt: appointment._creationTime,
     }));
 
     return NextResponse.json({

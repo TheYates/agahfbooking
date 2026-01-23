@@ -11,13 +11,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 interface Appointment {
-  id: number;
-  clientId: number;
+  id: number | string;
+  clientId: number | string;
   clientName: string;
   clientXNumber: string;
-  doctorId: number;
+  doctorId?: number | string;
   doctorName: string;
-  departmentId: number;
+  departmentId: number | string;
   departmentName: string;
   slotNumber: number;
   date: string;
@@ -31,7 +31,7 @@ interface DayAppointmentsPopoverProps {
   date: Date;
   getDepartmentColor: (departmentId: number) => string;
   maskXNumber: (xNumber: string, isOwn: boolean) => string;
-  currentUserId?: number;
+  currentUserId?: number | string;
   userRole: "client" | "receptionist" | "admin";
   onAppointmentClick: (appointment: Appointment) => void;
   onDragStart: (e: React.DragEvent, appointment: Appointment) => void;

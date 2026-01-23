@@ -55,6 +55,14 @@ export async function POST(request: NextRequest) {
     // Use BetterAuth verifyOTP function with JWT token
     const userData = await verifyOTP(token, otp);
 
+    console.log("✅ OTP verified successfully. User data:", {
+      id: userData.id,
+      xNumber: userData.xNumber,
+      name: userData.name,
+      convexId: userData.convexId,
+      role: userData.role,
+    });
+
     // Record successful attempt
     rateLimiter.recordAttempt(
       clientInfo.ip,

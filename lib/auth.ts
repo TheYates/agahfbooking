@@ -36,20 +36,34 @@ export async function staffLogin(username: string, password: string) {
   }
 
   try {
-    // Find user by employee_id (username) or name
-    const result = await query(
-      `SELECT * FROM users
-       WHERE (employee_id = $1 OR LOWER(name) = LOWER($1))
-       AND role IN ('receptionist', 'admin')
-       AND is_active = true`,
-      [username]
-    );
+    // Use Convex instead of PostgreSQL
+    const { ConvexHttpClient } = await import("convex/browser");
+    const { api } = await import("@/convex/_generated/api");
+    
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (!convexUrl) {
+      throw new Error("Convex URL not configured");
+    }
 
-    if (result.rows.length === 0) {
+    const convexClient = new ConvexHttpClient(convexUrl);
+
+    // Find user by employee_id in Convex
+    const user = await convexClient.query(api.queries.getUserByEmployeeId, {
+      employee_id: username,
+    });
+
+    if (!user) {
       throw new Error("Invalid username or password");
     }
 
-    const user = result.rows[0];
+    // Check if user is active and has correct role
+    if (!user.is_active) {
+      throw new Error("User account is inactive");
+    }
+
+    if (user.role !== "receptionist" && user.role !== "admin") {
+      throw new Error("Invalid username or password");
+    }
 
     // Check if user has a password hash
     if (!user.password_hash) {
@@ -59,18 +73,26 @@ export async function staffLogin(username: string, password: string) {
     }
 
     // Verify password
+    console.log("🔍 Debug - Comparing passwords:");
+    console.log("  Input password:", password);
+    console.log("  Stored hash:", user.password_hash?.substring(0, 20) + "...");
+    console.log("  Hash starts with $2a$ (bcrypt):", user.password_hash?.startsWith("$2a$") || user.password_hash?.startsWith("$2b$"));
+    
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    console.log("  Password valid:", isValidPassword);
+    
     if (!isValidPassword) {
       throw new Error("Invalid username or password");
     }
 
-    // Return user data
+    // Return user data with Convex ID
     return {
-      id: user.id,
+      id: parseInt(user._id, 36) || 0, // Convert Convex ID to number for compatibility
       name: user.name,
       phone: user.phone,
       role: user.role,
-      employee_id: user.employee_id,
+      employee_id: user.employee_id || "",
+      convexId: user._id,
       loginTime: new Date().toISOString(),
     };
   } catch (error) {
@@ -156,20 +178,53 @@ export async function verifyOTP(token: string, otp: string) {
 
     const xNumber = verificationResult.xNumber!;
 
-    // Find client
-    const client = await ClientService.findByXNumber(xNumber);
+    // Use Convex instead of PostgreSQL
+    const { ConvexHttpClient } = await import("convex/browser");
+    const { api } = await import("@/convex/_generated/api");
+    
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (!convexUrl) {
+      throw new Error("Convex URL not configured");
+    }
+
+    const convexClient = new ConvexHttpClient(convexUrl);
+
+    console.log("🔍 Looking up client in Convex by X-number:", xNumber);
+
+    // Find client by X-number in Convex
+    const client = await convexClient.query(api.queries.getClientByXNumber, {
+      x_number: xNumber,
+    });
+
+    console.log("📊 Convex client lookup result:", {
+      found: !!client,
+      clientId: client?._id,
+      clientName: client?.name,
+      xNumber: xNumber,
+    });
+
     if (!client) {
+      console.error("❌ Client not found in Convex for X-number:", xNumber);
       throw new Error("Client not found");
     }
 
-    // Return session data
+    // Check if client is active
+    if (!client.is_active) {
+      console.error("❌ Client account is inactive:", xNumber);
+      throw new Error("Client account is inactive");
+    }
+
+    console.log("✅ Returning user data with convexId:", client._id);
+
+    // Return session data with Convex ID
     return {
-      id: client.id,
+      id: parseInt(client._id, 36) || 0, // Convert Convex ID to number for compatibility
       xNumber: client.x_number,
       name: client.name,
       phone: client.phone,
       category: client.category,
       role: "client" as const,
+      convexId: client._id,
       loginTime: new Date().toISOString(),
     };
   } catch (error) {

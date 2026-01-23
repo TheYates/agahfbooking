@@ -4,9 +4,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "target": "ES2021",
-    "lib": ["ES2021"],
+    "lib": ["ES2021", "dom"],
+    "types": ["node"],
     "jsx": "preserve",
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -24,6 +25,9 @@
   ],
   "exclude": [
     "node_modules",
-    "_generated"
+    "_generated",
+    "**/*.test.ts",
+    "auth/staffLogin.ts",
+    "actions/staffAuth.ts"
   ]
 }

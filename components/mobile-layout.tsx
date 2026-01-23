@@ -3,7 +3,7 @@
 import { useState, createContext, useContext } from "react";
 import { MobileHeader } from "@/components/mobile-header";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
-import { MobileBookingSheet } from "@/components/dashboard/mobile-booking-sheet";
+import { MobileBookingSheetConvex as MobileBookingSheet } from "@/components/dashboard/mobile-booking-sheet-convex";
 import type { User } from "@/lib/types";
 
 interface BookingContextType {

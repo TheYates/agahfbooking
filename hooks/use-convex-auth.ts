@@ -16,8 +16,10 @@ interface User {
   phone: string;
   role: string;
   x_number?: string;
+  xNumber?: string; // Add both formats for compatibility
   category?: string;
   employee_id?: string;
+  convexId?: Id<"users"> | Id<"clients">; // Add convexId for dashboard queries
 }
 
 export function useConvexAuth() {

@@ -12,7 +12,12 @@
       "Bash(dir /s /b \"C:\\Users\\AGAHF USER\\Desktop\\BUILDS\\booking\\app\\dashboard\\appointments\")",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm run dev:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout:*)",
+      "Bash(npm run convex:dev:*)"
     ],
     "deny": [],
     "ask": []

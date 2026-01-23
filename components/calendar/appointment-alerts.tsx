@@ -5,13 +5,13 @@ import { toast } from "sonner";
 import { Calendar, Clock, User, Bell } from "lucide-react";
 
 interface Appointment {
-  id: number;
-  clientId: number;
+  id: number | string;
+  clientId: number | string;
   clientName: string;
   clientXNumber: string;
-  doctorId: number;
+  doctorId: number | string;
   doctorName: string;
-  departmentId: number;
+  departmentId: number | string;
   departmentName: string;
   date: string;
   slotNumber: number;
@@ -22,7 +22,7 @@ interface Appointment {
 
 interface AppointmentAlertsProps {
   userRole: "client" | "receptionist" | "admin";
-  currentUserId?: number;
+  currentUserId?: number | string;
   enabled?: boolean;
 }
 

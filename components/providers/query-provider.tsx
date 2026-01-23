@@ -34,18 +34,17 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
       })
   );
 
-  // 🔥 Prefetch common data on mount for instant access
-  useEffect(() => {
-    // Prefetch departments (rarely changes, used everywhere)
-    queryClient.prefetchQuery({
-      queryKey: ["departments"],
-      queryFn: async () => {
-        const res = await fetch("/api/departments");
-        return res.json();
-      },
-      staleTime: 5 * 60 * 1000, // Departments are stable for 5 minutes
-    });
-  }, [queryClient]);
+  // Prefetch disabled - now using Convex instead of old API routes
+  // useEffect(() => {
+  //   queryClient.prefetchQuery({
+  //     queryKey: ["departments"],
+  //     queryFn: async () => {
+  //       const res = await fetch("/api/departments");
+  //       return res.json();
+  //     },
+  //     staleTime: 5 * 60 * 1000,
+  //   });
+  // }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

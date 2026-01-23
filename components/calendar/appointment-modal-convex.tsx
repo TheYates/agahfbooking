@@ -1,0 +1,381 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
+import { Calendar, Clock, User, Building2, Stethoscope, AlertCircle, Edit, Trash2 } from "lucide-react";
+
+interface AppointmentModalConvexProps {
+  isOpen: boolean;
+  onClose: () => void;
+  appointment: any;
+  userRole?: "client" | "receptionist" | "admin";
+  currentUserId?: number;
+  onAppointmentUpdate?: (appointment: any) => void;
+  onAppointmentDelete?: (appointmentId: string) => void;
+}
+
+const STATUS_OPTIONS = [
+  { value: "booked", label: "Booked", color: "#3B82F6" },
+  { value: "confirmed", label: "Confirmed", color: "#10B981" },
+  { value: "arrived", label: "Arrived", color: "#F59E0B" },
+  { value: "waiting", label: "Waiting", color: "#8B5CF6" },
+  { value: "completed", label: "Completed", color: "#059669" },
+  { value: "no_show", label: "No Show", color: "#EF4444" },
+  { value: "cancelled", label: "Cancelled", color: "#6B7280" },
+  { value: "rescheduled", label: "Rescheduled", color: "#F97316" },
+];
+
+export function AppointmentModalConvex({
+  isOpen,
+  onClose,
+  appointment,
+  userRole = "admin",
+  currentUserId,
+  onAppointmentUpdate,
+  onAppointmentDelete,
+}: AppointmentModalConvexProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [statusChanged, setStatusChanged] = useState(false);
+
+  // Convex mutations
+  const updateAppointment = useMutation(api.mutations.updateAppointment);
+  const deleteAppointment = useMutation(api.mutations.deleteAppointment);
+
+  useEffect(() => {
+    if (appointment) {
+      setStatus(appointment.status);
+      setNotes(appointment.notes || "");
+      setIsEditing(false);
+      setError("");
+      setStatusChanged(false);
+    }
+  }, [appointment]);
+
+  if (!appointment) return null;
+
+  const currentStatus = STATUS_OPTIONS.find((s) => s.value === appointment.status);
+
+  // Check if appointment is in the past
+  const isPastAppointment = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(appointment.date);
+    appointmentDate.setHours(0, 0, 0, 0);
+    return appointmentDate < today;
+  };
+
+  const canEdit =
+    !isPastAppointment() &&
+    (userRole === "receptionist" ||
+      userRole === "admin" ||
+      appointment.clientId === currentUserId);
+  const canDelete =
+    !isPastAppointment() &&
+    (userRole === "receptionist" || userRole === "admin");
+
+  const handleStatusChange = (newStatus: string) => {
+    setStatus(newStatus);
+    setStatusChanged(newStatus !== appointment.status);
+  };
+
+  const handleQuickSave = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      await updateAppointment({
+        id: appointment.id as Id<"appointments">,
+        status: status as any,
+      });
+
+      const statusOption = STATUS_OPTIONS.find((s) => s.value === status);
+      const updatedAppointment = {
+        ...appointment,
+        status,
+        statusColor: statusOption?.color || appointment.statusColor,
+      };
+
+      onAppointmentUpdate?.(updatedAppointment);
+      setStatusChanged(false);
+
+      toast.success("Status Updated! ✅", {
+        description: `Status changed to ${statusOption?.label}`,
+        duration: 3000,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update status";
+      setError(errorMessage);
+
+      toast.error("Update Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      await updateAppointment({
+        id: appointment.id as Id<"appointments">,
+        status: status as any,
+      });
+
+      const statusOption = STATUS_OPTIONS.find((s) => s.value === status);
+      const updatedAppointment = {
+        ...appointment,
+        status,
+        statusColor: statusOption?.color || appointment.statusColor,
+        notes,
+      };
+
+      onAppointmentUpdate?.(updatedAppointment);
+      setIsEditing(false);
+      setStatusChanged(false);
+
+      toast.success("Appointment Updated! ✅", {
+        description: `${appointment.clientName}'s appointment has been updated successfully`,
+        duration: 3000,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update appointment";
+      setError(errorMessage);
+
+      toast.error("Update Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this appointment?")) return;
+
+    setLoading(true);
+    try {
+      await deleteAppointment({ id: appointment.id as Id<"appointments"> });
+      onAppointmentDelete?.(appointment.id);
+      onClose();
+
+      toast.success("Appointment Deleted! 🗑️", {
+        description: `${appointment.clientName}'s appointment has been cancelled`,
+        duration: 3000,
+      });
+    } catch (err) {
+      const errorMessage = "Failed to delete appointment";
+      setError(errorMessage);
+
+      toast.error("Delete Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const appointmentDate = new Date(appointment.date).toLocaleDateString(
+    "en-US",
+    {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }
+  );
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            <span>Appointment Details</span>
+            <div className="flex items-center gap-2">
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(!isEditing)}
+                  disabled={loading}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </DialogTitle>
+          <DialogDescription>
+            {appointmentDate} - Slot {appointment.slotNumber}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isPastAppointment() && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              This appointment is in the past and cannot be modified.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Patient</Label>
+              <div className="text-sm">
+                <div className="font-medium">
+                  {userRole === "client" &&
+                  appointment.clientId !== currentUserId
+                    ? "*** ***"
+                    : appointment.clientName}
+                </div>
+                <div className="text-muted-foreground">
+                  {userRole === "client" &&
+                  appointment.clientId !== currentUserId
+                    ? appointment.clientXNumber.substring(0, 4) + "**/**"
+                    : appointment.clientXNumber}
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label>Doctor</Label>
+              <div className="text-sm font-medium">
+                {appointment.doctorName}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Label>Department</Label>
+            <div className="text-sm font-medium">
+              {appointment.departmentName}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Status</Label>
+              {userRole === "admin" && statusChanged && !isEditing && (
+                <Button
+                  size="sm"
+                  onClick={handleQuickSave}
+                  disabled={loading}
+                  className="h-7"
+                >
+                  {loading ? "Saving..." : "Save Status"}
+                </Button>
+              )}
+            </div>
+            {isEditing || userRole === "admin" ? (
+              <Select value={status} onValueChange={handleStatusChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: option.color }}
+                        />
+                        {option.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div>
+                <Badge
+                  style={{
+                    backgroundColor: appointment.statusColor,
+                    color: "white",
+                  }}
+                >
+                  {appointment.status.replace("_", " ")}
+                </Badge>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <Label>Notes</Label>
+            {isEditing ? (
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add notes about this appointment..."
+                rows={3}
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground min-h-[60px] p-2 border rounded">
+                {userRole === "client" && appointment.clientId !== currentUserId
+                  ? "***"
+                  : appointment.notes || "No notes"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            {isEditing ? "Cancel" : "Close"}
+          </Button>
+          {isEditing && (
+            <Button onClick={handleSave} disabled={loading}>
+              {loading ? "Saving..." : "Save Changes"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

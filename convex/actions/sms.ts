@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * SMS Service Actions
  * 

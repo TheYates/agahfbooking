@@ -316,6 +316,229 @@ export const getAvailableSlots = query({
 
 // ============= DASHBOARD STATS =============
 
+/**
+ * Get dashboard statistics for a specific client
+ * Replaces /api/dashboard/stats?clientId=X
+ */
+export const getClientDashboardStats = query({
+  args: {
+    clientId: v.id("clients"),
+  },
+  handler: async (ctx, args) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split("T")[0];
+
+    // Get first day of current month
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const firstDayStr = firstDayOfMonth.toISOString().split("T")[0];
+
+    // Get all appointments for this client
+    const allAppointments = await ctx.db
+      .query("appointments")
+      .withIndex("by_client", (q) => q.eq("client_id", args.clientId))
+      .collect();
+
+    // Filter appointments for current month
+    const monthAppointments = allAppointments.filter(
+      (apt) => apt.appointment_date >= firstDayStr
+    );
+
+    // Count upcoming appointments (from today onwards)
+    const upcomingAppointments = allAppointments.filter(
+      (apt) =>
+        apt.appointment_date >= todayStr &&
+        apt.status !== "cancelled" &&
+        apt.status !== "completed" &&
+        apt.status !== "no_show"
+    );
+
+    // Count completed appointments this month
+    const completedAppointments = monthAppointments.filter(
+      (apt) => apt.status === "completed"
+    );
+
+    // Find next appointment
+    const nextAppointment = upcomingAppointments
+      .sort((a, b) => {
+        if (a.appointment_date === b.appointment_date) {
+          return a.slot_number - b.slot_number;
+        }
+        return a.appointment_date.localeCompare(b.appointment_date);
+      })[0];
+
+    // Calculate days until next appointment
+    let daysUntilNext = null;
+    if (nextAppointment) {
+      const nextDate = new Date(nextAppointment.appointment_date);
+      daysUntilNext = Math.ceil(
+        (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+    }
+
+    // Get recent appointments (last 5)
+    const recentAppointments = allAppointments
+      .sort((a, b) => {
+        if (a.appointment_date === b.appointment_date) {
+          return b.slot_number - a.slot_number;
+        }
+        return b.appointment_date.localeCompare(a.appointment_date);
+      })
+      .slice(0, 5);
+
+    // Fetch department and doctor details for recent appointments
+    const recentWithDetails = await Promise.all(
+      recentAppointments.map(async (apt) => {
+        const [department, doctor] = await Promise.all([
+          ctx.db.get(apt.department_id),
+          apt.doctor_id ? ctx.db.get(apt.doctor_id) : null,
+        ]);
+
+        return {
+          id: apt._id,
+          date: apt.appointment_date,
+          slotNumber: apt.slot_number,
+          status: apt.status,
+          doctorName: doctor?.name || "",
+          departmentName: department?.name || "",
+          departmentColor: department?.color || "#3B82F6",
+        };
+      })
+    );
+
+    // Calculate available slots for the week (rough estimate)
+    // Get all active departments
+    const departments = await ctx.db
+      .query("departments")
+      .filter((q) => q.eq(q.field("is_active"), true))
+      .collect();
+
+    const totalSlotsPerDay = departments.reduce(
+      (sum, dept) => sum + dept.slots_per_day,
+      0
+    );
+    const availableSlots = totalSlotsPerDay * 5; // Rough estimate for 5 weekdays
+
+    return {
+      upcomingAppointments: upcomingAppointments.length,
+      totalAppointments: monthAppointments.length,
+      completedAppointments: completedAppointments.length,
+      availableSlots,
+      daysUntilNext,
+      recentAppointments: recentWithDetails,
+    };
+  },
+});
+
+/**
+ * Get dashboard statistics for staff users (system-wide stats)
+ * Replaces /api/dashboard/staff-stats
+ */
+export const getStaffDashboardStats = query({
+  args: {},
+  handler: async (ctx, args) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split("T")[0];
+
+    // Get first day of current month
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const firstDayStr = firstDayOfMonth.toISOString().split("T")[0];
+
+    // Get end of current week (7 days from now)
+    const endOfWeek = new Date(today);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
+
+    // Get all appointments
+    const allAppointments = await ctx.db.query("appointments").collect();
+
+    // Filter for different time periods
+    const todayAppointments = allAppointments.filter(
+      (apt) => apt.appointment_date === todayStr
+    );
+
+    const weekAppointments = allAppointments.filter(
+      (apt) =>
+        apt.appointment_date >= todayStr &&
+        apt.appointment_date <= endOfWeekStr &&
+        apt.status !== "cancelled" &&
+        apt.status !== "completed" &&
+        apt.status !== "no_show"
+    );
+
+    const monthAppointments = allAppointments.filter(
+      (apt) => apt.appointment_date >= firstDayStr
+    );
+
+    // Count completed today
+    const completedToday = todayAppointments.filter(
+      (apt) => apt.status === "completed"
+    );
+
+    // Get recent appointments (last 5 for today/upcoming)
+    const recentAppointments = allAppointments
+      .filter((apt) => apt.appointment_date >= todayStr)
+      .sort((a, b) => {
+        if (a.appointment_date === b.appointment_date) {
+          return a.slot_number - b.slot_number;
+        }
+        return a.appointment_date.localeCompare(b.appointment_date);
+      })
+      .slice(0, 5);
+
+    // Fetch details for recent appointments
+    const recentWithDetails = await Promise.all(
+      recentAppointments.map(async (apt) => {
+        const [client, department, doctor] = await Promise.all([
+          ctx.db.get(apt.client_id),
+          ctx.db.get(apt.department_id),
+          apt.doctor_id ? ctx.db.get(apt.doctor_id) : null,
+        ]);
+
+        return {
+          id: apt._id,
+          date: apt.appointment_date,
+          slotNumber: apt.slot_number,
+          status: apt.status,
+          doctorName: doctor?.name || "",
+          departmentName: department?.name || "",
+          departmentColor: department?.color || "#3B82F6",
+          clientName: client?.name || "",
+          clientXNumber: client?.x_number || "",
+        };
+      })
+    );
+
+    // Calculate available slots for today
+    const departments = await ctx.db
+      .query("departments")
+      .filter((q) => q.eq(q.field("is_active"), true))
+      .collect();
+
+    const totalSlotsToday = departments.reduce(
+      (sum, dept) => sum + dept.slots_per_day,
+      0
+    );
+    const bookedToday = todayAppointments.filter(
+      (apt) => apt.status !== "cancelled"
+    ).length;
+    const availableSlots = totalSlotsToday - bookedToday;
+
+    return {
+      upcomingAppointments: weekAppointments.length,
+      totalAppointments: monthAppointments.length,
+      completedAppointments: completedToday.length,
+      availableSlots: Math.max(0, availableSlots),
+      daysUntilNext: null,
+      recentAppointments: recentWithDetails,
+    };
+  },
+});
+
+/**
+ * Legacy function - keeping for backward compatibility
+ */
 export const getDashboardStats = query({
   args: {
     startDate: v.optional(v.string()),
@@ -413,5 +636,60 @@ export const universalSearch = query({
       .map((d) => ({ type: "doctor" as const, data: d }));
 
     return [...clientResults, ...departmentResults, ...doctorResults];
+  },
+});
+
+// ============= CLIENT APPOINTMENTS QUERIES =============
+
+export const getClientAppointments = query({
+  args: { 
+    clientId: v.id("clients"),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 1000;
+    const offset = args.offset || 0;
+
+    // Get all appointments for the client
+    const allAppointments = await ctx.db
+      .query("appointments")
+      .withIndex("by_client", (q) => q.eq("client_id", args.clientId))
+      .collect();
+
+    // Sort by date descending, then by slot number
+    const sortedAppointments = allAppointments.sort((a, b) => {
+      const dateCompare = b.appointment_date.localeCompare(a.appointment_date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.slot_number - b.slot_number;
+    });
+
+    // Apply pagination
+    const paginatedAppointments = sortedAppointments.slice(offset, offset + limit);
+
+    // Enrich with related data
+    const enrichedAppointments = await Promise.all(
+      paginatedAppointments.map(async (appointment) => {
+        const [client, department, doctor] = await Promise.all([
+          ctx.db.get(appointment.client_id),
+          ctx.db.get(appointment.department_id),
+          appointment.doctor_id ? ctx.db.get(appointment.doctor_id) : null,
+        ]);
+
+        return {
+          ...appointment,
+          clientName: client?.name || "Unknown",
+          clientXNumber: client?.x_number || "N/A",
+          departmentName: department?.name || "Unknown",
+          departmentColor: department?.color || "#3B82F6",
+          doctorName: doctor?.name || "Dr. Smith",
+        };
+      })
+    );
+
+    return {
+      appointments: enrichedAppointments,
+      total: allAppointments.length,
+    };
   },
 });

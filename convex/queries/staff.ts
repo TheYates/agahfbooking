@@ -12,7 +12,7 @@ export const findByUsername = query({
   args: { username: v.string() },
   handler: async (ctx, { username }) => {
     return await ctx.db
-      .query("staff_users")
+      .query("users")
       .filter((q) =>
         q.or(
           q.eq(q.field("employee_id"), username),
@@ -25,7 +25,7 @@ export const findByUsername = query({
 
 // Get staff user by ID
 export const getById = query({
-  args: { staffId: v.id("staff_users") },
+  args: { staffId: v.id("users") },
   handler: async (ctx, { staffId }) => {
     return await ctx.db.get(staffId);
   },
@@ -36,7 +36,7 @@ export const getAllActive = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db
-      .query("staff_users")
+      .query("users")
       .filter((q) => q.eq(q.field("is_active"), true))
       .collect();
   },

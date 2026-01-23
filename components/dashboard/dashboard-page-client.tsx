@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardClient } from "@/components/dashboard-client";
-import { MobileDashboardClient } from "@/components/dashboard/mobile-dashboard-client";
+import { DashboardClientConvex } from "@/components/dashboard/dashboard-client-convex";
+import { MobileDashboardClientConvex } from "@/components/dashboard/mobile-dashboard-client-convex";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
 
@@ -31,14 +31,14 @@ export function DashboardPageClient({ user }: DashboardPageClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* Desktop Dashboard */}
+      {/* Desktop Dashboard - Using Convex */}
       <div className="hidden md:block">
-        <DashboardClient user={user} />
+        <DashboardClientConvex user={user} />
       </div>
 
-      {/* Mobile Dashboard */}
+      {/* Mobile Dashboard - Using Convex */}
       <div className="md:hidden">
-        <MobileDashboardClient
+        <MobileDashboardClientConvex
           key={refreshKey}
           user={user}
           onBookingClick={handleBookingClick}

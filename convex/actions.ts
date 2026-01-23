@@ -18,9 +18,9 @@ export const sendSMS = action({
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    const hubtelClientId = process.env.HUBTEL_CLIENT_ID;
-    const hubtelClientSecret = process.env.HUBTEL_CLIENT_SECRET;
-    const hubtelSenderId = process.env.HUBTEL_SENDER_ID || "AGAHF";
+    const hubtelClientId = process.env.HUBTEL_CLIENT_ID ?? "";
+    const hubtelClientSecret = process.env.HUBTEL_CLIENT_SECRET ?? "";
+    const hubtelSenderId = process.env.HUBTEL_SENDER_ID ?? "AGAHF";
 
     if (!hubtelClientId || !hubtelClientSecret) {
       console.warn("Hubtel credentials not configured, SMS not sent");

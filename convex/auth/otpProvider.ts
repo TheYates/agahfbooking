@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * OTP Provider for Client Authentication
  * 

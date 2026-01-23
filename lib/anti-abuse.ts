@@ -125,7 +125,8 @@ export class AntiAbuseService {
       this.settings = defaultSettings;
     }
 
-    return this.settings;
+    // Ensure we always return a valid settings object
+    return this.settings || defaultSettings;
   }
 
   // Clear cached settings (call after updating settings)

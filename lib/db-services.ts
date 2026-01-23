@@ -706,34 +706,8 @@ export class AppointmentService {
     const dayName = dayNames[dayOfWeek];
 
     return workingDays.includes(dayName);
-  }
-
-  static async getByClientAndDateRange(
-    clientId: number,
-    startDate: string,
-    endDate: string
-  ): Promise<Appointment[]> {
-    const result = await query(
-      `
-      SELECT
-        a.*,
-        c.name as client_name,
-        c.x_number as client_x_number,
-        d.name as department_name,
-        COALESCE(d.color, '#3B82F6') as department_color,
-        COALESCE(doc.name, 'Dr. Smith') as doctor_name
-      FROM appointments a
-      LEFT JOIN clients c ON a.client_id = c.id
-      LEFT JOIN departments d ON a.department_id = d.id
-      LEFT JOIN doctors doc ON a.doctor_id = doc.id
-      WHERE a.client_id = $1 AND a.appointment_date BETWEEN $2 AND $3
-      ORDER BY a.appointment_date ASC, a.slot_number ASC
-    `,
-      [clientId, startDate, endDate]
-    );
-    return result.rows;
-  }
-}
+   }
+ }
 
 // System Settings Services
 export class SystemSettingsService {

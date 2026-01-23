@@ -2,32 +2,46 @@
 // Expected performance: 1-5ms (vs 50-200ms previous) = 10-200x faster!
 
 import { NextResponse } from "next/server";
-import { DepartmentService } from "@/lib/db-services";
 const { MemoryCache } = require("@/lib/memory-cache.js");
+const { ConvexHttpClient } = require("convex/browser");
+const { api } = require("@/convex/_generated/api");
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
-  
+
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
 
     // 🚀 Smart cache key based on whether we need availability data
     const cacheKey = date ? `departments_with_availability_${date}` : 'departments_all';
-    
+
     const departments = await MemoryCache.get(
       cacheKey,
       async () => {
+        // Use Convex instead of PostgreSQL
+        const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+        if (!convexUrl) {
+          throw new Error("Convex URL not configured");
+        }
+
+        const convexClient = new ConvexHttpClient(convexUrl);
+
         let departmentData;
-        
+
         if (date) {
           // Get departments with availability for specific date
-          departmentData = await DepartmentService.getDepartmentsWithAvailability(date);
+          // For now, get all departments and we'll enhance this later
+          departmentData = await convexClient.query(api.queries.getDepartments, {
+            isActive: true
+          });
         } else {
           // Get all active departments (most common case)
-          departmentData = await DepartmentService.getAll();
+          departmentData = await convexClient.query(api.queries.getDepartments, {
+            isActive: true
+          });
         }
-        
+
         return departmentData;
       },
       // 🎯 Cache strategy: departments rarely change, availability changes more frequently
@@ -89,7 +103,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const department = await DepartmentService.create({
+    // Use Convex instead of PostgreSQL
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (!convexUrl) {
+      throw new Error("Convex URL not configured");
+    }
+
+    const convexClient = new ConvexHttpClient(convexUrl);
+
+    const department = await convexClient.mutation(api.mutations.createDepartment, {
       name,
       description: body.description,
       slots_per_day: body.slots_per_day,

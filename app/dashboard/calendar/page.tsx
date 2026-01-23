@@ -1,6 +1,6 @@
 import { requireAuth } from "@/lib/auth";
-// 🚀 Import TanStack-optimized calendar components
-import { CalendarViewTanstack as CalendarView } from "@/components/calendar/calendar-view-tanstack";
+// Calendar now uses Convex backend
+import { CalendarViewConvex as CalendarView } from "@/components/calendar/calendar-view-convex";
 import { MobileCalendarClientTanstack as MobileCalendarClient } from "@/components/calendar/mobile-calendar-client-tanstack";
 
 export default async function CalendarPage() {
@@ -8,7 +8,7 @@ export default async function CalendarPage() {
 
   return (
     <>
-      {/* Desktop View - TanStack Optimized */}
+      {/* Desktop View - Convex Optimized */}
       <div className="hidden md:block space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Calendar</h1>
@@ -22,7 +22,7 @@ export default async function CalendarPage() {
         <CalendarView userRole={user.role} currentUserId={user.id} />
       </div>
 
-      {/* Mobile View - TanStack Optimized */}
+      {/* Mobile View - TanStack (can be migrated later) */}
       <div className="md:hidden">
         <MobileCalendarClient
           user={user}
