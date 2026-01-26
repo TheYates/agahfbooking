@@ -7,7 +7,7 @@ import { MobileBookingSheetConvex as MobileBookingSheet } from "@/components/das
 import type { User } from "@/lib/types";
 
 interface BookingContextType {
-  openBooking: (departmentId?: number) => void;
+  openBooking: (departmentId?: string) => void;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -28,10 +28,10 @@ interface MobileLayoutProps {
 export function MobileLayout({ children, user }: MobileLayoutProps) {
   const [isBookingSheetOpen, setIsBookingSheetOpen] = useState(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<
-    number | undefined
+    string | undefined
   >();
 
-  const handleBookingClick = (departmentId?: number) => {
+  const handleBookingClick = (departmentId?: string) => {
     setSelectedDepartmentId(departmentId);
     setIsBookingSheetOpen(true);
   };

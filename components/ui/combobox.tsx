@@ -76,6 +76,8 @@ export function Combobox({
         align="start"
         sideOffset={4}
         style={{ width: "var(--radix-popover-trigger-width)" }}
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
       >
         <Command shouldFilter={!onSearchChange}>
           <CommandInput
@@ -83,7 +85,10 @@ export function Combobox({
             value={search}
             onValueChange={handleSearchChange}
           />
-          <CommandList>
+          <CommandList
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (

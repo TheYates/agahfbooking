@@ -10,7 +10,6 @@ import { ViewSwitcher } from "./view-switcher";
 import { AppointmentModalConvex as AppointmentModal } from "./appointment-modal-convex";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DayAppointmentsPopover } from "./day-appointments-popover";
-import { AppointmentAlerts } from "./appointment-alerts";
 import {
   isValidBookingDate,
   isWorkingDayForAnyDepartment,
@@ -980,13 +979,6 @@ export function CalendarViewConvex({ userRole, currentUserId }: CalendarViewConv
 
   return (
     <div className="space-y-6">
-      {/* Appointment Alerts - Shows toast notifications for upcoming appointments */}
-      <AppointmentAlerts
-        userRole={userRole}
-        currentUserId={currentUserId}
-        enabled={true}
-      />
-
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
       {view === "day" && renderDayView()}

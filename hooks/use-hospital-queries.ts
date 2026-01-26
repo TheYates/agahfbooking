@@ -227,20 +227,20 @@ const fetchWeekSchedule = async (
 const fetchDashboardStats = async (clientId: number): Promise<DashboardStats> => {
   const response = await fetch(`/api/dashboard/stats?clientId=${clientId}`)
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-  
+
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Failed to fetch stats')
-  
+
   return data.data
 }
 
 const fetchStaffDashboardStats = async (): Promise<DashboardStats> => {
   const response = await fetch('/api/dashboard/staff-stats')
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-  
+
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Failed to fetch staff stats')
-  
+
   return data.data
 }
 
@@ -253,10 +253,10 @@ const fetchClientAppointmentsPaginated = async (
     `/api/appointments/client?clientId=${clientId}&page=${page}&limit=${limit}`
   )
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-  
+
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Failed to fetch appointments')
-  
+
   return {
     data: data.data || [],
     pagination: data.pagination || {
@@ -275,20 +275,20 @@ const fetchAppointmentsList = async (
   limit: number = 20
 ): Promise<PaginatedDesktopAppointments> => {
   const params = new URLSearchParams()
-  
+
   if (filters.search) params.append('search', filters.search)
   if (filters.status && filters.status !== 'all') params.append('status', filters.status)
   if (filters.dateFilter && filters.dateFilter !== 'all') params.append('dateFilter', filters.dateFilter)
-  
+
   params.append('page', page.toString())
   params.append('limit', limit.toString())
-  
+
   const response = await fetch(`/api/appointments/list?${params.toString()}`)
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-  
+
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Failed to fetch appointments')
-  
+
   return {
     data: data.data || [],
     pagination: data.pagination || {
@@ -305,7 +305,7 @@ const deleteAppointment = async (appointmentId: number) => {
   const response = await fetch(`/api/appointments?id=${appointmentId}`, {
     method: 'DELETE',
   })
-  
+
   if (!response.ok) throw new Error('Failed to delete appointment')
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Delete failed')
@@ -313,22 +313,30 @@ const deleteAppointment = async (appointmentId: number) => {
 }
 
 const fetchCalendarEndpoint = async (
-  userRole: string, 
+  userRole: string,
   userId: number | string | undefined
 ): Promise<CalendarEndpoint> => {
-  // Don't pass invalid userIds
-  const validUserId = userId !== undefined && userId !== null && 
-    userId !== 'NaN' && userId !== 'undefined' && 
-    !(typeof userId === 'number' && isNaN(userId)) ? userId : ''
-  
+  // Validate userId before making request
+  // userId can be a number (legacy) or a Convex string ID
+  const isValidUserId = userId !== undefined && userId !== null &&
+    userId !== 'NaN' && userId !== 'undefined' && userId !== 'null' &&
+    (typeof userId === 'string' ? userId.trim().length > 0 : !isNaN(userId))
+
+  if (!isValidUserId) {
+    throw new Error('Invalid user ID for calendar endpoint')
+  }
+
   const response = await fetch(
-    `/api/calendar/endpoint?userRole=${userRole}&currentUserId=${validUserId}`
+    `/api/calendar/endpoint?userRole=${userRole}&currentUserId=${userId}`
   )
-  if (!response.ok) throw new Error('Failed to get calendar endpoint')
-  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || 'Failed to get calendar endpoint')
+  }
+
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Failed to get calendar endpoint')
-  
+
   return data.data
 }
 
@@ -340,26 +348,26 @@ const fetchCalendarAppointments = async (
 ): Promise<CalendarAppointment[]> => {
   try {
     // Validate userId before making the request
-    if (userId === undefined || userId === null || userId === 'NaN' || 
-        (typeof userId === 'number' && isNaN(userId))) {
+    if (userId === undefined || userId === null || userId === 'NaN' ||
+      (typeof userId === 'number' && isNaN(userId))) {
       console.warn('Invalid userId for calendar appointments, skipping fetch')
       return []
     }
-    
+
     // First get the appropriate endpoint
     const endpointData = await fetchCalendarEndpoint(userRole, userId)
-    
+
     // Construct the API URL with date range
     const url = new URL(endpointData.endpoint, window.location.origin)
     url.searchParams.set('startDate', startDate)
     url.searchParams.set('endDate', endDate)
-    
+
     const response = await fetch(url.toString())
     if (!response.ok) throw new Error('Failed to fetch calendar appointments')
-    
+
     const data = await response.json()
     if (!data.success) throw new Error(data.error || 'Failed to fetch appointments')
-    
+
     // Transform the data to match the expected interface
     const transformedAppointments = data.data.map((appointment: any) => ({
       id: appointment.id || appointment._id,
@@ -370,15 +378,15 @@ const fetchCalendarAppointments = async (
       doctorName: appointment.doctor_name || appointment.doctorName || 'Unassigned',
       departmentId: appointment.department_id || appointment.departmentId,
       departmentName: appointment.department_name || appointment.departmentName,
-      date: appointment.appointment_date 
-        ? appointment.appointment_date.split('T')[0] 
+      date: appointment.appointment_date
+        ? appointment.appointment_date.split('T')[0]
         : appointment.date,
       slotNumber: appointment.slot_number || appointment.slotNumber,
       status: appointment.status,
       statusColor: getStatusColor(appointment.status),
       notes: appointment.notes,
     }))
-    
+
     return transformedAppointments
   } catch (error) {
     throw error
@@ -388,10 +396,10 @@ const fetchCalendarAppointments = async (
 const fetchDoctors = async (): Promise<Doctor[]> => {
   const response = await fetch('/api/doctors')
   if (!response.ok) throw new Error('Failed to fetch doctors')
-  
+
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Failed to fetch doctors')
-  
+
   // Transform the data to match the expected interface
   const transformedDoctors = data.data.map((doctor: any) => ({
     id: doctor.id,
@@ -399,7 +407,7 @@ const fetchDoctors = async (): Promise<Doctor[]> => {
     specialization: doctor.department_name || 'General',
     departmentId: doctor.department_id,
   }))
-  
+
   return transformedDoctors
 }
 
@@ -407,7 +415,7 @@ const fetchDoctors = async (): Promise<Doctor[]> => {
 const getStatusColor = (status: string): string => {
   const statusColors: { [key: string]: string } = {
     booked: '#3B82F6',
-    arrived: '#10B981', 
+    arrived: '#10B981',
     waiting: '#F59E0B',
     completed: '#059669',
     no_show: '#EF4444',
@@ -428,7 +436,7 @@ const bookAppointment = async (bookingData: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(bookingData),
   })
-  
+
   if (!response.ok) throw new Error('Failed to book appointment')
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Booking failed')
@@ -446,7 +454,7 @@ const cancelAppointment = async (cancelData: {
     `/api/appointments/cancel?departmentId=${departmentId}&date=${date}&slotNumber=${slotNumber}&clientId=${clientId}`,
     { method: 'DELETE' }
   )
-  
+
   if (!response.ok) throw new Error('Failed to cancel appointment')
   const data = await response.json()
   if (!data.success) throw new Error(data.error || 'Cancellation failed')
@@ -519,35 +527,35 @@ export const useSchedule = (
 
 export const useBookAppointment = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: bookAppointment,
     onMutate: async (newBooking) => {
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ 
-        queryKey: queryKeys.schedule.department(newBooking.departmentId) 
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.schedule.department(newBooking.departmentId)
       })
-      
+
       // Get current schedule data
       const currentWeekOffset = 0 // You may need to pass this as parameter
       const queryKey = queryKeys.schedule.department(newBooking.departmentId, currentWeekOffset)
       const previousSchedule = queryClient.getQueryData(queryKey)
-      
+
       // Optimistically update the schedule
       queryClient.setQueryData(queryKey, (old: DaySchedule[] | undefined) => {
         if (!old) return old
-        
+
         return old.map(day => {
           const bookingDate = new Date(newBooking.date).toISOString().split('T')[0]
           if (day.fullDate === bookingDate) {
             return {
               ...day,
-              slots: day.slots.map(slot => 
-                slot.time === `Slot ${newBooking.slotNumber}` 
+              slots: day.slots.map(slot =>
+                slot.time === `Slot ${newBooking.slotNumber}`
                   ? { ...slot, available: false, clientId: newBooking.clientId }
                   : slot
               ),
-              hasAvailability: day.slots.some(slot => 
+              hasAvailability: day.slots.some(slot =>
                 slot.time !== `Slot ${newBooking.slotNumber}` && slot.available
               )
             }
@@ -555,7 +563,7 @@ export const useBookAppointment = () => {
           return day
         })
       })
-      
+
       return { previousSchedule, queryKey }
     },
     onError: (err, newBooking, context) => {
@@ -563,20 +571,20 @@ export const useBookAppointment = () => {
       if (context?.previousSchedule) {
         queryClient.setQueryData(context.queryKey, context.previousSchedule)
       }
-      
+
       toast.error('Booking Failed', {
         description: err.message || 'Failed to book appointment. Please try again.',
       })
     },
     onSuccess: (data, variables) => {
       // Invalidate and refetch related queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.schedule.department(variables.departmentId) 
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.schedule.department(variables.departmentId)
       })
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.appointments.byClient(variables.clientId) 
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.appointments.byClient(variables.clientId)
       })
-      
+
       toast.success('Booking Successful! 🎉', {
         description: 'Your appointment has been booked successfully.',
         duration: 5000,
@@ -585,32 +593,33 @@ export const useBookAppointment = () => {
   })
 }
 
+
 export const useCancelAppointment = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: cancelAppointment,
     onMutate: async (cancelData) => {
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ 
-        queryKey: queryKeys.schedule.department(cancelData.departmentId) 
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.schedule.department(cancelData.departmentId)
       })
-      
+
       // Get current schedule data
       const currentWeekOffset = 0 // You may need to pass this as parameter
       const queryKey = queryKeys.schedule.department(cancelData.departmentId, currentWeekOffset)
       const previousSchedule = queryClient.getQueryData(queryKey)
-      
+
       // Optimistically update the schedule
       queryClient.setQueryData(queryKey, (old: DaySchedule[] | undefined) => {
         if (!old) return old
-        
+
         return old.map(day => {
           if (day.fullDate === cancelData.date) {
             return {
               ...day,
-              slots: day.slots.map(slot => 
-                slot.time === `Slot ${cancelData.slotNumber}` 
+              slots: day.slots.map(slot =>
+                slot.time === `Slot ${cancelData.slotNumber}`
                   ? { ...slot, available: true, clientId: undefined, clientXNumber: undefined }
                   : slot
               ),
@@ -620,7 +629,7 @@ export const useCancelAppointment = () => {
           return day
         })
       })
-      
+
       return { previousSchedule, queryKey }
     },
     onError: (err, cancelData, context) => {
@@ -628,23 +637,23 @@ export const useCancelAppointment = () => {
       if (context?.previousSchedule) {
         queryClient.setQueryData(context.queryKey, context.previousSchedule)
       }
-      
+
       toast.error('Cancellation Failed', {
         description: err.message || 'Failed to cancel appointment. Please try again.',
       })
     },
     onSuccess: (data, variables) => {
       // Invalidate and refetch related queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.schedule.department(variables.departmentId) 
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.schedule.department(variables.departmentId)
       })
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.appointments.byClient(variables.clientId) 
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.appointments.byClient(variables.clientId)
       })
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.dashboardStats.byClient(variables.clientId) 
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboardStats.byClient(variables.clientId)
       })
-      
+
       toast.success('Appointment Cancelled! ✅', {
         description: 'Your appointment has been cancelled successfully.',
         duration: 4000,
@@ -686,16 +695,16 @@ export const useUnifiedDashboardStats = (
   enabled: boolean = true
 ) => {
   const isClient = userRole === 'client'
-  
+
   const clientStats = useDashboardStats(
-    isClient ? userId : undefined, 
+    isClient ? userId : undefined,
     enabled && isClient
   )
-  
+
   const staffStats = useStaffDashboardStats(
     enabled && !isClient
   )
-  
+
   return isClient ? clientStats : staffStats
 }
 
@@ -712,7 +721,7 @@ export const useClientAppointmentsPaginated = (
     enabled: enabled && !!clientId,
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 5 * 60 * 1000, // 5 minutes
-    keepPreviousData: true, // Keep previous page data while loading next page
+    placeholderData: (previousData) => previousData, // Keep previous page data while loading next page
   })
 }
 
@@ -729,7 +738,7 @@ export const useAppointmentsList = (
     enabled,
     staleTime: 30 * 1000, // 30 seconds - appointments change frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
-    keepPreviousData: true, // Smooth pagination experience
+    placeholderData: (previousData) => previousData, // Smooth pagination experience
     refetchInterval: 60 * 1000, // Background refresh every minute
     refetchIntervalInBackground: true,
   })
@@ -755,9 +764,9 @@ export const useCalendarAppointments = (
   enabled: boolean = true
 ) => {
   // Validate userId - must be a valid number or non-empty string
-  const isValidUserId = userId !== undefined && userId !== null && 
+  const isValidUserId = userId !== undefined && userId !== null &&
     (typeof userId === 'string' ? userId.length > 0 && userId !== 'NaN' && userId !== 'undefined' : !isNaN(userId))
-  
+
   return useQuery({
     queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
     queryFn: () => fetchCalendarAppointments(userRole, userId, startDate, endDate),
@@ -776,7 +785,7 @@ export const useCalendarEndpoint = (
   enabled: boolean = true
 ) => {
   // Validate userId
-  const isValidUserId = userId !== undefined && userId !== null && 
+  const isValidUserId = userId !== undefined && userId !== null &&
     (typeof userId === 'string' ? userId.length > 0 && userId !== 'NaN' && userId !== 'undefined' : !isNaN(userId))
 
   return useQuery({
@@ -822,11 +831,11 @@ export const useCalendarData = (
   }, [view, currentDate])
 
   // Fetch departments (cached)
-  const departmentsQuery = useDepartments(enabled)
-  
+  const departmentsQuery = useDepartments()
+
   // Fetch doctors (cached)
   const doctorsQuery = useDoctors(enabled)
-  
+
   // Fetch appointments (real-time)
   const appointmentsQuery = useCalendarAppointments(
     userRole,
@@ -857,31 +866,31 @@ export const useCalendarData = (
 // Delete Appointment Hook
 export const useDeleteAppointment = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: deleteAppointment,
     onMutate: async (appointmentId) => {
       // Cancel outgoing refetches for appointments list queries
-      await queryClient.cancelQueries({ 
-        queryKey: ['appointments', 'list'] 
+      await queryClient.cancelQueries({
+        queryKey: ['appointments', 'list']
       })
-      
+
       // Get all current appointments list queries
       const queryCache = queryClient.getQueryCache()
-      const appointmentQueries = queryCache.findAll(['appointments', 'list'])
+      const appointmentQueries = queryCache.findAll({ queryKey: ['appointments', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
-      
+
       // Optimistically remove appointment from all list queries
       appointmentQueries.forEach((query) => {
         const queryKey = query.queryKey
         const previousData = queryClient.getQueryData(queryKey)
-        
+
         if (previousData) {
           previousQueries.push({ queryKey, data: previousData })
-          
+
           queryClient.setQueryData(queryKey, (old: PaginatedDesktopAppointments | undefined) => {
             if (!old) return old
-            
+
             return {
               ...old,
               data: old.data.filter(apt => apt.id !== appointmentId),
@@ -893,7 +902,7 @@ export const useDeleteAppointment = () => {
           })
         }
       })
-      
+
       return { previousQueries }
     },
     onError: (err, appointmentId, context) => {
@@ -903,20 +912,20 @@ export const useDeleteAppointment = () => {
           queryClient.setQueryData(queryKey, data)
         })
       }
-      
+
       toast.error('Delete Failed', {
         description: err.message || 'Failed to delete appointment. Please try again.',
       })
     },
     onSuccess: (data, variables) => {
       // Invalidate and refetch appointments list queries
-      queryClient.invalidateQueries({ 
-        queryKey: ['appointments', 'list'] 
+      queryClient.invalidateQueries({
+        queryKey: ['appointments', 'list']
       })
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.dashboardStats.forStaff() 
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboardStats.forStaff()
       })
-      
+
       toast.success('Appointment Deleted! ✅', {
         description: 'The appointment has been successfully deleted.',
         duration: 4000,
@@ -1072,7 +1081,7 @@ export const useUpdateClient = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const clientQueries = queryCache.findAll(['clients', 'list'])
+      const clientQueries = queryCache.findAll({ queryKey: ['clients', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically update all client list queries
@@ -1141,7 +1150,7 @@ export const useDeleteClient = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const clientQueries = queryCache.findAll(['clients', 'list'])
+      const clientQueries = queryCache.findAll({ queryKey: ['clients', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically remove from all client list queries
@@ -1291,7 +1300,7 @@ export const useUpdateAppointmentStatus = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const appointmentQueries = queryCache.findAll(['appointments', 'list'])
+      const appointmentQueries = queryCache.findAll({ queryKey: ['appointments', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically update all appointment list queries
@@ -1454,7 +1463,7 @@ export const useUpdateUser = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const userQueries = queryCache.findAll(['users', 'list'])
+      const userQueries = queryCache.findAll({ queryKey: ['users', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically update all user list queries
@@ -1523,7 +1532,7 @@ export const useToggleUserActive = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const userQueries = queryCache.findAll(['users', 'list'])
+      const userQueries = queryCache.findAll({ queryKey: ['users', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically toggle active status in all user list queries
@@ -1594,7 +1603,7 @@ export const useDeleteUser = () => {
 
       // Snapshot previous data
       const queryCache = queryClient.getQueryCache()
-      const userQueries = queryCache.findAll(['users', 'list'])
+      const userQueries = queryCache.findAll({ queryKey: ['users', 'list'] })
       const previousQueries: Array<{ queryKey: any; data: any }> = []
 
       // Optimistically remove from all user list queries

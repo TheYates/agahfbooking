@@ -25,9 +25,9 @@ export const queryKeys = {
   // Clients - medium cache, search-based
   clients: {
     all: ['clients'] as const,
-    search: (searchTerm: string, userRole: string, userId?: number) => 
+    search: (searchTerm: string, userRole: string, userId?: number | string) => 
       ['clients', 'search', { searchTerm, userRole, userId }] as const,
-    byId: (id: number) => ['clients', id] as const,
+    byId: (id: number | string) => ['clients', id] as const,
   },
   
   // Schedule data - frequently updated, shorter cache
@@ -64,9 +64,9 @@ export const queryKeys = {
 
   // Calendar data - real-time scheduling
   calendar: {
-    appointments: (userRole: string, userId: number | undefined, startDate: string, endDate: string) =>
+    appointments: (userRole: string, userId: number | string | undefined, startDate: string, endDate: string) =>
       ['calendar', 'appointments', userRole, userId, startDate, endDate] as const,
-    endpoint: (userRole: string, userId: number | undefined) =>
+    endpoint: (userRole: string, userId: number | string | undefined) =>
       ['calendar', 'endpoint', userRole, userId] as const,
   },
 

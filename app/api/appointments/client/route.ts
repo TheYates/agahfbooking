@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    if (!clientId || clientId === "NaN" || clientId === "undefined" || clientId === "null") {
+    if (!clientId || clientId === "NaN" || clientId === "undefined" || clientId === "null" || clientId.trim() === "") {
       return NextResponse.json(
         {
           success: false,

@@ -1,4 +1,4 @@
-  "use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
@@ -319,7 +319,7 @@ export function QuickBookingDialogConvex({
 
   // Convex queries - This replaces ALL your useEffect hooks!
   const fetchedDepartments = useQuery(api.queries.getDepartments, { isActive: true });
-  
+
   // Query for client's own data when userRole is "client"
   const clientData = useQuery(
     api.queries.getClientById,
@@ -570,7 +570,7 @@ export function QuickBookingDialogConvex({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] h-[90vh] max-h-[90vh] overflow-hidden p-0 flex flex-col">
+        <DialogContent className="max-w-3xl w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] max-h-[85vh] overflow-hidden p-0 flex flex-col">
           <DialogHeader className="p-4 pb-2">
             <DialogTitle>Quick Booking</DialogTitle>
             <DialogDescription className="mb-4">
@@ -728,7 +728,7 @@ export function QuickBookingDialogConvex({
                         {/* TanStack Status Debug (development only) */}
                         {process.env.NODE_ENV === "development" && (
                           <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-                            Convex Status: {weekSchedule?.length || 0} days • 
+                            Convex Status: {weekSchedule?.length || 0} days •
                             Loading: {scheduleLoading ? 'Yes' : 'No'}
                           </div>
                         )}
@@ -773,14 +773,14 @@ export function QuickBookingDialogConvex({
                                       whileHover={
                                         shouldAnimate && slot.available
                                           ? {
-                                              scale: 1.05,
-                                              y: -2,
-                                              transition: {
-                                                type: "spring",
-                                                stiffness: 400,
-                                                damping: 25,
-                                              },
-                                            }
+                                            scale: 1.05,
+                                            y: -2,
+                                            transition: {
+                                              type: "spring",
+                                              stiffness: 400,
+                                              damping: 25,
+                                            },
+                                          }
                                           : {}
                                       }
                                       whileTap={
@@ -812,11 +812,9 @@ export function QuickBookingDialogConvex({
                                         isBooking ||
                                         isCancelling
                                       }
-                                      aria-label={`${
-                                        slot.available ? "Book" : "Occupied"
-                                      } time slot ${slot.time} on ${
-                                        day.dayName
-                                      }, ${day.date}`}
+                                      aria-label={`${slot.available ? "Book" : "Occupied"
+                                        } time slot ${slot.time} on ${day.dayName
+                                        }, ${day.date}`}
                                       className={cn(
                                         "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
                                         getSlotStyling(slot, day.fullDate)
@@ -859,8 +857,8 @@ export function QuickBookingDialogConvex({
                       {!selectedDepartment && !selectedClient
                         ? "Please select a department and client to view available time slots"
                         : !selectedDepartment
-                        ? "Please select a department to continue"
-                        : "Please select a client to continue"}
+                          ? "Please select a department to continue"
+                          : "Please select a client to continue"}
                     </p>
                   </motion.div>
                 )}
@@ -992,8 +990,8 @@ export function QuickBookingDialogConvex({
             >
               Keep Appointment
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={confirmCancelAppointment}
               disabled={isCancelling}
             >

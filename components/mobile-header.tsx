@@ -64,10 +64,10 @@ export function MobileHeader({ user }: MobileHeaderProps) {
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         {/* Left: Branding & Title */}
         <div className="flex items-center gap-3">
-          <motion.div 
+          <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="h-9 w-9 bg-primary/10 rounded-full flex items-center justify-center"
+            className="h-12 w-9  flex items-center justify-center"
           >
             <img
               src="/agahflogo.svg"
@@ -82,7 +82,7 @@ export function MobileHeader({ user }: MobileHeaderProps) {
           </motion.div>
           <div className="flex flex-col">
             <h1 className="text-lg font-bold tracking-tight leading-none text-foreground">{getPageTitle()}</h1>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">AGAHF Hospital</p>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">AGA HEALTH FOUNDATION</p>
           </div>
         </div>
 
@@ -98,7 +98,7 @@ export function MobileHeader({ user }: MobileHeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 ring-2 ring-primary/10">
                 <Avatar className="h-9 w-9">
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-700 text-white text-xs font-bold">
+                  <AvatarFallback className="bg-gradient-to-br from-green-500 to-green-700 text-white text-xs font-bold">
                     {getUserInitials(user.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -119,7 +119,7 @@ export function MobileHeader({ user }: MobileHeaderProps) {
                   </span>
                 </div>
               </div>
-              
+
               <DropdownMenuItem asChild className="cursor-pointer">
                 <button
                   onClick={() => router.push("/dashboard/profile")}
@@ -129,11 +129,11 @@ export function MobileHeader({ user }: MobileHeaderProps) {
                   Account Settings
                 </button>
               </DropdownMenuItem>
-              
+
               <DropdownMenuSeparator className="my-1" />
-              
-              <DropdownMenuItem 
-                onClick={handleLogout} 
+
+              <DropdownMenuItem
+                onClick={handleLogout}
                 className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/10"
               >
                 <LogOut className="h-4 w-4 mr-3" />

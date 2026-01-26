@@ -14,7 +14,7 @@ export function DashboardPageClient({ user }: DashboardPageClientProps) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Get booking function from context (only available on mobile within MobileLayout)
-  let openBooking: ((departmentId?: number) => void) | undefined;
+  let openBooking: ((departmentId?: string) => void) | undefined;
   try {
     const booking = useBooking();
     openBooking = booking.openBooking;
@@ -22,7 +22,7 @@ export function DashboardPageClient({ user }: DashboardPageClientProps) {
     // Not within MobileLayout context (e.g., on desktop), ignore
   }
 
-  const handleBookingClick = (departmentId?: number) => {
+  const handleBookingClick = (departmentId?: string) => {
     // Call the booking function from MobileLayout context if available
     openBooking?.(departmentId);
     // Also trigger a refresh of dashboard data

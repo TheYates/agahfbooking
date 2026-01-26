@@ -12,14 +12,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Clock, User, Building } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Calendar, Clock, User, Building, Search } from "lucide-react";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// 🚀 Import TanStack Query hooks
 import {
   useClientAppointmentsPaginated,
   useCancelAppointment,
 } from "@/hooks/use-hospital-queries";
+
+import { MobileAppointmentsList } from "./mobile-appointments-list";
 
 interface Appointment {
   id: number;
@@ -38,9 +42,8 @@ interface MyAppointmentsViewProps {
 }
 
 export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
-  const [filter, setFilter] = useState<
-    "all" | "upcoming" | "past" | "completed" | "cancelled"
-  >("all");
+  const [filter, setFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 🚀 TanStack Query: Replace manual fetch with optimized hook
   const {
@@ -57,7 +60,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
   const cancelMutation = useCancelAppointment();
 
   // Extract appointments with safe default
-  const appointments = appointmentsData?.data || [];
+  const appointments: Appointment[] = (appointmentsData as any)?.data || [];
   const error = queryError?.message || "";
 
   const getStatusColor = (status: string) => {
@@ -90,8 +93,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     if (!appointment) return;
 
     const confirmCancel = window.confirm(
-      `Are you sure you want to cancel your appointment with Dr. ${
-        appointment.doctorName
+      `Are you sure you want to cancel your appointment with Dr. ${appointment.doctorName
       } on ${new Date(appointment.date).toLocaleDateString()}?`
     );
 
@@ -111,248 +113,241 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Date/Status Filter
+    let matchesFilter = true;
     switch (filter) {
       case "upcoming":
-        return (
+        matchesFilter =
           appointmentDate >= today &&
           appointment.status !== "completed" &&
-          appointment.status !== "cancelled"
-        );
+          appointment.status !== "cancelled";
+        break;
       case "past":
-        return appointmentDate < today;
+        matchesFilter = appointmentDate < today;
+        break;
       case "completed":
-        return appointment.status === "completed";
+        matchesFilter = appointment.status === "completed";
+        break;
       case "cancelled":
-        return appointment.status === "cancelled";
+        matchesFilter = appointment.status === "cancelled";
+        break;
       default:
-        return true;
+        matchesFilter = true;
     }
+
+    // Search Filter
+    const query = searchQuery.toLowerCase();
+    const searchMatch =
+      appointment.doctorName.toLowerCase().includes(query) ||
+      appointment.departmentName.toLowerCase().includes(query) ||
+      (appointment.notes && appointment.notes.toLowerCase().includes(query));
+
+    return matchesFilter && searchMatch;
   });
+
+  const handleReschedule = (id: number) => {
+    toast.info("Rescheduling feature coming soon!");
+  };
 
   return (
     <div className="space-y-6">
       {/* Filter Buttons */}
-      <div className="flex gap-2 flex-wrap">
-        <Button
-          variant={filter === "all" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter("all")}
-        >
-          All Appointments
-        </Button>
-        <Button
-          variant={filter === "upcoming" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter("upcoming")}
-        >
-          Upcoming
-        </Button>
-        <Button
-          variant={filter === "past" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter("past")}
-        >
-          Past
-        </Button>
-        <Button
-          variant={filter === "completed" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter("completed")}
-        >
-          Completed
-        </Button>
-        <Button
-          variant={filter === "cancelled" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setFilter("cancelled")}
-        >
-          Cancelled
-        </Button>
+      {/* Mobile Filter & Search (Reference Style) */}
+      <div className="md:hidden space-y-3 mb-2">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            placeholder="Find appointments..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-12 pl-11 rounded-full border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm text-base"
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+          {["All", "Upcoming", "Past", "Completed", "Cancelled"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilter(tab.toLowerCase())}
+              className={cn(
+                "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap border shadow-sm transition-all",
+                filter === tab.toLowerCase()
+                  ? "bg-zinc-900 text-white border-zinc-900 dark:bg-white dark:text-zinc-900"
+                  : "bg-white text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Appointments Table */}
-      {loading ? (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[150px]">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Date
-                  </div>
-                </TableHead>
-                <TableHead className="w-[100px]">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Time
-                  </div>
-                </TableHead>
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <Building className="h-4 w-4" />
-                    Department
-                  </div>
-                </TableHead>
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Doctor
-                  </div>
-                </TableHead>
-                <TableHead className="w-[120px]">Status</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="w-[150px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Show 5 skeleton rows */}
-              {Array.from({ length: 5 }).map((_, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-32" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-28" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-5 w-20" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Skeleton className="h-8 w-16" />
-                      <Skeleton className="h-8 w-14" />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      {/* Desktop Filter & Search */}
+      <div className="hidden md:flex flex-row gap-4 items-center justify-between">
+        <Tabs defaultValue="all" value={filter} onValueChange={setFilter} className="w-auto">
+          <TabsList className="grid w-full grid-cols-5 md:w-auto">
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+            <TabsTrigger value="past">Past</TabsTrigger>
+            <TabsTrigger value="completed">Done</TabsTrigger>
+            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="relative w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search doctor or department..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
-      ) : error ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center text-red-600">
-            <p className="text-sm">Error: {error}</p>
+      </div>
+
+      {/* Mobile View */}
+      <div className="md:hidden">
+        <MobileAppointmentsList
+          appointments={filteredAppointments}
+          isLoading={loading}
+          onCancel={handleCancelAppointment}
+          onReschedule={handleReschedule}
+        />
+      </div>
+
+      {/* Desktop View */}
+      <div className="hidden md:block">
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-4 p-4 border rounded-lg">
+                <Skeleton className="h-10 w-10" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-3 w-1/4" />
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      ) : filteredAppointments.length === 0 ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center text-muted-foreground">
-            <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium mb-2">No appointments found</p>
-            <p className="text-sm">
-              {filter === "all"
-                ? "You don't have any appointments yet."
-                : `No ${filter} appointments found.`}
-            </p>
+        ) : error ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center text-red-600">
+              <p className="text-sm">Error: {error}</p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[150px]">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Date
+        ) : filteredAppointments.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">No appointments found</p>
+              <p className="text-sm">
+                Try adjusting your filters or search query.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            {/* Header Row */}
+            <div className="grid grid-cols-[2.5fr_1fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div>Title</div>
+              <div>Status</div>
+              <div>Doctor</div>
+              <div>Date</div>
+              <div>Actions</div>
+            </div>
+
+            {/* Appointment Groups */}
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {Object.entries(
+                filteredAppointments.reduce((groups, appointment) => {
+                  const date = new Date(appointment.date);
+                  const today = new Date();
+                  const yesterday = new Date();
+                  yesterday.setDate(yesterday.getDate() - 1);
+
+                  let groupKey = "Older";
+                  if (date.toDateString() === today.toDateString()) groupKey = "Today";
+                  else if (date.toDateString() === yesterday.toDateString()) groupKey = "Yesterday";
+                  else if (date > new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)) groupKey = "Last Week";
+                  else if (date > today) groupKey = "Upcoming";
+
+                  if (!groups[groupKey]) groups[groupKey] = [];
+                  groups[groupKey].push(appointment);
+                  return groups;
+                }, {} as Record<string, Appointment[]>)
+              ).sort((a, b) => { // Custom sort order
+                const order = ["Today", "Upcoming", "Yesterday", "Last Week", "Older"];
+                return order.indexOf(a[0]) - order.indexOf(b[0]);
+              }).map(([groupName, groupAppointments]) => (
+                <div key={groupName}>
+                  <div className="px-6 py-3 bg-zinc-50/30 dark:bg-zinc-900/30 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    {groupName}
                   </div>
-                </TableHead>
-                <TableHead className="w-[100px]">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Time
+                  <div>
+                    {groupAppointments.map((appointment) => (
+                      <div key={appointment.id} className="grid grid-cols-[2.5fr_1fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 items-center group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                        {/* Title Column */}
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center shrink-0">
+                            <Building className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
+                              Appointment w/ {appointment.doctorName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {appointment.departmentName} • Slot #{appointment.slotNumber}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Status Column */}
+                        <div className="flex items-center gap-2">
+                          <div className={`h-2 w-2 rounded-full ${appointment.status === 'confirmed' ? 'bg-green-500' :
+                            appointment.status === 'booked' ? 'bg-blue-500' :
+                              appointment.status === 'cancelled' ? 'bg-zinc-400' : 'bg-orange-400'
+                            }`} />
+                          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400 capitalize">
+                            {appointment.status.replace("_", " ")}
+                          </span>
+                        </div>
+
+                        {/* Doctor/Recipients Column */}
+                        <div className="flex -space-x-2">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                            {appointment.doctorName.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                          </div>
+                          <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                            DE
+                          </div>
+                        </div>
+
+                        {/* Date Column */}
+                        <div className="text-sm text-zinc-500">
+                          {new Date(appointment.date).toLocaleDateString("en-US", { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+
+                        {/* Actions Column */}
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {(appointment.status === "booked" || appointment.status === "confirmed") && (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => handleReschedule(appointment.id)}>
+                                Reschedule
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleCancelAppointment(appointment.id)}>
+                                Cancel
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </TableHead>
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <Building className="h-4 w-4" />
-                    Department
-                  </div>
-                </TableHead>
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Doctor
-                  </div>
-                </TableHead>
-                <TableHead className="w-[120px]">Status</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="w-[150px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAppointments.map((appointment) => (
-                <TableRow key={appointment.id} className="hover:bg-muted/50">
-                  <TableCell className="font-medium">
-                    {new Date(appointment.date).toLocaleDateString("en-US", {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      Slot {appointment.slotNumber}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">
-                      {appointment.departmentName}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-muted-foreground">
-                      {appointment.doctorName}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor(appointment.status)}>
-                      {appointment.status.replace("_", " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="max-w-[200px] truncate text-sm text-muted-foreground">
-                      {appointment.notes || "-"}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {appointment.status === "booked" && (
-                        <Button size="sm" variant="outline">
-                          Reschedule
-                        </Button>
-                      )}
-                      {(appointment.status === "booked" ||
-                        appointment.status === "confirmed") && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() =>
-                            handleCancelAppointment(appointment.id)
-                          }
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -134,8 +134,10 @@ class CalendarConfigService {
 
   /**
    * Get appropriate API endpoint for user role and current settings
+   * @param userRole - The role of the user (client, staff, admin, etc.)
+   * @param currentUserId - The user ID (can be numeric or Convex string ID)
    */
-  async getAppointmentsEndpoint(userRole: string, currentUserId: number): Promise<string> {
+  async getAppointmentsEndpoint(userRole: string, currentUserId: number | string): Promise<string> {
     if (userRole !== "client") {
       // Staff always see all appointments
       return "/api/appointments";

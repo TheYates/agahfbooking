@@ -20,7 +20,7 @@ import { Id } from "@/convex/_generated/dataModel";
 
 interface MobileDashboardClientProps {
   user: User;
-  onBookingClick?: (departmentId?: number) => void;
+  onBookingClick?: (departmentId?: string) => void;
 }
 
 interface Department {
@@ -156,10 +156,8 @@ export function MobileDashboardClientConvex({
   };
 
   const handleDepartmentClick = (departmentId: string) => {
-    // Convert Convex ID string to number for compatibility
-    // Note: This assumes the numeric ID can be extracted or mapped
-    // For now, we'll pass the string and let the parent handle it
-    onBookingClick?.(parseInt(departmentId, 10) || 0);
+    // Pass Convex string ID directly
+    onBookingClick?.(departmentId);
   };
 
   const { greeting, subtext } = getDynamicGreeting();

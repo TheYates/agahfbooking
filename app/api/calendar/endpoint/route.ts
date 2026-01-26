@@ -32,9 +32,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the appropriate appointments endpoint based on admin settings
+    // Note: currentUserId can be either a numeric ID (legacy) or a Convex string ID
     const endpoint = await calendarConfig.getAppointmentsEndpoint(
       userRole,
-      parseInt(currentUserId, 10)
+      currentUserId
     );
 
     // Also get the current visibility setting for informational purposes
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
         endpoint,
         visibility,
         userRole,
-        currentUserId: parseInt(currentUserId, 10),
+        currentUserId,
       },
     });
   } catch (error) {
