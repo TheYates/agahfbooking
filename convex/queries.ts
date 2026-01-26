@@ -268,6 +268,60 @@ export const getAppointmentById = query({
   },
 });
 
+export const getAppointmentsByDateRange = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+    department_id: v.optional(v.id("departments")),
+  },
+  handler: async (ctx, args) => {
+    let appointments = await ctx.db.query("appointments").collect();
+
+    // Filter by date range
+    appointments = appointments.filter(
+      (apt) =>
+        apt.appointment_date >= args.startDate &&
+        apt.appointment_date <= args.endDate
+    );
+
+    // Filter by department if specified
+    if (args.department_id) {
+      appointments = appointments.filter(
+        (apt) => apt.department_id === args.department_id
+      );
+    }
+
+    // Enrich with related data
+    const enrichedAppointments = await Promise.all(
+      appointments.map(async (appointment) => {
+        const [client, department, doctor] = await Promise.all([
+          ctx.db.get(appointment.client_id),
+          ctx.db.get(appointment.department_id),
+          appointment.doctor_id ? ctx.db.get(appointment.doctor_id) : null,
+        ]);
+
+        return {
+          ...appointment,
+          id: appointment._id, // Add id for backward compatibility
+          client_name: client?.name || "Unknown",
+          client_x_number: client?.x_number || "N/A",
+          client_phone: client?.phone || "",
+          department_name: department?.name || "Unknown",
+          department_color: department?.color || "#3B82F6",
+          doctor_name: doctor?.name || null,
+        };
+      })
+    );
+
+    // Sort by date and slot number
+    return enrichedAppointments.sort((a, b) => {
+      const dateCompare = a.appointment_date.localeCompare(b.appointment_date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.slot_number - b.slot_number;
+    });
+  },
+});
+
 export const getAppointmentWithDetails = query({
   args: { id: v.id("appointments") },
   handler: async (ctx, args) => {
@@ -645,6 +699,99 @@ export const universalSearch = query({
   },
 });
 
+// ============= SCHEDULE QUERIES =============
+
+/**
+ * Get weekly schedule for a department (for quick booking dialog)
+ * This matches the TanStack Query API format
+ */
+export const getScheduleForDepartment = query({
+  args: {
+    departmentId: v.id("departments"),
+    startDate: v.string(), // ISO date string
+  },
+  handler: async (ctx, args) => {
+    const department = await ctx.db.get(args.departmentId);
+    if (!department) return [];
+
+    const startDate = new Date(args.startDate);
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    // Generate 7 days of schedule
+    const schedule = [];
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + i);
+
+      const dateStr = currentDate.toISOString().split("T")[0]; // YYYY-MM-DD
+      const dayName = dayNames[currentDate.getDay()];
+      const dayOfWeekLower = dayName.toLowerCase();
+      const isWorkingDay = department.working_days.includes(dayOfWeekLower);
+
+      // Get appointments for this day
+      const appointments = await ctx.db
+        .query("appointments")
+        .withIndex("by_department_and_date", (q) =>
+          q.eq("department_id", args.departmentId).eq("appointment_date", dateStr)
+        )
+        .collect();
+
+      // Filter out cancelled appointments
+      const activeAppointments = appointments.filter(
+        (apt) => apt.status !== "cancelled"
+      );
+
+      // Build slot information
+      const slots = [];
+      for (let slotNum = 1; slotNum <= department.slots_per_day; slotNum++) {
+        const appointment = activeAppointments.find(
+          (apt) => apt.slot_number === slotNum
+        );
+
+        if (!isWorkingDay) {
+          slots.push({
+            time: `Slot ${slotNum}`,
+            available: false,
+            isNonWorkingDay: true,
+          });
+        } else if (appointment) {
+          // Get client info for the booked slot
+          const client = await ctx.db.get(appointment.client_id);
+          slots.push({
+            time: `Slot ${slotNum}`,
+            available: false,
+            clientXNumber: client?.x_number || "",
+            clientId: client?._id,
+            appointmentId: appointment._id,
+            isNonWorkingDay: false,
+          });
+        } else {
+          slots.push({
+            time: `Slot ${slotNum}`,
+            available: true,
+            isNonWorkingDay: false,
+          });
+        }
+      }
+
+      const hasAvailability = slots.some((slot) => slot.available);
+
+      schedule.push({
+        date: `${months[currentDate.getMonth()]} ${currentDate.getDate()}`,
+        fullDate: dateStr,
+        dayName,
+        dayNumber: currentDate.getDate(),
+        slots,
+        hasAvailability,
+        isWorkingDay,
+      });
+    }
+
+    return schedule;
+  },
+});
+
 // ============= CLIENT APPOINTMENTS QUERIES =============
 
 export const getClientAppointments = query({
@@ -699,3 +846,30 @@ export const getClientAppointments = query({
     };
   },
 });
+
+// ============= APPOINTMENT STATUSES QUERIES =============
+
+export const getAppointmentStatuses = query({
+  args: {
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    let statuses = await ctx.db.query("appointment_statuses").collect();
+
+    if (args.isActive !== undefined) {
+      statuses = statuses.filter((status) => status.is_active === args.isActive);
+    }
+
+    return statuses;
+  },
+});
+
+// ============= CALENDAR CONFIG QUERIES =============
+
+export const getCalendarSettings = query({
+  args: {},
+  handler: async (ctx, args) => {
+    return await ctx.db.query("calendar_config").collect();
+  },
+});
+

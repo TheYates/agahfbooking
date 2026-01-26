@@ -4,15 +4,28 @@
  * Manages calendar visibility settings for clients.
  * Allows admins to control whether clients see only their own appointments
  * or all appointments in the system.
+ * 
+ * Migrated from PostgreSQL to Convex
  */
-
-import { SystemSettingsService } from "./db-services";
 
 export type CalendarVisibility = "own_only" | "all_appointments";
 
 export interface CalendarConfig {
   clientVisibility: CalendarVisibility;
   description: string;
+}
+
+// Helper to get Convex client (lazy loaded to avoid issues)
+async function getConvexClient() {
+  const { ConvexHttpClient } = await import("convex/browser");
+  const { api } = await import("@/convex/_generated/api");
+  
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    throw new Error("Convex URL not configured");
+  }
+  
+  return { client: new ConvexHttpClient(convexUrl), api };
 }
 
 class CalendarConfigService {
@@ -30,16 +43,20 @@ class CalendarConfigService {
   }
 
   /**
-   * Get initial calendar visibility from database, or default
+   * Get initial calendar visibility from Convex, or default
    */
   private async getInitialVisibility(): Promise<CalendarVisibility> {
     try {
-      const savedVisibility = await SystemSettingsService.get(this.SETTING_KEY);
-      if (savedVisibility === "own_only" || savedVisibility === "all_appointments") {
-        return savedVisibility as CalendarVisibility;
+      const { client, api } = await getConvexClient();
+      const setting = await client.query(api.queries.getSystemSetting, {
+        key: this.SETTING_KEY,
+      });
+      
+      if (setting?.setting_value === "own_only" || setting?.setting_value === "all_appointments") {
+        return setting.setting_value as CalendarVisibility;
       }
     } catch (error) {
-      console.warn("Could not load calendar visibility from database:", error);
+      console.warn("Could not load calendar visibility from Convex:", error);
     }
 
     // Fallback to default
@@ -55,27 +72,28 @@ class CalendarConfigService {
   }
 
   /**
-   * Set calendar visibility and persist to database
+   * Set calendar visibility and persist to Convex
    */
-  async setVisibility(visibility: CalendarVisibility, updatedBy?: number): Promise<void> {
+  async setVisibility(visibility: CalendarVisibility, updatedBy?: string): Promise<void> {
     if (visibility !== "own_only" && visibility !== "all_appointments") {
       throw new Error('Invalid calendar visibility. Must be "own_only" or "all_appointments"');
     }
 
-    // Save to database
+    // Save to Convex
     try {
-      await SystemSettingsService.update(
-        this.SETTING_KEY,
-        visibility,
-        updatedBy || 1
-      );
+      const { client, api } = await getConvexClient();
+      await client.mutation(api.mutations.updateSystemSetting, {
+        setting_key: this.SETTING_KEY,
+        setting_value: visibility,
+        description: "Calendar visibility setting for clients",
+      });
       this.currentVisibility = visibility;
       console.log(
-        `🔧 Calendar visibility changed to: ${visibility.toUpperCase()} and saved to database`
+        `🔧 Calendar visibility changed to: ${visibility.toUpperCase()} and saved to Convex`
       );
     } catch (error) {
-      console.error("Failed to save calendar visibility to database:", error);
-      throw new Error("Failed to save calendar visibility to database");
+      console.error("Failed to save calendar visibility to Convex:", error);
+      throw new Error("Failed to save calendar visibility to Convex");
     }
   }
 

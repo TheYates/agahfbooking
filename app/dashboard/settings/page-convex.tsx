@@ -1,304 +1,562 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatusManagementTab } from "@/components/settings/status-management-tab";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Settings,
+  Calendar,
+  Bell,
+  Palette,
+  Plus,
+  Trash2,
+  CheckCircle,
+  Shield,
+  MessageSquare,
+  Loader2,
+} from "lucide-react";
+import { CalendarManagementTab } from "@/components/settings/calendar-management-tab";
+import { AntiAbuseManagementTab } from "@/components/settings/anti-abuse-management-tab";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-import { 
-  Settings, 
-  Shield, 
-  Bell, 
-  Save, 
-  Globe, 
-  Lock, 
-  Mail, 
-  MessageSquare,
-  CheckCircle2 
-} from "lucide-react";
+
+interface SystemSettings {
+  maxAdvanceBookingDays: number;
+  multipleAppointmentsAllowed: boolean;
+  sameDayBookingAllowed: boolean;
+  defaultSlotsPerDay: number;
+  sessionDurationHours: number;
+  sessionTimeoutMinutes: number;
+  recurringAppointmentsEnabled: boolean;
+  waitlistEnabled: boolean;
+  emergencySlotsEnabled: boolean;
+}
+
+interface AppointmentStatus {
+  id: number;
+  name: string;
+  color: string;
+  isActive: boolean;
+}
+
+const defaultSettings: SystemSettings = {
+  maxAdvanceBookingDays: 30,
+  multipleAppointmentsAllowed: true,
+  sameDayBookingAllowed: true,
+  defaultSlotsPerDay: 10,
+  sessionDurationHours: 24,
+  sessionTimeoutMinutes: 60,
+  recurringAppointmentsEnabled: false,
+  waitlistEnabled: false,
+  emergencySlotsEnabled: false,
+};
 
 export default function SettingsPageConvex() {
-  const [otpEnabled, setOtpEnabled] = useState(true);
-  const [smsProvider, setSmsProvider] = useState("hubtel");
-
   // Convex queries
   const systemSettings = useQuery(api.queries.getSystemSettings, {});
   const updateSetting = useMutation(api.mutations.updateSystemSetting);
 
   const loading = systemSettings === undefined;
-  const error = systemSettings === null;
+  const settingsError = systemSettings === null;
 
-  const handleSaveSetting = async (key: string, value: string) => {
+  // Local state for UI updates
+  const [localSettings, setLocalSettings] = useState<SystemSettings>(defaultSettings);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    setSaveSuccess(false);
     try {
       await updateSetting({
-        setting_key: key,
-        setting_value: value,
+        setting_key: "session_duration_hours",
+        setting_value: String(localSettings.sessionDurationHours),
       });
-      toast.success("Setting updated successfully");
+      await updateSetting({
+        setting_key: "session_timeout_minutes",
+        setting_value: String(localSettings.sessionTimeoutMinutes),
+      });
+      await updateSetting({
+        setting_key: "default_slots_per_day",
+        setting_value: String(localSettings.defaultSlotsPerDay),
+      });
+      await updateSetting({
+        setting_key: "recurring_appointments_enabled",
+        setting_value: String(localSettings.recurringAppointmentsEnabled),
+      });
+      await updateSetting({
+        setting_key: "waitlist_enabled",
+        setting_value: String(localSettings.waitlistEnabled),
+      });
+      await updateSetting({
+        setting_key: "emergency_slots_enabled",
+        setting_value: String(localSettings.emergencySlotsEnabled),
+      });
+      
+      setSaveSuccess(true);
+      toast.success("Settings saved successfully!");
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error("Error updating setting:", error);
-      toast.error("Failed to update setting");
+      console.error("Error saving settings:", error);
+      toast.error("Failed to save settings");
+    } finally {
+      setSaving(false);
     }
   };
+
+  // Loading state with skeleton
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-5 w-96" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-            <Settings className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">
-              Manage system configuration and preferences
-            </p>
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-muted-foreground">
+          Configure system preferences and manage hospital data
+        </p>
       </div>
 
-      <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+      {settingsError && (
+        <Alert variant="destructive">
+          <AlertDescription>Failed to load settings</AlertDescription>
+        </Alert>
+      )}
+
+      {saveSuccess && (
+        <Alert>
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>Settings saved successfully!</AlertDescription>
+        </Alert>
+      )}
+
+      <Tabs defaultValue="general" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general" className="flex items-center gap-2">
-            <Globe className="h-4 w-4" />
+            <Settings className="h-4 w-4" />
             General
           </TabsTrigger>
-          <TabsTrigger value="authentication" className="flex items-center gap-2">
-            <Lock className="h-4 w-4" />
-            Authentication
+          <TabsTrigger value="appointments" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Appointments
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Calendar
+          </TabsTrigger>
+          <TabsTrigger value="anti-abuse" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Anti-Abuse
+          </TabsTrigger>
+          <TabsTrigger value="statuses" className="flex items-center gap-2">
+            <Palette className="h-4 w-4" />
+            Statuses
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
             Notifications
           </TabsTrigger>
+          <TabsTrigger value="otp" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            OTP
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-4">
+        {/* General Tab */}
+        <TabsContent value="general" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-blue-600" />
-                <CardTitle>General Settings</CardTitle>
-              </div>
-              <CardDescription>
-                Basic system configuration and preferences
-              </CardDescription>
+              <CardTitle>General Settings</CardTitle>
+              <CardDescription>Basic system configuration</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">Loading settings...</p>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="sessionDuration">Session Duration (hours)</Label>
+                  <Input
+                    id="sessionDuration"
+                    type="number"
+                    value={localSettings.sessionDurationHours}
+                    onChange={(e) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        sessionDurationHours: Number.parseInt(e.target.value) || 24,
+                      })
+                    }
+                  />
                 </div>
-              ) : error ? (
-                <div className="text-center py-8 text-red-600">
-                  <p>Error loading settings</p>
+                <div>
+                  <Label htmlFor="sessionTimeout">Auto-Logout Timeout (minutes)</Label>
+                  <Input
+                    id="sessionTimeout"
+                    type="number"
+                    min="5"
+                    max="480"
+                    value={localSettings.sessionTimeoutMinutes}
+                    onChange={(e) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        sessionTimeoutMinutes: Number.parseInt(e.target.value) || 60,
+                      })
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Users will be automatically logged out after this period of inactivity (5-480 minutes)
+                  </p>
                 </div>
-              ) : (
-                <>
-                  <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <Label htmlFor="system-name">System Name</Label>
-                        <Input 
-                          id="system-name"
-                          defaultValue="Hospital Booking System" 
-                          placeholder="Enter system name"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Displayed in the application header
-                        </p>
-                      </div>
-                      <div>
-                        <Label htmlFor="language">Default Language</Label>
-                        <Input 
-                          id="language"
-                          defaultValue="English" 
-                          placeholder="Select language"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Default language for new users
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="border-t pt-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>System Status</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Current operational status
-                          </p>
-                        </div>
-                        <Badge variant="default" className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Active
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-4 border-t">
-                    <Button 
-                      onClick={() => toast.success("Settings saved successfully!")}
-                      className="flex items-center gap-2"
-                    >
-                      <Save className="h-4 w-4" />
-                      Save Changes
-                    </Button>
-                  </div>
-                </>
-              )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="defaultSlots">Default Slots Per Day</Label>
+                  <Input
+                    id="defaultSlots"
+                    type="number"
+                    value={localSettings.defaultSlotsPerDay}
+                    onChange={(e) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        defaultSlotsPerDay: Number.parseInt(e.target.value) || 10,
+                      })
+                    }
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="authentication" className="space-y-4">
+        {/* Appointments Tab */}
+        <TabsContent value="appointments" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-purple-600" />
-                <CardTitle>Authentication Settings</CardTitle>
-              </div>
+              <CardTitle>Appointment Features</CardTitle>
               <CardDescription>
-                Configure OTP and authentication methods for client access
+                Configure operational appointment features and capabilities
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100">
+                      Booking Limits & Restrictions
+                    </h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                      Booking limits, advance booking rules, and anti-abuse measures are now configured in the{" "}
+                      <strong>Anti-Abuse</strong> tab for better organization.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Enable OTP Authentication</Label>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Recurring Appointments</Label>
                     <p className="text-sm text-muted-foreground">
-                      Allow clients to login with one-time password codes sent via SMS
+                      Enable recurring appointment feature
                     </p>
                   </div>
                   <Switch
-                    checked={otpEnabled}
-                    onCheckedChange={setOtpEnabled}
+                    checked={localSettings.recurringAppointmentsEnabled}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        recurringAppointmentsEnabled: checked,
+                      })
+                    }
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="sms-provider">SMS Provider</Label>
-                  <Input
-                    id="sms-provider"
-                    value={smsProvider}
-                    onChange={(e) => setSmsProvider(e.target.value)}
-                    placeholder="e.g., hubtel, twilio"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    SMS service provider for sending OTP codes
-                  </p>
-                </div>
-
-                {otpEnabled && (
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-sm text-blue-900 dark:text-blue-100">
-                          OTP Authentication Enabled
-                        </p>
-                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                          Clients will receive a 6-digit code via SMS to verify their identity
-                        </p>
-                      </div>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Waitlist</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable waitlist for fully booked slots
+                    </p>
                   </div>
-                )}
-              </div>
+                  <Switch
+                    checked={localSettings.waitlistEnabled}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        waitlistEnabled: checked,
+                      })
+                    }
+                  />
+                </div>
 
-              <div className="flex justify-end pt-4 border-t">
-                <Button 
-                  onClick={() => handleSaveSetting("otp_enabled", String(otpEnabled))}
-                  className="flex items-center gap-2"
-                >
-                  <Save className="h-4 w-4" />
-                  Save Changes
-                </Button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Emergency Slots</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Reserve slots for emergency appointments
+                    </p>
+                  </div>
+                  <Switch
+                    checked={localSettings.emergencySlotsEnabled}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        emergencySlotsEnabled: checked,
+                      })
+                    }
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="notifications" className="space-y-4">
+        {/* Calendar Tab */}
+        <TabsContent value="calendar" className="space-y-6">
+          <CalendarManagementTab />
+        </TabsContent>
+
+        {/* Anti-Abuse Tab */}
+        <TabsContent value="anti-abuse" className="space-y-6">
+          <AntiAbuseManagementTab />
+        </TabsContent>
+
+        {/* Statuses Tab */}
+        <TabsContent value="statuses" className="space-y-6">
+          <StatusManagementTab />
+        </TabsContent>
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-green-600" />
-                <CardTitle>Notification Settings</CardTitle>
-              </div>
-              <CardDescription>
-                Configure appointment reminders and system notifications
-              </CardDescription>
+              <CardTitle>SMS Notifications</CardTitle>
+              <CardDescription>Configure SMS settings and templates</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-blue-600" />
-                      <Label className="text-base">Email Notifications</Label>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Send appointment reminders and updates via email
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>SMS Notifications Enabled</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Send SMS for OTP and appointment reminders
+                  </p>
                 </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5 flex-1">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-green-600" />
-                      <Label className="text-base">SMS Notifications</Label>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Send appointment reminders and updates via SMS
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 border rounded-lg">
-                  <h4 className="font-medium text-sm mb-3">Notification Schedule</h4>
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-                      <span>24 hours before appointment</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-green-600"></div>
-                      <span>2 hours before appointment</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-orange-600"></div>
-                      <span>On appointment confirmation</span>
-                    </div>
-                  </div>
-                </div>
+                <Switch defaultChecked />
               </div>
 
-              <div className="flex justify-end pt-4 border-t">
-                <Button 
-                  onClick={() => toast.success("Notification settings saved successfully!")}
-                  className="flex items-center gap-2"
-                >
-                  <Save className="h-4 w-4" />
-                  Save Changes
-                </Button>
+              <div>
+                <Label htmlFor="smsProvider">SMS Provider</Label>
+                <Select defaultValue="mock">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mock">Mock Provider (Development)</SelectItem>
+                    <SelectItem value="twilio">Twilio</SelectItem>
+                    <SelectItem value="aws">AWS SNS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="otpTemplate">OTP SMS Template</Label>
+                <Textarea
+                  id="otpTemplate"
+                  placeholder="Your OTP code is: {otp}. Valid for 10 minutes."
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="reminderTemplate">Appointment Reminder Template</Label>
+                <Textarea
+                  id="reminderTemplate"
+                  placeholder="Reminder: You have an appointment with {doctor} on {date} at slot {slot}."
+                  rows={3}
+                />
               </div>
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* OTP Tab */}
+        <TabsContent value="otp" className="space-y-6">
+          <OTPConfigurationTab />
+        </TabsContent>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSaveSettings} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Settings"
+            )}
+          </Button>
+        </div>
       </Tabs>
     </div>
+  );
+}
+
+// OTP Configuration Component
+function OTPConfigurationTab() {
+  const [testPhone, setTestPhone] = useState("");
+  const [currentMode, setCurrentMode] = useState<"hubtel" | "mock">("mock");
+  const [testing, setTesting] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  const updateMode = async (newMode: "hubtel" | "mock") => {
+    setUpdating(true);
+    try {
+      const response = await fetch("/api/settings/otp-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: newMode }),
+      });
+      if (response.ok) {
+        setCurrentMode(newMode);
+        toast.success(`OTP mode changed to ${newMode.toUpperCase()}`);
+      } else {
+        toast.error("Failed to update OTP mode");
+      }
+    } catch (error) {
+      toast.error("Failed to update OTP mode");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const testService = async () => {
+    if (!testPhone.trim()) return;
+    setTesting(true);
+    try {
+      const response = await fetch("/api/test-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: testPhone }),
+      });
+      if (response.ok) {
+        toast.success("Test SMS sent successfully!");
+      } else {
+        toast.error("Failed to send test SMS");
+      }
+    } catch (error) {
+      toast.error("Failed to send test SMS");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>OTP Configuration</CardTitle>
+        <CardDescription>Configure how OTP messages are sent to users</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Current Mode */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div>
+            <p className="font-medium">Current Mode: {currentMode.toUpperCase()}</p>
+            <p className="text-sm text-muted-foreground">
+              {currentMode === "hubtel" ? "Real SMS via Hubtel" : "Mock SMS (Console)"}
+            </p>
+          </div>
+        </div>
+
+        {/* Mode Selection */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <Label>Hubtel SMS (Real)</Label>
+              <p className="text-sm text-muted-foreground">Send real SMS messages</p>
+            </div>
+            <Switch
+              checked={currentMode === "hubtel"}
+              onCheckedChange={(checked) => checked && updateMode("hubtel")}
+              disabled={updating}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <Label>Mock SMS (Development)</Label>
+              <p className="text-sm text-muted-foreground">Log messages to console</p>
+            </div>
+            <Switch
+              checked={currentMode === "mock"}
+              onCheckedChange={(checked) => checked && updateMode("mock")}
+              disabled={updating}
+            />
+          </div>
+        </div>
+
+        {/* Test Service */}
+        <div className="space-y-4">
+          <Label>Test Current Service</Label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="+233240000000"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+            />
+            <Button onClick={testService} disabled={testing || !testPhone.trim()}>
+              {testing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                "Test"
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -209,7 +209,7 @@ export function MobileDashboardClientConvex({
           <div className="relative">
             {/* Horizontal scrolling container */}
             <div className="flex gap-4 overflow-x-auto pb-2 px-1 hide-scrollbar">
-              {allDepartments?.map((department, index) => (
+              {allDepartments?.map((department: Department, index: number) => (
                 <motion.div
                   key={department._id}
                   initial={{ opacity: 0, x: 20 }}
@@ -257,7 +257,7 @@ export function MobileDashboardClientConvex({
             {/* Scroll indicator dots */}
             {allDepartments && allDepartments.length > 1 && (
               <div className="flex justify-center mt-6 space-x-2">
-                {allDepartments.map((_, index) => (
+                {allDepartments.map((_: Department, index: number) => (
                   <div
                     key={index}
                     className="w-2 h-2 rounded-full bg-muted-foreground/40"

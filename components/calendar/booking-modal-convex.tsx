@@ -1,16 +1,18 @@
 "use client";
 
+import type React from "react";
+
 import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -18,19 +20,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Combobox } from "@/components/ui/combobox";
+import { isWorkingDay } from "@/lib/working-days-utils";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 
 interface BookingModalConvexProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDate: Date | null;
   selectedSlot: number | null;
-  userRole: string;
-  currentUserId?: number;
+  userRole: "client" | "receptionist" | "admin";
+  currentUserId?: string;
+  onAppointmentBooked: () => void;
 }
 
 export function BookingModalConvex({
@@ -40,235 +46,253 @@ export function BookingModalConvex({
   selectedSlot,
   userRole,
   currentUserId,
+  onAppointmentBooked,
 }: BookingModalConvexProps) {
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<Id<"departments"> | null>(null);
-  const [selectedClientId, setSelectedClientId] = useState<Id<"clients"> | null>(null);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<Id<"doctors"> | null>(null);
-  const [clientSearch, setClientSearch] = useState("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Convex queries
   const departments = useQuery(api.queries.getDepartments, { isActive: true });
   const allClients = useQuery(api.queries.getClients, {});
-  const doctors = useQuery(
-    api.queries.getDoctors,
-    selectedDepartmentId ? { isActive: true } : "skip"
-  );
 
   // Convex mutation
   const createAppointment = useMutation(api.mutations.createAppointment);
 
-  const loading = departments === undefined || allClients === undefined;
-
-  // Filter clients based on search
+  // Filter clients based on search term
   const filteredClients = allClients?.filter((client) => {
-    if (!clientSearch) return true;
-    const search = clientSearch.toLowerCase();
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
     return (
       client.name.toLowerCase().includes(search) ||
       client.x_number.toLowerCase().includes(search) ||
       client.phone.includes(search)
     );
-  });
+  }) || [];
 
-  // Filter doctors by selected department
-  const filteredDoctors = doctors?.filter(
-    (doc) => doc.department_id === selectedDepartmentId
-  );
-
-  // Auto-select client for client users
+  // Set client ID for client users
   useEffect(() => {
-    if (userRole === "client" && allClients && currentUserId) {
-      // In a real app, match by proper ID mapping
-      const currentClient = allClients[0];
-      if (currentClient) {
-        setSelectedClientId(currentClient._id);
+    if (isOpen && userRole === "client" && currentUserId) {
+      setSelectedClientId(currentUserId);
+    }
+  }, [isOpen, userRole, currentUserId]);
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedDepartmentId("");
+      if (userRole !== "client") {
+        setSelectedClientId("");
+      }
+      setNotes("");
+      setError("");
+      setSearchTerm("");
+    }
+  }, [isOpen, userRole]);
+
+  // Clear selected department if it's no longer available on the selected date
+  useEffect(() => {
+    if (selectedDepartmentId && selectedDate && departments && departments.length > 0) {
+      const selectedDept = departments.find(
+        (d) => d._id === selectedDepartmentId
+      );
+      if (selectedDept && !isWorkingDay(selectedDept as any, selectedDate)) {
+        setSelectedDepartmentId("");
       }
     }
-  }, [userRole, allClients, currentUserId]);
+  }, [selectedDate, selectedDepartmentId, departments]);
 
-  const handleBooking = async () => {
-    if (!selectedDepartmentId || !selectedClientId || !selectedDate || selectedSlot === null) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     try {
-      const dateStr = selectedDate.toISOString().split("T")[0];
+      if (!selectedDepartmentId) {
+        throw new Error("Please select a department");
+      }
 
+      if (!selectedClientId) {
+        throw new Error("Please select a client");
+      }
+
+      if (!selectedDate || selectedSlot === null) {
+        throw new Error("Invalid date or slot");
+      }
+
+      // Check if the selected date is in the past
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const appointmentDate = new Date(selectedDate);
+      appointmentDate.setHours(0, 0, 0, 0);
+
+      if (appointmentDate < today) {
+        throw new Error("Cannot book appointments in the past");
+      }
+
+      // Find department data
+      const department = departments?.find(
+        (d) => d._id === selectedDepartmentId
+      );
+      if (!department) {
+        throw new Error("Department not found");
+      }
+
+      // Create appointment via Convex mutation
       await createAppointment({
-        client_id: selectedClientId,
-        department_id: selectedDepartmentId,
-        doctor_id: selectedDoctorId || undefined,
-        appointment_date: dateStr,
+        client_id: selectedClientId as Id<"clients">,
+        department_id: selectedDepartmentId as Id<"departments">,
+        appointment_date: selectedDate.toISOString().split("T")[0],
         slot_number: selectedSlot,
         status: "booked",
         notes: notes || undefined,
       });
 
-      toast.success("Appointment booked successfully!");
+      // Show success toast
+      const selectedClient = filteredClients.find((c) => c._id === selectedClientId);
+      const formattedDate = selectedDate.toLocaleDateString();
+
+      toast.success("Appointment Booked Successfully! 🎉", {
+        description: `${selectedClient?.name || "Client"} - ${
+          department.name
+        } on ${formattedDate}, Slot ${selectedSlot}`,
+        duration: 5000,
+      });
+
+      // Call the callback to refresh appointments list
+      onAppointmentBooked();
+
+      // Close modal
       onClose();
-      resetForm();
-    } catch (error) {
-      console.error("Error booking appointment:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to book appointment");
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to book appointment";
+      setError(errorMessage);
+
+      // Show error toast
+      toast.error("Booking Failed", {
+        description: errorMessage,
+        duration: 4000,
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setSelectedDepartmentId(null);
-    setSelectedClientId(null);
-    setSelectedDoctorId(null);
-    setClientSearch("");
-    setNotes("");
-  };
+  // Filter departments based on working days for selected date
+  const availableDepartments = departments?.filter((department) => {
+    if (!selectedDate) return false;
+    return isWorkingDay(department as any, selectedDate);
+  }) || [];
 
-  const handleClose = () => {
-    onClose();
-    resetForm();
-  };
+  // Prepare client options for combobox
+  const clientOptions = filteredClients.map((client) => ({
+    value: client._id,
+    label: `${client.x_number} - ${client.name}`,
+  }));
+
+  if (!selectedDate || selectedSlot === null) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Book Appointment</DialogTitle>
+          <DialogDescription>
+            Booking for{" "}
+            {selectedDate.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}{" "}
+            - Slot {selectedSlot}
+          </DialogDescription>
         </DialogHeader>
 
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Date & Slot (read-only) */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Date</Label>
-                <Input
-                  value={selectedDate?.toLocaleDateString() || ""}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-              <div>
-                <Label>Slot</Label>
-                <Input
-                  value={selectedSlot !== null ? `Slot ${selectedSlot}` : ""}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-            </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-            {/* Department Selection */}
-            <div>
-              <Label>Department *</Label>
-              <Select
-                value={selectedDepartmentId || ""}
-                onValueChange={(value) => {
-                  setSelectedDepartmentId(value as Id<"departments">);
-                  setSelectedDoctorId(null); // Reset doctor when department changes
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments?.map((dept) => (
-                    <SelectItem key={dept._id} value={dept._id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Doctor Selection (optional) */}
-            {selectedDepartmentId && filteredDoctors && filteredDoctors.length > 0 && (
-              <div>
-                <Label>Doctor (Optional)</Label>
-                <Select
-                  value={selectedDoctorId || ""}
-                  onValueChange={(value) => setSelectedDoctorId(value as Id<"doctors">)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select doctor (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No preference</SelectItem>
-                    {filteredDoctors.map((doc) => (
-                      <SelectItem key={doc._id} value={doc._id}>
-                        {doc.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Client Selection (staff only) */}
-            {userRole !== "client" && (
-              <div>
-                <Label>Client *</Label>
-                <Input
-                  placeholder="Search by name, X-number, or phone..."
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  className="mb-2"
-                />
-                <div className="max-h-[200px] overflow-y-auto space-y-2 border rounded-lg p-2">
-                  {filteredClients?.slice(0, 10).map((client) => (
-                    <button
-                      key={client._id}
-                      onClick={() => setSelectedClientId(client._id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                        selectedClientId === client._id
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent"
-                      }`}
-                    >
-                      <div className="font-medium">{client.name}</div>
-                      <div className="text-sm opacity-80">
-                        {client.x_number} • {client.phone}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="department">Department *</Label>
+            <Select
+              value={selectedDepartmentId}
+              onValueChange={setSelectedDepartmentId}
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a department" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableDepartments.length > 0 ? (
+                  availableDepartments.map((department) => (
+                    <SelectItem key={department._id} value={department._id}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: department.color || "#3B82F6" }}
+                        />
+                        {department.name}
                       </div>
-                    </button>
-                  ))}
-                  {filteredClients?.length === 0 && (
-                    <p className="text-center text-muted-foreground py-4">
-                      No clients found
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                    No departments available on this date
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Notes */}
+          {(userRole === "receptionist" || userRole === "admin") && (
             <div>
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any additional notes..."
-                rows={3}
+              <Label htmlFor="client">Client *</Label>
+              <Combobox
+                options={clientOptions}
+                value={selectedClientId}
+                onValueChange={setSelectedClientId}
+                onSearchChange={setSearchTerm}
+                placeholder="Select a client..."
+                searchPlaceholder="Search by X-number or name..."
+                emptyText="No clients found."
+                className="w-full"
               />
             </div>
+          )}
 
-            {/* Actions */}
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleClose} variant="outline" className="flex-1">
-                Cancel
-              </Button>
-              <Button
-                onClick={handleBooking}
-                disabled={!selectedDepartmentId || !selectedClientId}
-                className="flex-1"
-              >
-                Book Appointment
-              </Button>
-            </div>
+          <div>
+            <Label htmlFor="notes">Notes (Optional)</Label>
+            <Textarea
+              id="notes"
+              placeholder="Any additional notes for this appointment..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+            />
           </div>
-        )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Booking..." : "Book Appointment"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

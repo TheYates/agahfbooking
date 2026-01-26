@@ -20,13 +20,37 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Edit, Trash2, Building2, Stethoscope } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  Search,
+  CheckCircle2,
+  XCircle,
+  Building2,
+} from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Department {
   _id: Id<"departments">;
@@ -41,12 +65,6 @@ interface Department {
   color: string;
   is_active: boolean;
   created_at: number;
-}
-
-interface Doctor {
-  _id: Id<"users">;
-  name: string;
-  department_id: Id<"departments">;
 }
 
 const DAYS_OF_WEEK = [
@@ -71,13 +89,12 @@ const DEPARTMENT_COLORS = [
 ];
 
 export default function DepartmentsPageConvex() {
-  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(null);
-  const [isAddDoctorDialogOpen, setIsAddDoctorDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Form state
   const [formData, setFormData] = useState({
@@ -89,11 +106,6 @@ export default function DepartmentsPageConvex() {
     color: DEPARTMENT_COLORS[0],
   });
 
-  const [doctorFormData, setDoctorFormData] = useState({
-    name: "",
-    department_id: "" as Id<"departments"> | "",
-  });
-
   // Convex queries and mutations
   const departments = useQuery(api.queries.getDepartments, {});
   const doctors = useQuery(api.queries.staff.getAllActive, {});
@@ -102,7 +114,6 @@ export default function DepartmentsPageConvex() {
   const deleteDepartment = useMutation(api.mutations.deleteDepartment);
 
   const loading = departments === undefined;
-  const error = departments === null;
 
   // Get doctor count for a department
   const getDoctorCount = (departmentId: Id<"departments">) => {
@@ -110,11 +121,9 @@ export default function DepartmentsPageConvex() {
     return doctors.filter((doctor: any) => doctor.department_id === departmentId).length;
   };
 
-  // Get filtered doctors for selected department
-  const getFilteredDoctors = () => {
-    if (!selectedDepartment || !doctors) return [];
-    return doctors.filter((doctor: any) => doctor.department_id === selectedDepartment._id);
-  };
+  const filteredDepartments = departments?.filter((dept: Department) =>
+    dept.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleAddDepartment = async () => {
     try {
@@ -191,7 +200,7 @@ export default function DepartmentsPageConvex() {
       });
 
       toast.success(
-        `Department ${department.is_active ? "deactivated" : "activated"} successfully`
+        `Department ${!department.is_active ? "activated" : "deactivated"} successfully`
       );
     } catch (error) {
       console.error("Error toggling department active status:", error);
@@ -217,50 +226,6 @@ export default function DepartmentsPageConvex() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleEditDept = (department: Department) => {
-    setEditingDepartment(department);
-    setFormData({
-      name: department.name,
-      description: department.description || "",
-      slots_per_day: department.slots_per_day,
-      working_days: department.working_days,
-      working_hours: department.working_hours,
-      color: department.color,
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const handleDeleteDept = async (id: Id<"departments">) => {
-    if (!confirm("Are you sure you want to delete this department?")) return;
-    
-    try {
-      await deleteDepartment({ id });
-      toast.success("Department deleted successfully");
-      if (selectedDepartment?._id === id) {
-        setSelectedDepartment(null);
-      }
-    } catch (error) {
-      console.error("Error deleting department:", error);
-      toast.error("Failed to delete department");
-    }
-  };
-
-  const handleAddDoctor = () => {
-    if (!selectedDepartment) return;
-    setDoctorFormData({
-      name: "",
-      department_id: selectedDepartment._id,
-    });
-    setIsAddDoctorDialogOpen(true);
-  };
-
-  const handleDoctorSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.info("Doctor creation functionality to be implemented with user creation");
-    setIsAddDoctorDialogOpen(false);
-    resetDoctorForm();
-  };
-
   const resetForm = () => {
     setFormData({
       name: "",
@@ -272,22 +237,6 @@ export default function DepartmentsPageConvex() {
     });
   };
 
-  const resetDoctorForm = () => {
-    setDoctorFormData({
-      name: "",
-      department_id: "",
-    });
-  };
-
-  const handleDeptSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingDepartment) {
-      await handleEditDepartment();
-    } else {
-      await handleAddDepartment();
-    }
-  };
-
   const handleWorkingDayToggle = (day: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -297,13 +246,22 @@ export default function DepartmentsPageConvex() {
     }));
   };
 
+  const formatTime = (time: string) => {
+    if (!time) return "";
+    const [hours, minutes] = time.split(":");
+    const h = parseInt(hours, 10);
+    const suffix = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${minutes} ${suffix}`;
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Departments</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Departments</h1>
           <p className="text-muted-foreground">
-            Manage hospital departments and their schedules
+            Manage hospital departments, schedules, and capacities.
           </p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
@@ -312,244 +270,157 @@ export default function DepartmentsPageConvex() {
         </Button>
       </div>
 
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Department List */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  All Departments
-                </CardTitle>
-                <CardDescription>
-                  Select a department to view details
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {departments?.map((department: any) => (
-                  <div
-                    key={department._id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                      selectedDepartment?._id === department._id
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                    onClick={() => setSelectedDepartment(department)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-1">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: department.color }}
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{department.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-muted-foreground">
-                              {department.slots_per_day} slots/day
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {getDoctorCount(department._id)} doctors
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditDept(department);
-                          }}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteDept(department._id);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {departments?.length === 0 && (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No departments found</p>
-                    <Button
-                      variant="outline"
-                      className="mt-2"
-                      onClick={() => setIsAddDialogOpen(true)}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add First Department
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Department Details */}
-          <div className="lg:col-span-2">
-            {selectedDepartment ? (
-              <div className="space-y-6">
-                {/* Department Info */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: selectedDepartment.color }}
-                        />
-                        <div>
-                          <CardTitle>{selectedDepartment.name}</CardTitle>
-                          <CardDescription>
-                            {selectedDepartment.description}
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleEditDept(selectedDepartment)}
-                      >
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit Department
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium text-muted-foreground">
-                          Slots Per Day
-                        </Label>
-                        <p className="text-2xl font-bold">
-                          {selectedDepartment.slots_per_day}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-muted-foreground">
-                          Working Hours
-                        </Label>
-                        <p className="text-lg font-semibold">
-                          {selectedDepartment.working_hours.start} -{" "}
-                          {selectedDepartment.working_hours.end}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-muted-foreground">
-                          Working Days
-                        </Label>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {selectedDepartment.working_days.map((day) => (
-                            <Badge
-                              key={day}
-                              variant="secondary"
-                              className="text-xs"
-                            >
-                              {DAYS_OF_WEEK.find((d) => d.id === day)?.label}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-muted-foreground">
-                          Assigned Doctors
-                        </Label>
-                        <p className="text-2xl font-bold">
-                          {getDoctorCount(selectedDepartment._id)}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Doctors List */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        <Stethoscope className="h-5 w-5" />
-                        Doctors in {selectedDepartment.name}
-                      </CardTitle>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddDoctor}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Doctor
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {getFilteredDoctors().length > 0 ? (
-                      <div className="space-y-2">
-                        {getFilteredDoctors().map((doctor: any) => (
-                          <div
-                            key={doctor._id}
-                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                <Stethoscope className="h-5 w-5 text-primary" />
-                              </div>
-                              <div>
-                                <p className="font-medium">{doctor.name}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {doctor.role || "Doctor"}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Stethoscope className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                        <p>No doctors assigned to this department yet</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2"
-                          onClick={handleAddDoctor}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add Doctor
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Department List</CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search departments..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
               </div>
-            ) : (
-              <Card className="h-full flex items-center justify-center min-h-[400px]">
-                <CardContent className="text-center">
-                  <Building2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-20" />
-                  <p className="text-xl font-medium text-muted-foreground mb-2">
-                    No Department Selected
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Select a department from the list to view details
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            </div>
           </div>
-        </div>
-      )}
+          <CardDescription>
+            View and manage all registered departments in the system.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-8">Loading departments...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">#</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Schedule</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead>Staff</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDepartments?.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                      No departments found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredDepartments?.map((dept: Department, index: number) => (
+                    <TableRow key={dept._id}>
+                      <TableCell className="font-medium text-muted-foreground">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-4 h-4 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: dept.color }}
+                          />
+                          <div>
+                            <div className="font-medium">{dept.name}</div>
+                            {dept.description && (
+                              <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                {dept.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={dept.is_active ? "default" : "secondary"}
+                          className={
+                            dept.is_active
+                              ? "bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-100/80 border-gray-200"
+                          }
+                        >
+                          {dept.is_active ? (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" /> Active
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <XCircle className="h-3 w-3" /> Inactive
+                            </div>
+                          )}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>
+                            {formatTime(dept.working_hours.start)} - {formatTime(dept.working_hours.end)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {dept.working_days.length} days / week
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">{dept.slots_per_day}</span>
+                          <span className="text-muted-foreground text-xs">slots/day</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                         <div className="flex items-center gap-1">
+                            <span className="font-medium">{getDoctorCount(dept._id)}</span>
+                            <span className="text-muted-foreground text-xs">doctors</span>
+                         </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => openEditDialog(dept)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleToggleActive(dept)}>
+                              {dept.is_active ? (
+                                <>
+                                  <XCircle className="mr-2 h-4 w-4 text-yellow-600" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+                                  Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={() => openDeleteDialog(dept)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Add Department Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -635,9 +506,9 @@ export default function DepartmentsPageConvex() {
             </div>
             <div>
               <Label>Working Days *</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="grid grid-cols-4 gap-2 mt-2">
                 {DAYS_OF_WEEK.map((day) => (
-                  <label key={day.id} className="flex items-center space-x-2">
+                  <label key={day.id} className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-accent">
                     <input
                       type="checkbox"
                       checked={formData.working_days.includes(day.id)}
@@ -651,15 +522,15 @@ export default function DepartmentsPageConvex() {
             </div>
             <div>
               <Label>Department Color</Label>
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-2 flex-wrap">
                 {DEPARTMENT_COLORS.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`w-8 h-8 rounded-full border-2 ${
+                    className={`w-8 h-8 rounded-full border-2 transition-transform ${
                       formData.color === color
                         ? "border-black scale-110"
-                        : "border-transparent"
+                        : "border-transparent hover:scale-105"
                     }`}
                     style={{ backgroundColor: color }}
                     onClick={() => setFormData({ ...formData, color })}
@@ -679,23 +550,24 @@ export default function DepartmentsPageConvex() {
 
       {/* Edit Department Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Department</DialogTitle>
             <DialogDescription>
               Update department details and configuration
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2">
               <Label htmlFor="edit-name">Department Name *</Label>
               <Input
                 id="edit-name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="mt-1"
               />
             </div>
-            <div>
+            <div className="col-span-2">
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
                 id="edit-description"
@@ -703,10 +575,11 @@ export default function DepartmentsPageConvex() {
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                rows={3}
+                rows={2}
+                className="mt-1 min-h-[60px]"
               />
             </div>
-            <div>
+            <div className="col-span-2">
               <Label htmlFor="edit-slots">Slots per Day *</Label>
               <Input
                 id="edit-slots"
@@ -719,13 +592,13 @@ export default function DepartmentsPageConvex() {
                     slots_per_day: parseInt(e.target.value) || 20,
                   })
                 }
+                className="mt-1"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-start-time">Start Time *</Label>
+            <div className="col-span-2">
+               <Label>Working Hours *</Label>
+               <div className="flex items-center gap-2 mt-1">
                 <Input
-                  id="edit-start-time"
                   type="time"
                   value={formData.working_hours.start}
                   onChange={(e) =>
@@ -737,12 +610,10 @@ export default function DepartmentsPageConvex() {
                       },
                     })
                   }
+                  className="flex-1"
                 />
-              </div>
-              <div>
-                <Label htmlFor="edit-end-time">End Time *</Label>
+                <span className="text-muted-foreground">-</span>
                 <Input
-                  id="edit-end-time"
                   type="time"
                   value={formData.working_hours.end}
                   onChange={(e) =>
@@ -754,36 +625,43 @@ export default function DepartmentsPageConvex() {
                       },
                     })
                   }
+                  className="flex-1"
                 />
-              </div>
+               </div>
             </div>
-            <div>
+            <div className="col-span-2">
               <Label>Working Days *</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 {DAYS_OF_WEEK.map((day) => (
-                  <label key={day.id} className="flex items-center space-x-2">
+                  <label key={day.id} 
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border cursor-pointer transition-colors text-xs font-medium ${
+                      formData.working_days.includes(day.id)
+                        ? "bg-primary text-primary-foreground border-primary" 
+                        : "hover:bg-muted"
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={formData.working_days.includes(day.id)}
                       onChange={() => handleWorkingDayToggle(day.id)}
-                      className="rounded"
+                      className="hidden"
                     />
-                    <span className="text-sm">{day.label}</span>
+                    {day.label.charAt(0)}
                   </label>
                 ))}
               </div>
             </div>
-            <div>
-              <Label>Department Color</Label>
-              <div className="flex gap-2 mt-2">
+            <div className="col-span-2">
+              <Label>Color</Label>
+              <div className="flex gap-2 mt-2 flex-wrap">
                 {DEPARTMENT_COLORS.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`w-8 h-8 rounded-full border-2 ${
+                    className={`w-6 h-6 rounded-full border-2 transition-transform ${
                       formData.color === color
                         ? "border-black scale-110"
-                        : "border-transparent"
+                        : "border-transparent hover:scale-105"
                     }`}
                     style={{ backgroundColor: color }}
                     onClick={() => setFormData({ ...formData, color })}
@@ -807,62 +685,17 @@ export default function DepartmentsPageConvex() {
           <DialogHeader>
             <DialogTitle>Delete Department</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{deletingDepartment?.name}"? This action
-              cannot be undone.
+              Are you sure you want to delete <span className="font-semibold">{deletingDepartment?.name}</span>? 
+              This action cannot be undone and may affect assigned doctors and appointments.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteDepartment}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Doctor Dialog */}
-      <Dialog
-        open={isAddDoctorDialogOpen}
-        onOpenChange={setIsAddDoctorDialogOpen}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add New Doctor</DialogTitle>
-            <DialogDescription>
-              Add a new doctor to {selectedDepartment?.name} department.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleDoctorSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="doctor-name">Doctor Name</Label>
-              <Input
-                id="doctor-name"
-                value={doctorFormData.name}
-                onChange={(e) =>
-                  setDoctorFormData({ ...doctorFormData, name: e.target.value })
-                }
-                placeholder="Enter doctor's full name"
-                required
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setIsAddDoctorDialogOpen(false);
-                  resetDoctorForm();
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Add Doctor</Button>
-            </div>
-          </form>
+          <div className="flex justify-end gap-3 mt-4">
+             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+             <Button variant="destructive" onClick={handleDeleteDepartment}>Delete Department</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+

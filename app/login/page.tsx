@@ -106,20 +106,31 @@ export default function LoginPage() {
 
       if (result.success && result.user) {
         // User is automatically stored in localStorage by useConvexAuth
-        console.log("Login successful, setting cookie and redirecting...");
+        
         
         // Format user data for middleware (expects xNumber not x_number)
+        // Use type assertion to access optional properties safely
+        const userData = result.user as {
+          id: string;
+          name: string;
+          phone: string;
+          xNumber?: string;
+          x_number?: string;
+          category?: string;
+          role: string;
+          convexId?: string;
+        };
+        
         const sessionData = {
-          id: result.user.id,
-          name: result.user.name,
-          phone: result.user.phone,
-          xNumber: result.user.xNumber || result.user.x_number, // Middleware expects xNumber
-          category: result.user.category,
-          role: result.user.role,
-          convexId: result.user.convexId || result.user.id, // Use convexId if present, otherwise use id
+          id: userData.id,
+          name: userData.name,
+          phone: userData.phone,
+          xNumber: userData.xNumber || userData.x_number, // Middleware expects xNumber
+          category: userData.category,
+          role: userData.role,
+          convexId: userData.convexId || userData.id, // Use convexId if present, otherwise use id
         };
 
-        console.log("Setting session cookie. User data:", sessionData);
         
         // Set session cookie for middleware
         document.cookie = `session_token=${JSON.stringify(sessionData)}; path=/; max-age=86400`; // 24 hours
@@ -159,179 +170,182 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-4xl">
-        <div className="flex flex-col gap-6">
-          <Card className="overflow-hidden p-0">
-            <CardContent className="grid p-0 md:grid-cols-2">
-              <div className="bg-muted relative hidden md:block">
-                <img
-                  src="https://images.pexels.com/photos/34862508/pexels-photo-34862508.jpeg"
-                  alt="Hospital Interior"
-                  className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.6] dark:grayscale"
-                />
+    <div className="flex min-h-svh flex-col items-center justify-center bg-background md:bg-muted/40 p-0 md:p-10">
+      <div className="w-full max-w-4xl md:mx-auto z-10">
+        <Card className="overflow-hidden border-0 shadow-none md:border md:shadow-xl rounded-none md:rounded-xl bg-background">
+          <CardContent className="grid p-0 md:grid-cols-2 min-h-[100svh] md:min-h-[600px]">
+            {/* Desktop Image Section */}
+            <div className="bg-muted relative hidden md:block">
+              <img
+                src="https://images.pexels.com/photos/34862508/pexels-photo-34862508.jpeg"
+                alt="Hospital Interior"
+                className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.6] dark:grayscale"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-10 text-white">
+                <h3 className="text-2xl font-bold mb-2">Modern Healthcare</h3>
+                <p className="text-white/90">Experience the future of medical appointment scheduling.</p>
               </div>
-              <form
-                className="p-8 md:p-12"
+            </div>
+
+            {/* Form Section */}
+            <div className="flex flex-col justify-center h-full">
+               <form
+                className="flex flex-col h-full md:h-auto justify-between md:justify-center p-6 sm:p-10 md:p-12"
                 onSubmit={
                   step === "xnumber" ? handleXNumberSubmit : handleOtpSubmit
                 }
               >
-                <div className="flex flex-col gap-6">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="mb-3 flex flex-col items-center gap-2">
-                      <img
-                        src="/agahflogo.svg"
-                        alt="AGAHF Logo"
-                        className="h-20 w-20 object-contain dark:hidden"
-                      />
-                      <img
-                        src="/agahflogo white.svg"
-                        alt="AGAHF Logo"
-                        className="h-20 w-20 object-contain hidden dark:block"
-                      />
-                      <h2 className="text-lg font-bold tracking-tight">AGAHF BOOKING</h2>
-                    </div>
-                    <h1 className="text-2xl font-bold">
-                      {step === "xnumber" ? "Welcome back" : "Verify OTP"}
-                    </h1>
-                    <p className="text-muted-foreground text-balance">
-                      {step === "xnumber"
-                        ? "Login to your account"
-                        : "Enter the OTP sent to your phone"}
-                    </p>
+                {/* Header / Logo */}
+                <div className="flex flex-col items-center text-center mt-8 md:mt-0 space-y-2">
+                  <div className="mb-4 md:mb-6 rounded-2xl bg-primary/10 p-3">
+                    <img
+                      src="/agahflogo.svg"
+                      alt="AGAHF Logo"
+                      className="h-12 w-12 md:h-10 md:w-10 object-contain dark:hidden"
+                    />
+                    <img
+                      src="/agahflogo white.svg"
+                      alt="AGAHF Logo"
+                      className="h-12 w-12 md:h-10 md:w-10 object-contain hidden dark:block"
+                    />
                   </div>
+                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                    {step === "xnumber" ? "Welcome Back" : "Security Verification"}
+                  </h1>
+                  <p className="text-muted-foreground text-sm md:text-base max-w-xs mx-auto">
+                    {step === "xnumber"
+                      ? "Enter your X-Number to access your portal"
+                      : `Enter the code sent to ${xNumber}`}
+                  </p>
+                </div>
 
+                {/* Main Content Area */}
+                <div className="flex-1 flex flex-col justify-center py-8 space-y-6 max-w-sm mx-auto w-full">
                   {error && (
-                    <Alert variant="destructive">
+                    <Alert variant="destructive" className="animate-in slide-in-from-top-2">
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
 
                   {step === "xnumber" ? (
-                    <>
-                      <div className="grid gap-3">
-                        <Label htmlFor="xnumber">X-Number</Label>
-                        <Input
-                          id="xnumber"
-                          type="text"
-                          placeholder="X12345/67"
-                          value={xNumber}
-                          onChange={handleXNumberChange}
-                          maxLength={10}
-                          required
-                        />
+                    <div className="space-y-4 animate-in ease-out duration-300 fade-in slide-in-from-bottom-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="xnumber" className="sr-only">X-Number</Label>
+                        <div className="relative">
+                          <Shield className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                          <Input
+                            id="xnumber"
+                            type="text"
+                            placeholder="X12345/67"
+                            value={xNumber}
+                            onChange={handleXNumberChange}
+                            maxLength={10}
+                            className="pl-10 h-12 text-lg bg-muted/30 border-muted-foreground/20 focus-visible:border-primary"
+                            required
+                            autoComplete="off"
+                          />
+                        </div>
                       </div>
                       <Button
                         type="submit"
-                        className="w-full"
+                        className="w-full h-12 text-base font-medium transition-transform active:scale-[0.98]"
                         disabled={loading}
                       >
-                        <Shield className="mr-2 h-4 w-4" />
-                        {loading ? "Sending OTP..." : "Send OTP"}
+                         {loading ? (
+                           <div className="flex items-center gap-2">
+                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                             Processing...
+                           </div>
+                         ) : "Continue"}
                       </Button>
-                      <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
-                        <span className="relative z-10 bg-card px-2 text-muted-foreground">
-                          Or continue as
-                        </span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        type="button"
-                        className="w-full"
-                        asChild
-                      >
-                        <Link href="/staff-login">
-                          <Shield className="h-4 w-4 mr-2" />
-                          Staff Login
-                        </Link>
-                      </Button>
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      <div className="grid gap-3">
-                        <Label htmlFor="otp">OTP Code</Label>
-                        <div className="flex justify-center">
-                          <InputOTP
-                            maxLength={6}
-                            value={otp}
-                            onChange={handleOtpChange}
-                            disabled={loading}
-                            autoFocus
-                          >
-                            <InputOTPGroup className="gap-3">
-                              <InputOTPSlot index={0} />
-                              <InputOTPSlot index={1} />
-                              <InputOTPSlot index={2} />
-                              <InputOTPSlot index={3} />
-                              <InputOTPSlot index={4} />
-                              <InputOTPSlot index={5} />
-                            </InputOTPGroup>
-                          </InputOTP>
-                        </div>
-                        <p className="text-sm text-muted-foreground text-center">
-                          {loading && otp.length === 6
-                            ? "Verifying OTP..."
-                            : "Enter the 6-digit code sent to your phone"}
-                        </p>
-                        {isMockMode && mockOtp && (
-                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <div className="text-center space-y-2">
-                              <p className="text-sm text-blue-700 font-medium">
-                                🧪 Development Mode - Mock OTP
-                              </p>
-                              <div className="bg-white border border-blue-300 rounded-md p-3">
-                                <p className="text-xs text-blue-600 mb-1">
-                                  Your OTP Code:
-                                </p>
-                                <p className="font-mono font-bold text-2xl text-blue-800 tracking-wider">
-                                  {mockOtp}
-                                </p>
-                              </div>
-                              <p className="text-xs text-blue-600">
-                                This OTP is displayed because you're in development mode
-                              </p>
-                            </div>
-                          </div>
-                        )}
+                    <div className="space-y-6 animate-in ease-out duration-300 fade-in slide-in-from-right-8">
+                       <div className="flex justify-center my-4">
+                        <InputOTP
+                          maxLength={6}
+                          value={otp}
+                          onChange={handleOtpChange}
+                          disabled={loading}
+                          autoFocus
+                        >
+                          <InputOTPGroup className="gap-2 sm:gap-3">
+                            {[0, 1, 2, 3, 4, 5].map((idx) => (
+                              <InputOTPSlot 
+                                key={idx} 
+                                index={idx} 
+                                className="h-12 w-12 sm:h-16 sm:w-16 text-xl sm:text-3xl border-muted-foreground/20 bg-muted/30 focus-visible:ring-primary focus-visible:border-primary" 
+                              />
+                            ))}
+                          </InputOTPGroup>
+                        </InputOTP>
                       </div>
+                      
+                      {isMockMode && mockOtp && (
+                        <div className="mx-auto max-w-xs p-3 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-lg text-center">
+                          <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">Development Code</p>
+                          <p className="text-xl font-mono font-bold tracking-widest text-blue-700 dark:text-blue-300">{mockOtp}</p>
+                        </div>
+                      )}
+
                       <Button
                         type="submit"
-                        className="w-full"
+                        className="w-full h-12 text-base font-medium transition-transform active:scale-[0.98]"
                         disabled={loading || otp.length !== 6}
                       >
-                        {loading
-                          ? "Verifying..."
-                          : otp.length === 6
-                          ? "Auto-verifying..."
-                          : "Verify OTP"}
+                         {loading ? "Verifying..." : "Verify Login"}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => {
-                          setStep("xnumber");
-                          setMockOtp("");
-                          setOtp("");
-                        }}
-                      >
-                        Back to X-Number
-                      </Button>
-                    </>
+                    </div>
                   )}
+                </div>
 
-                  <div className="text-center text-sm">
-                    Need help?{" "}
-                    <a href="#" className="underline underline-offset-4">
-                      Contact support
-                    </a>
+                {/* Footer Area */}
+                <div className="space-y-6 mb-4">
+                  {step === "xnumber" ? (
+                    <div className="space-y-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-muted" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">Or</span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        type="button"
+                        className="w-full h-11 text-muted-foreground hover:text-foreground"
+                        asChild
+                      >
+                        <Link href="/staff-login">I am a Staff Member</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full text-muted-foreground"
+                      onClick={() => {
+                        setStep("xnumber");
+                        setMockOtp("");
+                        setOtp("");
+                      }}
+                    >
+                      Use a different X-Number
+                    </Button>
+                  )}
+                  
+                  <div className="text-center">
+                     <p className="text-xs text-muted-foreground">
+                        Protected by secure OTP verification. <br/>
+                        <a href="#" className="hover:underline text-primary/80">Privacy Policy</a> &bull; <a href="#" className="hover:underline text-primary/80">Help Center</a>
+                     </p>
                   </div>
                 </div>
               </form>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -314,10 +314,15 @@ const deleteAppointment = async (appointmentId: number) => {
 
 const fetchCalendarEndpoint = async (
   userRole: string, 
-  userId: number | undefined
+  userId: number | string | undefined
 ): Promise<CalendarEndpoint> => {
+  // Don't pass invalid userIds
+  const validUserId = userId !== undefined && userId !== null && 
+    userId !== 'NaN' && userId !== 'undefined' && 
+    !(typeof userId === 'number' && isNaN(userId)) ? userId : ''
+  
   const response = await fetch(
-    `/api/calendar/endpoint?userRole=${userRole}&currentUserId=${userId || ''}`
+    `/api/calendar/endpoint?userRole=${userRole}&currentUserId=${validUserId}`
   )
   if (!response.ok) throw new Error('Failed to get calendar endpoint')
   
@@ -329,11 +334,18 @@ const fetchCalendarEndpoint = async (
 
 const fetchCalendarAppointments = async (
   userRole: string,
-  userId: number | undefined,
+  userId: number | string | undefined,
   startDate: string,
   endDate: string
 ): Promise<CalendarAppointment[]> => {
   try {
+    // Validate userId before making the request
+    if (userId === undefined || userId === null || userId === 'NaN' || 
+        (typeof userId === 'number' && isNaN(userId))) {
+      console.warn('Invalid userId for calendar appointments, skipping fetch')
+      return []
+    }
+    
     // First get the appropriate endpoint
     const endpointData = await fetchCalendarEndpoint(userRole, userId)
     
@@ -350,7 +362,7 @@ const fetchCalendarAppointments = async (
     
     // Transform the data to match the expected interface
     const transformedAppointments = data.data.map((appointment: any) => ({
-      id: appointment.id,
+      id: appointment.id || appointment._id,
       clientId: appointment.client_id || appointment.clientId,
       clientName: appointment.client_name || appointment.clientName,
       clientXNumber: appointment.client_x_number || appointment.clientXNumber,
@@ -737,15 +749,19 @@ export const useDoctors = (enabled: boolean = true) => {
 // Calendar Appointments Hook (with real-time updates)
 export const useCalendarAppointments = (
   userRole: string,
-  userId: number | undefined,
+  userId: number | string | undefined,
   startDate: string,
   endDate: string,
   enabled: boolean = true
 ) => {
+  // Validate userId - must be a valid number or non-empty string
+  const isValidUserId = userId !== undefined && userId !== null && 
+    (typeof userId === 'string' ? userId.length > 0 && userId !== 'NaN' && userId !== 'undefined' : !isNaN(userId))
+  
   return useQuery({
     queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
     queryFn: () => fetchCalendarAppointments(userRole, userId, startDate, endDate),
-    enabled,
+    enabled: enabled && isValidUserId,
     staleTime: 30 * 1000, // 30 seconds - calendar data changes frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 30 * 1000, // Background refresh every 30 seconds for real-time calendar
@@ -756,13 +772,17 @@ export const useCalendarAppointments = (
 // Calendar Endpoint Hook (cached for session)
 export const useCalendarEndpoint = (
   userRole: string,
-  userId: number | undefined,
+  userId: number | string | undefined,
   enabled: boolean = true
 ) => {
+  // Validate userId
+  const isValidUserId = userId !== undefined && userId !== null && 
+    (typeof userId === 'string' ? userId.length > 0 && userId !== 'NaN' && userId !== 'undefined' : !isNaN(userId))
+
   return useQuery({
     queryKey: queryKeys.calendar.endpoint(userRole, userId),
     queryFn: () => fetchCalendarEndpoint(userRole, userId),
-    enabled,
+    enabled: enabled && isValidUserId,
     staleTime: 60 * 60 * 1000, // 1 hour - endpoint rarely changes
     gcTime: 2 * 60 * 60 * 1000, // 2 hours
   })
@@ -771,7 +791,7 @@ export const useCalendarEndpoint = (
 // Combined Calendar Data Hook (departments + doctors + appointments)
 export const useCalendarData = (
   userRole: string,
-  userId: number | undefined,
+  userId: number | string | undefined,
   view: 'month' | 'week' | 'day',
   currentDate: Date,
   enabled: boolean = true

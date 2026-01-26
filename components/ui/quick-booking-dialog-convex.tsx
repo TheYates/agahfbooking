@@ -1,6 +1,6 @@
   "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,8 @@ interface TimeSlot {
   time: string;
   available: boolean;
   clientXNumber?: string;
-  clientId?: number;
+  clientId?: string | Id<"clients">;
+  appointmentId?: Id<"appointments">;
   isNonWorkingDay?: boolean;
 }
 
@@ -76,7 +77,8 @@ interface QuickBookingDialogConvexProps {
   onWeekChange?: (direction: "prev" | "next") => void;
   enableAnimations?: boolean;
   userRole?: "client" | "receptionist" | "admin";
-  currentUserId?: number;
+  currentUserId?: string; // Convex ID string
+  currentClientId?: Id<"clients">; // For client users
 }
 
 // Client Selector Component (simplified with Convex)
@@ -86,7 +88,8 @@ interface ClientSelectorProps {
   searchTerm: string;
   onSearchChange: (searchTerm: string) => void;
   userRole: string;
-  currentUserId?: number;
+  currentUserId?: string;
+  isLoading?: boolean;
 }
 
 function ClientSelector({
@@ -96,20 +99,30 @@ function ClientSelector({
   onSearchChange,
   userRole,
   currentUserId,
+  isLoading,
 }: ClientSelectorProps) {
   const [open, setOpen] = useState(false);
 
-  // Use Convex for client data
-  const clients = useQuery(api.queries.getClients, {});
-  const filteredClients = clients?.filter((client: Client) => {
-    if (!searchTerm) return true;
+  // Use Convex for client data with search
+  const clients = useQuery(
+    api.queries.getClients,
+    open || searchTerm.length > 0 ? { search: searchTerm || undefined } : "skip"
+  );
+
+  // Filter clients based on search term (client-side filtering for immediate feedback)
+  const filteredClients = useMemo(() => {
+    if (!clients) return [];
+    if (!searchTerm) return clients;
     const search = searchTerm.toLowerCase();
-    return (
-      client.name.toLowerCase().includes(search) ||
-      client.x_number.toLowerCase().includes(search) ||
-      client.phone.includes(search)
+    return clients.filter(
+      (client: Client) =>
+        client.name.toLowerCase().includes(search) ||
+        client.x_number.toLowerCase().includes(search) ||
+        client.phone.includes(search)
     );
-  });
+  }, [clients, searchTerm]);
+
+  const isLoadingClients = clients === undefined && (open || searchTerm.length > 0);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -134,9 +147,9 @@ function ClientSelector({
             onValueChange={onSearchChange}
           />
           <CommandList>
-            {!clients ? (
+            {isLoadingClients ? (
               <div className="p-2 text-center text-sm text-muted-foreground">
-                Loading...
+                Searching...
               </div>
             ) : (
               <>
@@ -248,6 +261,7 @@ export function QuickBookingDialogConvex({
   enableAnimations = true,
   userRole = "receptionist",
   currentUserId,
+  currentClientId,
 }: QuickBookingDialogConvexProps) {
   // Local state (much simpler now!)
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -258,6 +272,7 @@ export function QuickBookingDialogConvex({
     day: string;
     time: string;
     dayName: string;
+    fullDate: string;
   } | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<{
@@ -265,29 +280,85 @@ export function QuickBookingDialogConvex({
     slot: TimeSlot;
   } | null>(null);
   const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [isBooking, setIsBooking] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Animation setup
   const shouldReduceMotion = useReducedMotion();
   const shouldAnimate = enableAnimations && !shouldReduceMotion;
   const currentWeekRange = generateWeekRange(currentWeekOffset);
 
+  // Calculate start date for schedule query
+  const startDate = useMemo(() => {
+    const today = new Date();
+    let start = new Date(today);
+
+    if (currentWeekOffset === 0) {
+      // Current week: start from today
+      start = new Date(today);
+    } else if (currentWeekOffset > 0) {
+      // Future weeks: start from the next Sunday (week start)
+      const daysUntilNextSunday = today.getDay() === 0 ? 7 : 7 - today.getDay();
+      const nextSunday = new Date(today);
+      nextSunday.setDate(today.getDate() + daysUntilNextSunday);
+
+      start = new Date(nextSunday);
+      start.setDate(nextSunday.getDate() + (currentWeekOffset - 1) * 7);
+    } else {
+      // Previous weeks: go to previous Sunday-based weeks
+      const currentSunday = new Date(today);
+      const daysSinceSunday = today.getDay();
+      currentSunday.setDate(today.getDate() - daysSinceSunday);
+
+      start = new Date(currentSunday);
+      start.setDate(currentSunday.getDate() + currentWeekOffset * 7);
+    }
+
+    return start.toISOString();
+  }, [currentWeekOffset]);
+
   // Convex queries - This replaces ALL your useEffect hooks!
   const fetchedDepartments = useQuery(api.queries.getDepartments, { isActive: true });
-  const clients = useQuery(api.queries.getClients, {});
-  const weekSchedule = useQuery(api.queries.getAppointments, {});
+  
+  // Query for client's own data when userRole is "client"
+  const clientData = useQuery(
+    api.queries.getClientById,
+    currentClientId ? { id: currentClientId } : "skip"
+  );
+
+  // Query for all clients (for staff)
+  const allClients = useQuery(
+    api.queries.getClients,
+    userRole !== "client" && isOpen ? {} : "skip"
+  );
+
+  // Query for schedule - only when department is selected
+  const weekSchedule = useQuery(
+    api.queries.getScheduleForDepartment,
+    selectedDepartment && isOpen
+      ? { departmentId: selectedDepartment._id, startDate }
+      : "skip"
+  );
 
   const bookMutation = useMutation(api.mutations.createAppointment);
-  const cancelMutation = useMutation(api.mutations.deleteAppointment);
+  const cancelMutation = useMutation(api.mutations.cancelAppointment);
 
   // Use fetched departments if no departments prop provided
   const availableDepartments = Array.isArray(departments) && departments.length > 0
     ? departments
     : (Array.isArray(fetchedDepartments) ? fetchedDepartments : []);
 
-  // Auto-select client if user is a client and only one client is returned
-  if (userRole === "client" && clients && clients.length === 1 && !selectedClient) {
-    setSelectedClient(clients[0]);
-  }
+  // Auto-select client if user is a client
+  useEffect(() => {
+    if (userRole === "client" && clientData && !selectedClient) {
+      setSelectedClient(clientData as Client);
+    }
+  }, [userRole, clientData, selectedClient]);
+
+  // Loading states
+  const clientsLoading = userRole === "client" ? clientData === undefined : allClients === undefined;
+  const scheduleLoading = selectedDepartment && weekSchedule === undefined;
+  const departmentsLoading = fetchedDepartments === undefined;
 
   const handleDepartmentChange = (departmentId: string) => {
     const department = availableDepartments.find(
@@ -299,16 +370,16 @@ export function QuickBookingDialogConvex({
     }
   };
 
-  const handleTimeSlotClick = (day: string, time: string) => {
+  const handleTimeSlotClick = (day: DaySchedule, time: string) => {
     if (selectedDepartment && selectedClient) {
-      const dayInfo = weekSchedule?.find((d: DaySchedule) => d.date === day);
       setSelectedTimeSlot({
-        day,
+        day: day.date,
         time,
-        dayName: dayInfo?.dayName || day,
+        dayName: day.dayName,
+        fullDate: day.fullDate,
       });
       setShowConfirmationView(true);
-      onTimeSlotSelect?.(day, time, selectedDepartment._id);
+      onTimeSlotSelect?.(day.date, time, selectedDepartment._id);
     }
   };
 
@@ -319,20 +390,36 @@ export function QuickBookingDialogConvex({
   };
 
   const confirmCancelAppointment = async () => {
-    if (!appointmentToCancel || !selectedDepartment) return;
+    if (!appointmentToCancel || !selectedDepartment || !selectedClient) return;
 
-    const { day, slot } = appointmentToCancel;
-    const slotNumber = parseInt(slot.time.replace("Slot ", ""));
+    const { slot } = appointmentToCancel;
 
+    if (!slot.appointmentId) {
+      toast.error("Cancellation Failed", {
+        description: "Could not find the appointment to cancel.",
+      });
+      return;
+    }
+
+    setIsCancelling(true);
     try {
       await cancelMutation({
-        id: "temp" as any, // This needs to be implemented properly
+        id: slot.appointmentId,
+      });
+
+      toast.success("Appointment Cancelled! ✅", {
+        description: "Your appointment has been cancelled successfully.",
+        duration: 4000,
       });
 
       setShowCancelDialog(false);
       setAppointmentToCancel(null);
-    } catch (error) {
-      // Error is handled in the mutation
+    } catch (error: any) {
+      toast.error("Cancellation Failed", {
+        description: error.message || "Failed to cancel appointment. Please try again.",
+      });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -341,20 +428,30 @@ export function QuickBookingDialogConvex({
 
     const slotNumber = parseInt(selectedTimeSlot.time.replace("Slot ", ""));
 
+    setIsBooking(true);
     try {
       await bookMutation({
         client_id: selectedClient._id,
         department_id: selectedDepartment._id,
-        appointment_date: selectedTimeSlot.day,
+        appointment_date: selectedTimeSlot.fullDate,
         slot_number: slotNumber,
         status: "booked",
+      });
+
+      toast.success("Booking Successful! 🎉", {
+        description: "Your appointment has been booked successfully.",
+        duration: 5000,
       });
 
       setShowConfirmationView(false);
       setSelectedTimeSlot(null);
       onClose();
-    } catch (error) {
-      // Error is handled in the mutation
+    } catch (error: any) {
+      toast.error("Booking Failed", {
+        description: error.message || "Failed to book appointment. Please try again.",
+      });
+    } finally {
+      setIsBooking(false);
     }
   };
 
@@ -384,7 +481,8 @@ export function QuickBookingDialogConvex({
   };
 
   const isOwnAppointment = (slot: TimeSlot) => {
-    return !slot.available && slot.clientId === currentUserId;
+    if (!selectedClient) return false;
+    return !slot.available && slot.clientId === selectedClient._id;
   };
 
   const getSlotStyling = (slot: TimeSlot, fullDateString: string) => {
@@ -484,7 +582,7 @@ export function QuickBookingDialogConvex({
               {userRole === "client" ? (
                 // Read-only display for clients - centered
                 <div className="w-full p-3 rounded-md bg-muted/10 flex justify-center">
-                  {!clients ? (
+                  {clientsLoading ? (
                     <div className="h-6 w-32 bg-muted animate-pulse rounded" />
                   ) : selectedClient ? (
                     <div className="flex flex-col text-center">
@@ -512,6 +610,7 @@ export function QuickBookingDialogConvex({
                     onSearchChange={setClientSearchTerm}
                     userRole={userRole}
                     currentUserId={currentUserId}
+                    isLoading={clientsLoading}
                   />
                 </>
               )}
@@ -522,7 +621,7 @@ export function QuickBookingDialogConvex({
               <label className="block text-sm font-medium text-foreground mb-2">
                 Choose Department
               </label>
-              {!fetchedDepartments ? (
+              {departmentsLoading ? (
                 <div className="w-full h-10 bg-muted animate-pulse rounded-md" />
               ) : (
                 <Combobox
@@ -566,7 +665,7 @@ export function QuickBookingDialogConvex({
               >
                 {/* Conditional rendering: only show calendar if both department and client are selected */}
                 {selectedDepartment && selectedClient ? (
-                  !weekSchedule ? (
+                  scheduleLoading ? (
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
                       <p className="text-muted-foreground">
@@ -626,21 +725,128 @@ export function QuickBookingDialogConvex({
                           msOverflowStyle: "none",
                         }}
                       >
-                        {/* Debug info in development */}
+                        {/* TanStack Status Debug (development only) */}
                         {process.env.NODE_ENV === "development" && (
                           <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-                            Convex Status: {weekSchedule?.length || 0} appointments
+                            Convex Status: {weekSchedule?.length || 0} days • 
+                            Loading: {scheduleLoading ? 'Yes' : 'No'}
                           </div>
                         )}
 
-                        <div className="text-center py-8">
-                          <p className="text-muted-foreground">
-                            Schedule view not yet implemented for Convex
-                          </p>
-                          <p className="text-sm text-muted-foreground mt-2">
-                            This feature requires additional Convex queries to match the TanStack version
-                          </p>
-                        </div>
+                        {!weekSchedule || weekSchedule.length === 0 ? (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground">No schedule data available</p>
+                          </div>
+                        ) : (
+                          weekSchedule.map((day: DaySchedule) => (
+                            <motion.div
+                              key={day.date}
+                              variants={shouldAnimate ? itemVariants : {}}
+                              className="space-y-3"
+                            >
+                              {/* Day Header */}
+                              <div className="flex items-center justify-center">
+                                <h4 className="font-medium text-foreground">
+                                  {day.dayName}, {day.date}
+                                </h4>
+                                {!day.hasAvailability && (
+                                  <span className="text-sm text-muted-foreground ml-2">
+                                    - No Availability
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Time Slots */}
+                              {day.hasAvailability ? (
+                                <motion.div
+                                  variants={
+                                    shouldAnimate ? containerVariants : {}
+                                  }
+                                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2"
+                                >
+                                  {day.slots.map((slot: TimeSlot) => (
+                                    <motion.button
+                                      key={`${day.date}-${slot.time}`}
+                                      variants={
+                                        shouldAnimate ? timeSlotVariants : {}
+                                      }
+                                      whileHover={
+                                        shouldAnimate && slot.available
+                                          ? {
+                                              scale: 1.05,
+                                              y: -2,
+                                              transition: {
+                                                type: "spring",
+                                                stiffness: 400,
+                                                damping: 25,
+                                              },
+                                            }
+                                          : {}
+                                      }
+                                      whileTap={
+                                        shouldAnimate && slot.available
+                                          ? { scale: 0.98 }
+                                          : {}
+                                      }
+                                      onClick={() => {
+                                        if (
+                                          slot.available &&
+                                          !isPastDate(day.fullDate) &&
+                                          !slot.isNonWorkingDay
+                                        ) {
+                                          handleTimeSlotClick(
+                                            day,
+                                            slot.time
+                                          );
+                                        } else if (
+                                          isOwnAppointment(slot) &&
+                                          !isPastDate(day.fullDate) &&
+                                          !slot.isNonWorkingDay
+                                        ) {
+                                          handleCancelAppointment(day, slot);
+                                        }
+                                      }}
+                                      disabled={
+                                        isPastDate(day.fullDate) ||
+                                        slot.isNonWorkingDay ||
+                                        isBooking ||
+                                        isCancelling
+                                      }
+                                      aria-label={`${
+                                        slot.available ? "Book" : "Occupied"
+                                      } time slot ${slot.time} on ${
+                                        day.dayName
+                                      }, ${day.date}`}
+                                      className={cn(
+                                        "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
+                                        getSlotStyling(slot, day.fullDate)
+                                      )}
+                                    >
+                                      <div className="text-center relative">
+                                        <div className="font-medium">
+                                          {slot.time}
+                                        </div>
+                                        <div className="text-xs">
+                                          {getSlotText(slot)}
+                                        </div>
+                                        {isOwnAppointment(slot) &&
+                                          !isPastDate(day.fullDate) && (
+                                            <div className="absolute -top-1 -right-1 text-red-500 opacity-80 font-bold">
+                                              ×
+                                            </div>
+                                          )}
+                                      </div>
+                                    </motion.button>
+                                  ))}
+                                </motion.div>
+                              ) : (
+                                <div className="text-center py-4 text-muted-foreground text-sm">
+                                  No available slots for this day
+                                </div>
+                              )}
+                            </motion.div>
+                          ))
+                        )}
                       </motion.div>
                     </div>
                   )
@@ -723,12 +929,20 @@ export function QuickBookingDialogConvex({
                     </div>
                   </div>
 
-                  {/* Confirm button */}
+                  {/* Confirm button with loading state */}
                   <Button
                     onClick={handleConfirmBooking}
+                    disabled={isBooking}
                     className="w-full"
                   >
-                    CONFIRM BOOKING
+                    {isBooking ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                        Booking...
+                      </>
+                    ) : (
+                      'CONFIRM BOOKING'
+                    )}
                   </Button>
                 </div>
               )}
@@ -774,14 +988,23 @@ export function QuickBookingDialogConvex({
                 setShowCancelDialog(false);
                 setAppointmentToCancel(null);
               }}
+              disabled={isCancelling}
             >
               Keep Appointment
             </Button>
-            <Button
-              variant="destructive"
+            <Button 
+              variant="destructive" 
               onClick={confirmCancelAppointment}
+              disabled={isCancelling}
             >
-              Cancel Appointment
+              {isCancelling ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Cancelling...
+                </>
+              ) : (
+                'Cancel Appointment'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -789,3 +1012,5 @@ export function QuickBookingDialogConvex({
     </>
   );
 }
+
+export default QuickBookingDialogConvex;

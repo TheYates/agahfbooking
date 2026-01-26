@@ -1003,7 +1003,8 @@ export function CalendarViewConvex({ userRole, currentUserId }: CalendarViewConv
         selectedDate={bookingModal.selectedDate}
         selectedSlot={bookingModal.selectedSlot}
         userRole={userRole}
-        currentUserId={currentUserId}
+        currentUserId={currentUserId?.toString()}
+        onAppointmentBooked={handleAppointmentBooked}
       />
 
       {appointmentModal.appointment && (

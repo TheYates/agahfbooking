@@ -80,10 +80,19 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
         {/* Logo/Brand */}
         <div className="flex items-center space-x-3">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xs">
-                H
-              </span>
+            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
+              <picture>
+                <source
+                  srcSet="/agahflogo white.svg"
+                  media="(prefers-color-scheme: dark)"
+                />
+                <img
+                  src="/agahflogo.svg"
+                  alt="AGAHF Logo"
+                  className="h-6 w-6"
+                  style={{ display: 'block' }}
+                />
+              </picture>
             </div>
             <span className="font-semibold text-base">AGAHF</span>
           </Link>

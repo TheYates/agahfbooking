@@ -378,6 +378,7 @@ export function DashboardClientConvex({ user }: DashboardClientProps) {
           onTimeSlotSelect={handleTimeSlotSelect}
           userRole={user.role}
           currentUserId={user.id}
+          currentClientId={user.convexId as Id<"clients">}
         />
       )}
     </div>

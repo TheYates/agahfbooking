@@ -163,6 +163,16 @@ export const createDepartment = mutation({
     color: v.string(),
   },
   handler: async (ctx, args) => {
+    // Check if department with this name already exists
+    const existing = await ctx.db
+      .query("departments")
+      .filter((q) => q.eq(q.field("name"), args.name))
+      .first();
+
+    if (existing) {
+      throw new Error(`Department "${args.name}" already exists`);
+    }
+
     const departmentId = await ctx.db.insert("departments", {
       name: args.name,
       description: args.description,
@@ -206,6 +216,54 @@ export const deleteDepartment = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
+  },
+});
+
+/**
+ * Remove duplicate departments, keeping only the first one of each name
+ */
+export const removeDuplicateDepartments = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allDepartments = await ctx.db.query("departments").collect();
+    
+    // Group by name using plain object
+    const departmentsByName: Record<string, Array<typeof allDepartments[0]>> = {};
+    for (const dept of allDepartments) {
+      if (!departmentsByName[dept.name]) {
+        departmentsByName[dept.name] = [];
+      }
+      departmentsByName[dept.name].push(dept);
+    }
+    
+    let deletedCount = 0;
+    const keptDepartments: string[] = [];
+    
+    // For each name, keep the first (oldest by _id) and delete the rest
+    const names = Object.keys(departmentsByName);
+    for (const name of names) {
+      const departments = departmentsByName[name];
+      if (departments.length > 1) {
+        // Sort by _id to keep consistent ordering (first created)
+        departments.sort((a, b) => a._id.localeCompare(b._id));
+        
+        // Keep the first one
+        keptDepartments.push(`${name} (kept ID: ${departments[0]._id})`);
+        
+        // Delete the rest
+        for (let i = 1; i < departments.length; i++) {
+          await ctx.db.delete(departments[i]._id);
+          deletedCount++;
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      deletedCount,
+      message: `Removed ${deletedCount} duplicate departments`,
+      keptDepartments,
+    };
   },
 });
 
@@ -413,6 +471,15 @@ export const deleteAppointment = mutation({
   },
 });
 
+export const deleteAppointments = mutation({
+  args: { ids: v.array(v.id("appointments")) },
+  handler: async (ctx, args) => {
+    const { ids } = args;
+    await Promise.all(ids.map((id) => ctx.db.delete(id)));
+    return { success: true };
+  },
+});
+
 // ============= DEPARTMENT AVAILABILITY MUTATIONS =============
 
 export const setDepartmentAvailability = mutation({
@@ -526,5 +593,50 @@ export const updateAppointmentStatus = mutation({
     await ctx.db.patch(id, updates);
 
     return id;
+  },
+});
+
+export const deleteAppointmentStatus = mutation({
+  args: { id: v.id("appointment_statuses") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id);
+    return { success: true };
+  },
+});
+
+// ============= CALENDAR CONFIG MUTATIONS =============
+
+export const updateCalendarSetting = mutation({
+  args: {
+    config_key: v.string(),
+    config_value: v.string(),
+    description: v.optional(v.string()),
+    updated_by: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("calendar_config")
+      .withIndex("by_key", (q) => q.eq("config_key", args.config_key))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        config_value: args.config_value,
+        description: args.description,
+        updated_by: args.updated_by,
+        updated_at: Date.now(),
+      });
+      return existing._id;
+    }
+
+    const configId = await ctx.db.insert("calendar_config", {
+      config_key: args.config_key,
+      config_value: args.config_value,
+      description: args.description,
+      updated_by: args.updated_by,
+      updated_at: Date.now(),
+    });
+
+    return configId;
   },
 });
