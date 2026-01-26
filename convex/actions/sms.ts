@@ -8,13 +8,31 @@
  */
 
 import { v } from "convex/values";
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 
 /**
  * Send OTP via SMS
  * Supports both Hubtel (production) and mock mode (development)
  */
 export const sendOTP = action({
+  args: {
+    phone: v.string(),
+    otp: v.string(),
+    hospitalName: v.string(),
+  },
+  handler: async (ctx, { phone, otp, hospitalName }) => {
+    const mode = process.env.OTP_MODE || "mock";
+    
+    if (mode === "hubtel") {
+      return await sendViaHubtel(phone, otp, hospitalName);
+    } else {
+      return await sendViaMock(phone, otp, hospitalName);
+    }
+  },
+});
+
+// Internal action for sending OTP - used by other actions to avoid circular type references
+export const sendOTPInternal = internalAction({
   args: {
     phone: v.string(),
     otp: v.string(),

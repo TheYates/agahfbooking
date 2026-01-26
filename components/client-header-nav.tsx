@@ -85,7 +85,7 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
                 H
               </span>
             </div>
-            <span className="font-semibold text-base">Hospital System</span>
+            <span className="font-semibold text-base">AGAHF</span>
           </Link>
         </div>
 

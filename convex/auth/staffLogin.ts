@@ -23,7 +23,7 @@ export const staffLogin = mutation({
   handler: async (ctx, { username, passwordHash }) => {
     // Find staff user by employee_id or name
     const staffUser = await ctx.db
-      .query("staff_users")
+      .query("users")
       .filter((q) =>
         q.or(
           q.eq(q.field("employee_id"), username),

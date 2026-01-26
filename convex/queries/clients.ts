@@ -5,10 +5,21 @@
  */
 
 import { v } from "convex/values";
-import { query } from "../_generated/server";
+import { query, internalQuery } from "../_generated/server";
 
-// Get client by X-number
+// Get client by X-number - public query
 export const getByXNumber = query({
+  args: { xNumber: v.string() },
+  handler: async (ctx, { xNumber }) => {
+    return await ctx.db
+      .query("clients")
+      .withIndex("by_x_number", (q) => q.eq("x_number", xNumber))
+      .first();
+  },
+});
+
+// Get client by X-number - internal query for use by actions
+export const getByXNumberInternal = internalQuery({
   args: { xNumber: v.string() },
   handler: async (ctx, { xNumber }) => {
     return await ctx.db

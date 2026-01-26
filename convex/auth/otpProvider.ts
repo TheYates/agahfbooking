@@ -10,8 +10,30 @@
 
 import { v } from "convex/values";
 import { mutation, action } from "../_generated/server";
-import { api } from "../_generated/api";
 import { ConvexError } from "convex/values";
+import { Id } from "../_generated/dataModel";
+import { FunctionReference } from "convex/server";
+
+// Define the expected client type to avoid deep type instantiation
+type Client = {
+  _id: Id<"clients">;
+  x_number: string;
+  name: string;
+  phone: string;
+  category: string;
+  emergency_contact?: string;
+  address?: string;
+  is_active: boolean;
+  created_at: number;
+  updated_at: number;
+} | null;
+
+// Define SMS result type
+type SmsResult = { success: boolean; messageId?: string; error?: string };
+
+// Function references - typed to avoid circular reference issues
+const getByXNumberInternalRef = "queries/clients:getByXNumberInternal" as unknown as FunctionReference<"query", "internal", { xNumber: string }, Client>;
+const sendOTPInternalRef = "actions/sms:sendOTPInternal" as unknown as FunctionReference<"action", "internal", { phone: string; otp: string; hospitalName: string }, SmsResult>;
 
 /**
  * Generate and send OTP to client
@@ -27,9 +49,7 @@ export const sendOTP = action({
     const crypto = await import("crypto");
     
     // Find client by X-number
-    const client = await ctx.runQuery(api.queries.clients.getByXNumber, {
-      xNumber,
-    });
+    const client = await ctx.runQuery(getByXNumberInternalRef, { xNumber });
     
     if (!client) {
       throw new ConvexError({
@@ -70,7 +90,7 @@ export const sendOTP = action({
     });
     
     // Send OTP via SMS
-    const smsResult = await ctx.runAction(api.actions.sms.sendOTP, {
+    const smsResult = await ctx.runAction(sendOTPInternalRef, {
       phone: client.phone,
       otp,
       hospitalName: "AGAHF Hospital",
@@ -129,7 +149,7 @@ export const verifyOTP = action({
       }
       
       // Find client
-      const client = await ctx.runQuery(api.queries.clients.getByXNumber, {
+      const client = await ctx.runQuery(getByXNumberInternalRef, {
         xNumber: decoded.xNumber,
       });
       

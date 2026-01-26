@@ -15,13 +15,16 @@ export const getUsers = query({
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    let usersQuery = ctx.db.query("users");
+    let users;
 
     if (args.role !== undefined) {
-      usersQuery = usersQuery.withIndex("by_role", (q) => q.eq("role", args.role!));
+      users = await ctx.db
+        .query("users")
+        .withIndex("by_role", (q) => q.eq("role", args.role!))
+        .collect();
+    } else {
+      users = await ctx.db.query("users").collect();
     }
-
-    const users = await usersQuery.collect();
 
     if (args.isActive !== undefined) {
       return users.filter((user) => user.is_active === args.isActive);
@@ -179,15 +182,18 @@ export const getDoctors = query({
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    let doctorsQuery = ctx.db.query("doctors");
+    let doctors;
 
     if (args.department_id) {
-      doctorsQuery = doctorsQuery.withIndex("by_department", (q) =>
-        q.eq("department_id", args.department_id!)
-      );
+      doctors = await ctx.db
+        .query("doctors")
+        .withIndex("by_department", (q) =>
+          q.eq("department_id", args.department_id!)
+        )
+        .collect();
+    } else {
+      doctors = await ctx.db.query("doctors").collect();
     }
-
-    const doctors = await doctorsQuery.collect();
 
     if (args.isActive !== undefined) {
       return doctors.filter((doctor) => doctor.is_active === args.isActive);

@@ -5,10 +5,26 @@
  */
 
 import { v } from "convex/values";
-import { query } from "../_generated/server";
+import { query, internalQuery } from "../_generated/server";
 
-// Find staff user by username (employee_id or name)
+// Find staff user by username (employee_id or name) - public query
 export const findByUsername = query({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    return await ctx.db
+      .query("users")
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("employee_id"), username),
+          q.eq(q.field("name"), username)
+        )
+      )
+      .first();
+  },
+});
+
+// Find staff user by username - internal query for use by actions
+export const findByUsernameInternal = internalQuery({
   args: { username: v.string() },
   handler: async (ctx, { username }) => {
     return await ctx.db
