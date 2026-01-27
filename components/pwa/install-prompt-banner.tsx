@@ -56,7 +56,7 @@ export function InstallPromptBanner({ className }: InstallPromptBannerProps) {
     <div
       className={cn(
         "fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom duration-300",
-        "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground",
+        "bg-background border-t border-border",
         "safe-area-inset-bottom",
         className
       )}
@@ -64,12 +64,12 @@ export function InstallPromptBanner({ className }: InstallPromptBannerProps) {
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-full bg-white/20 p-2">
-              <Smartphone className="h-5 w-5" />
+            <div className="rounded-full bg-primary/10 p-2">
+              <Smartphone className="h-5 w-5 text-primary" />
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">Install AGAHF Booking</span>
-              <span className="text-xs text-primary-foreground/80">
+              <span className="font-semibold text-sm text-foreground">Install AGAHF Booking</span>
+              <span className="text-xs text-muted-foreground">
                 Get quick access from your home screen
               </span>
             </div>
@@ -77,10 +77,10 @@ export function InstallPromptBanner({ className }: InstallPromptBannerProps) {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="secondary"
+              variant="default"
               size="sm"
               onClick={handleInstall}
-              className="gap-1.5 bg-white text-primary hover:bg-white/90"
+              className="gap-1.5"
             >
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Install</span>
@@ -89,7 +89,7 @@ export function InstallPromptBanner({ className }: InstallPromptBannerProps) {
               variant="ghost"
               size="icon"
               onClick={handleDismiss}
-              className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/20"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Dismiss</span>
