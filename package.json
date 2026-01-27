@@ -33,6 +33,7 @@
     "@apollo/server": "^5.0.0",
     "@as-integrations/next": "^4.0.0",
     "@convex-dev/auth": "^0.0.90",
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@emotion/is-prop-valid": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.2",
@@ -86,7 +87,6 @@
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.454.0",
     "next": "15.2.6",
-    "@ducanh2912/next-pwa": "^10.2.9",
     "next-themes": "^0.4.6",
     "pg": "^8.16.3",
     "react": "^19",
@@ -99,6 +99,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {

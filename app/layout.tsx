@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
 // Legacy providers (keep during migration)
 import QueryProvider from "@/components/providers/query-provider";
+import { PWAProvider } from "@/components/pwa";
 
 export const metadata: Metadata = {
   title: "AGAHF Booking",
@@ -80,7 +81,9 @@ html {
               enableSystem
               disableTransitionOnChange
             >
-              {children}
+              <PWAProvider>
+                {children}
+              </PWAProvider>
             </ThemeProvider>
           </QueryProvider>
         </ConvexClientProvider>

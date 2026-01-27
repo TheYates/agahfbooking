@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Calendar, Clock, User, Building, Search } from "lucide-react";
+import { Calendar, Clock, User, Building, Search, CheckCircle2, Sparkles, CircleDashed, XCircle, MapPin, UserX, RefreshCw, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,29 +63,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
   const appointments: Appointment[] = (appointmentsData as any)?.data || [];
   const error = queryError?.message || "";
 
-  const getStatusColor = (status: string) => {
-    const colors: { [key: string]: string } = {
-      booked:
-        "bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300",
-      confirmed:
-        "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300",
-      arrived:
-        "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300",
-      waiting:
-        "bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300",
-      completed:
-        "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300",
-      no_show: "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300",
-      cancelled:
-        "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300",
-      rescheduled:
-        "bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300",
-    };
-    return (
-      colors[status] ||
-      "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300"
-    );
-  };
+
 
   // 🚀 TanStack Query: Simplified cancel with optimistic updates
   const handleCancelAppointment = async (appointmentId: number) => {
@@ -292,7 +270,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-                              Appointment w/ {appointment.doctorName}
+                              Appointment <span className="font-light text-xs text-muted-foreground">with</span> {appointment.doctorName}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               {appointment.departmentName} • Slot #{appointment.slotNumber}
@@ -301,14 +279,69 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                         </div>
 
                         {/* Status Column */}
-                        <div className="flex items-center gap-2">
-                          <div className={`h-2 w-2 rounded-full ${appointment.status === 'confirmed' ? 'bg-green-500' :
-                            appointment.status === 'booked' ? 'bg-blue-500' :
-                              appointment.status === 'cancelled' ? 'bg-zinc-400' : 'bg-orange-400'
-                            }`} />
-                          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400 capitalize">
-                            {appointment.status.replace("_", " ")}
-                          </span>
+                        <div className="flex items-center">
+                          {(() => {
+                            const statusConfig: Record<string, { icon: any, label: string, className: string }> = {
+                              booked: {
+                                icon: Calendar,
+                                label: "Booked",
+                                className: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400"
+                              },
+                              confirmed: {
+                                icon: CheckCircle2,
+                                label: "Confirmed",
+                                className: "bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-950/30 dark:border-cyan-800 dark:text-cyan-400"
+                              },
+                              arrived: {
+                                icon: MapPin,
+                                label: "Arrived",
+                                className: "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/30 dark:border-indigo-800 dark:text-indigo-400"
+                              },
+                              waiting: {
+                                icon: Clock,
+                                label: "Waiting",
+                                className: "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-400"
+                              },
+                              completed: {
+                                icon: Check,
+                                label: "Completed",
+                                className: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400"
+                              },
+                              no_show: {
+                                icon: UserX,
+                                label: "No Show",
+                                className: "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400"
+                              },
+                              cancelled: {
+                                icon: XCircle,
+                                label: "Cancelled",
+                                className: "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
+                              },
+                              rescheduled: {
+                                icon: RefreshCw,
+                                label: "Rescheduled",
+                                className: "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400"
+                              }
+                            };
+
+                            const config = statusConfig[appointment.status] || {
+                              icon: CircleDashed,
+                              label: appointment.status,
+                              className: "bg-zinc-50 border-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
+                            };
+
+                            const StatusIcon = config.icon;
+
+                            return (
+                              <div className={cn(
+                                "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium shadow-sm transition-colors",
+                                config.className
+                              )}>
+                                <StatusIcon className="h-3.5 w-3.5" />
+                                <span className="capitalize">{config.label}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Doctor/Recipients Column */}

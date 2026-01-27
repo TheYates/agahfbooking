@@ -41,6 +41,9 @@ import { AntiAbuseManagementTab } from "@/components/settings/anti-abuse-managem
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { useInstallPrompt, useOnlineStatus } from "@/hooks/use-pwa";
+import { Smartphone, Download, WifiOff } from "lucide-react";
 
 interface SystemSettings {
   maxAdvanceBookingDays: number;
@@ -369,6 +372,9 @@ export default function SettingsPageConvex() {
 
         {/* Notifications Tab */}
         <TabsContent value="notifications" className="space-y-6">
+          {/* Push Notifications Card */}
+          <PushNotificationsCard />
+
           <Card>
             <CardHeader>
               <CardTitle>SMS Notifications</CardTitle>
@@ -443,6 +449,155 @@ export default function SettingsPageConvex() {
 }
 
 // OTP Configuration Component
+function PushNotificationsCard() {
+  const {
+    isSupported,
+    permission,
+    subscription,
+    isLoading,
+    error,
+    subscribe,
+    unsubscribe,
+    sendLocalNotification,
+  } = usePushNotifications();
+  const { isInstallable, isInstalled, promptInstall } = useInstallPrompt();
+  const isOnline = useOnlineStatus();
+
+  const handleToggleNotifications = async () => {
+    if (subscription) {
+      const success = await unsubscribe();
+      if (success) {
+        toast.success("Push notifications disabled");
+      } else {
+        toast.error("Failed to disable notifications");
+      }
+    } else {
+      const result = await subscribe();
+      if (result) {
+        toast.success("Push notifications enabled!", {
+          description: "You'll receive reminders for your appointments.",
+        });
+      } else if (error) {
+        toast.error("Failed to enable notifications", {
+          description: error,
+        });
+      }
+    }
+  };
+
+  const handleTestNotification = () => {
+    sendLocalNotification("Test Notification", {
+      body: "Push notifications are working correctly!",
+      tag: "test",
+    });
+    toast.success("Test notification sent!");
+  };
+
+  const handleInstallApp = async () => {
+    const success = await promptInstall();
+    if (success) {
+      toast.success("App installed successfully!");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="h-5 w-5" />
+          Push Notifications
+        </CardTitle>
+        <CardDescription>
+          Receive browser notifications for appointment reminders
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Online Status */}
+        {!isOnline && (
+          <Alert>
+            <WifiOff className="h-4 w-4" />
+            <AlertDescription>
+              You're currently offline. Some features may be unavailable.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* PWA Install Status */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center gap-3">
+            <Smartphone className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <Label>App Installation</Label>
+              <p className="text-sm text-muted-foreground">
+                {isInstalled
+                  ? "App is installed on your device"
+                  : isInstallable
+                    ? "Install app for the best experience"
+                    : "App installation not available"}
+              </p>
+            </div>
+          </div>
+          {isInstallable && !isInstalled && (
+            <Button variant="outline" size="sm" onClick={handleInstallApp}>
+              <Download className="h-4 w-4 mr-2" />
+              Install
+            </Button>
+          )}
+          {isInstalled && (
+            <span className="text-sm text-green-600 font-medium flex items-center gap-1">
+              <CheckCircle className="h-4 w-4" />
+              Installed
+            </span>
+          )}
+        </div>
+
+        {/* Push Notification Toggle */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div>
+            <Label>Push Notifications</Label>
+            <p className="text-sm text-muted-foreground">
+              {!isSupported
+                ? "Not supported on this browser"
+                : permission === "denied"
+                  ? "Blocked - Enable in browser settings"
+                  : subscription
+                    ? "Receiving appointment reminders"
+                    : "Enable to receive reminders"}
+            </p>
+          </div>
+          <Switch
+            checked={!!subscription}
+            onCheckedChange={handleToggleNotifications}
+            disabled={!isSupported || permission === "denied" || isLoading}
+          />
+        </div>
+
+        {/* Test Notification */}
+        {subscription && (
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+            <div>
+              <Label>Test Notification</Label>
+              <p className="text-sm text-muted-foreground">
+                Send a test notification to verify setup
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleTestNotification}>
+              Send Test
+            </Button>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function OTPConfigurationTab() {
   const [testPhone, setTestPhone] = useState("");
   const [currentMode, setCurrentMode] = useState<"hubtel" | "mock">("mock");

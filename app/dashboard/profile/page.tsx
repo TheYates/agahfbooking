@@ -19,14 +19,34 @@ import {
   HeartPulse,
   CreditCard,
   Building2,
-  CalendarDays
+  CalendarDays,
+  Bell,
+  BellOff,
+  Smartphone,
+  Download,
+  CheckCircle2,
+  Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useConvexAuth } from "@/hooks/use-convex-auth";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { useInstallPrompt } from "@/hooks/use-pwa";
+import { toast } from "sonner";
 
 export default function ProfilePage() {
   const { user: authUser } = useConvexAuth();
   const [userData, setUserData] = useState<any>(null);
+  
+  // PWA and Notification hooks
+  const {
+    isSupported: notificationsSupported,
+    permission,
+    subscription,
+    isLoading: notificationsLoading,
+    subscribe,
+    unsubscribe,
+  } = usePushNotifications();
+  const { isInstallable, isInstalled, promptInstall } = useInstallPrompt();
 
   useEffect(() => {
     if (authUser) {
@@ -226,6 +246,91 @@ export default function ProfilePage() {
               />
             </Section>
           )}
+
+          <Section title="App & Notifications">
+            {/* Install App */}
+            <div 
+              className="flex items-center px-5 py-4 hover:bg-muted/30 transition-all cursor-pointer"
+              onClick={async () => {
+                if (isInstallable && !isInstalled) {
+                  const success = await promptInstall();
+                  if (success) {
+                    toast.success("App installed successfully!");
+                  }
+                }
+              }}
+            >
+              <div className="h-9 w-9 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center mr-4">
+                <Smartphone className="h-[18px] w-[18px] text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-foreground">Install App</p>
+                <p className="text-[13px] text-muted-foreground truncate">
+                  {isInstalled 
+                    ? "App is installed on your device" 
+                    : isInstallable 
+                      ? "Add to home screen for quick access"
+                      : "App installation not available"}
+                </p>
+              </div>
+              {isInstalled ? (
+                <CheckCircle2 className="h-5 w-5 text-green-500 ml-2" />
+              ) : isInstallable ? (
+                <Download className="h-5 w-5 text-muted-foreground/50 ml-2" />
+              ) : null}
+            </div>
+
+            {/* Push Notifications */}
+            <div 
+              className="flex items-center px-5 py-4 hover:bg-muted/30 transition-all cursor-pointer"
+              onClick={async () => {
+                if (!notificationsSupported || permission === "denied" || notificationsLoading) return;
+                
+                if (subscription) {
+                  const success = await unsubscribe();
+                  if (success) {
+                    toast.success("Notifications disabled");
+                  }
+                } else {
+                  const result = await subscribe();
+                  if (result) {
+                    toast.success("Notifications enabled!", {
+                      description: "You'll receive appointment reminders",
+                    });
+                  }
+                }
+              }}
+            >
+              <div className={`h-9 w-9 rounded-xl flex items-center justify-center mr-4 ${
+                subscription 
+                  ? "bg-green-50 dark:bg-green-500/10" 
+                  : "bg-muted"
+              }`}>
+                {notificationsLoading ? (
+                  <Loader2 className="h-[18px] w-[18px] text-muted-foreground animate-spin" />
+                ) : subscription ? (
+                  <Bell className="h-[18px] w-[18px] text-green-500" />
+                ) : (
+                  <BellOff className="h-[18px] w-[18px] text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-foreground">Push Notifications</p>
+                <p className="text-[13px] text-muted-foreground truncate">
+                  {!notificationsSupported 
+                    ? "Not supported on this browser"
+                    : permission === "denied"
+                      ? "Blocked - Enable in browser settings"
+                      : subscription
+                        ? "Receiving appointment reminders"
+                        : "Tap to enable reminders"}
+                </p>
+              </div>
+              {subscription && (
+                <CheckCircle2 className="h-5 w-5 text-green-500 ml-2" />
+              )}
+            </div>
+          </Section>
 
           <Section title="Support & Security">
             <ListItem

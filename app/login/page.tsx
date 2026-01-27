@@ -269,12 +269,12 @@ export default function LoginPage() {
                           disabled={loading}
                           autoFocus
                         >
-                          <InputOTPGroup className="gap-2 sm:gap-3">
+                          <InputOTPGroup className="gap-2 sm:gap-2">
                             {[0, 1, 2, 3, 4, 5].map((idx) => (
                               <InputOTPSlot 
                                 key={idx} 
                                 index={idx} 
-                                className="h-12 w-12 sm:h-16 sm:w-16 text-xl sm:text-3xl border-muted-foreground/20 bg-muted/30 focus-visible:ring-primary focus-visible:border-primary" 
+                                className="h-14 w-12 sm:h-12 sm:w-10 text-2xl sm:text-xl font-semibold border-muted-foreground/20 bg-muted/30 focus-visible:ring-primary focus-visible:border-primary rounded-lg" 
                               />
                             ))}
                           </InputOTPGroup>

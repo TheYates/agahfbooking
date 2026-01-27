@@ -76,11 +76,11 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto max-w-7xl flex h-14 items-center justify-between px-6">
+      <div className="container mx-auto max-w-7xl flex h-14 items-center px-6">
         {/* Logo/Brand */}
         <div className="flex items-center space-x-3">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center overflow-hidden">
+            <div className="h-7 w-7 flex items-center justify-center overflow-hidden">
               <picture>
                 <source
                   srcSet="/agahflogo white.svg"
@@ -94,12 +94,12 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
                 />
               </picture>
             </div>
-            <span className="font-semibold text-base">AGAHF</span>
+            <span className="font-semibold text-base">AGA HEALTH FOUNDATION</span>
           </Link>
         </div>
 
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-1">
+        {/* Desktop Navigation - Centered */}
+        <div className="hidden md:flex flex-1 items-center justify-center">
           <NavigationMenu>
             <NavigationMenuList>
               {clientMenuItems.map((item) => (
