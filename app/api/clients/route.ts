@@ -45,11 +45,11 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     // Validate required fields
-    const { xNumber, name, phone, category, emergencyContact, address } = body;
+    const { xNumber, name, phone, email, category, emergencyContact, address } = body;
 
-    if (!xNumber || !name || !phone || !category) {
+    if (!xNumber || !name || !phone || !email || !category) {
       return NextResponse.json(
-        { error: "xNumber, name, phone, and category are required" },
+        { error: "xNumber, name, phone, email, and category are required" },
         { status: 400 }
       );
     }
@@ -71,12 +71,13 @@ export async function POST(request: Request) {
         x_number: xNumber,
         name,
         phone,
+        email,
         category,
         emergency_contact: emergencyContact || null,
         address: address || null,
         is_active: true,
       })
-      .select("id,x_number,name,phone,category,is_active,created_at")
+      .select("id,x_number,name,phone,email,category,is_active,created_at")
       .single();
 
     if (error) {

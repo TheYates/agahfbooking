@@ -18,6 +18,7 @@ interface Client {
   xNumber: string;
   name: string;
   phone: string;
+  email?: string;
   category: string;
   joinDate: string;
   totalAppointments: number;
@@ -42,6 +43,7 @@ export function EditClientForm({
   const [formData, setFormData] = useState({
     name: client.name,
     phone: client.phone,
+    email: client.email || "",
     category: client.category,
     status: client.status,
     emergencyContact: client.emergencyContact || "",
@@ -132,16 +134,25 @@ export function EditClientForm({
           />
         </div>
         <div>
-          <Label htmlFor="emergencyContact">Emergency Contact</Label>
+          <Label htmlFor="email">Email *</Label>
           <Input
-            id="emergencyContact"
-            type="tel"
-            value={formData.emergencyContact}
-            onChange={(e) =>
-              handleInputChange("emergencyContact", e.target.value)
-            }
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => handleInputChange("email", e.target.value)}
+            required
           />
         </div>
+      </div>
+
+      <div>
+        <Label htmlFor="emergencyContact">Emergency Contact</Label>
+        <Input
+          id="emergencyContact"
+          type="tel"
+          value={formData.emergencyContact}
+          onChange={(e) => handleInputChange("emergencyContact", e.target.value)}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

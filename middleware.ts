@@ -30,13 +30,11 @@ export function middleware(request: NextRequest) {
       const userData = JSON.parse(sessionToken.value);
 
       // Check for required fields - handle both client and staff sessions
-      // For clients: require convexId (added during Convex migration)
-      const hasClientFields = userData.id && userData.xNumber && userData.role && userData.convexId;
-      const hasStaffFields =
-        userData.id && userData.role && userData.employee_id;
+      const hasClientFields = userData.id && userData.xNumber && userData.role;
+      const hasStaffFields = userData.id && userData.role && userData.employee_id;
 
       if (!hasClientFields && !hasStaffFields) {
-        // Invalid session (missing required fields or old session without convexId)
+        // Invalid session (missing required fields)
         // Clear the session and redirect to login
         const response = NextResponse.redirect(new URL("/login", request.url));
         response.cookies.delete("session_token");

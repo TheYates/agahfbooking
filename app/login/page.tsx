@@ -15,11 +15,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield } from "lucide-react";
 import Link from "next/link";
-import { useConvexAuth } from "@/hooks/use-convex-auth";
+import { authActions } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { sendOTP, verifyOTP } = useConvexAuth();
+  // Email OTP via Supabase-backed API routes
+  const sendOTP = authActions.sendOTP;
+  const verifyOTP = authActions.verifyOTP;
   
   const [step, setStep] = useState<"xnumber" | "otp">("xnumber");
   const [xNumber, setXNumber] = useState("");
@@ -64,8 +66,7 @@ export default function LoginPage() {
     }
 
     try {
-      // Call Convex OTP function
-      const result = await sendOTP(xNumber, "client");
+      const result = await sendOTP(xNumber);
 
       // Check if we're in development mode (mock OTP)
       if (result.otp) {
@@ -98,43 +99,13 @@ export default function LoginPage() {
     try {
       console.log("Verifying OTP:", { xNumber, otpValue });
       
-      // Call Convex OTP verification
-      const result = await verifyOTP(xNumber, otpValue, "client");
+      const result = await verifyOTP(xNumber, otpValue);
       
       console.log("Verification result:", result);
       console.log("Verification result.user:", JSON.stringify(result.user, null, 2));
 
       if (result.success && result.user) {
-        // User is automatically stored in localStorage by useConvexAuth
-        
-        
-        // Format user data for middleware (expects xNumber not x_number)
-        // Use type assertion to access optional properties safely
-        const userData = result.user as {
-          id: string;
-          name: string;
-          phone: string;
-          xNumber?: string;
-          x_number?: string;
-          category?: string;
-          role: string;
-          convexId?: string;
-        };
-        
-        const sessionData = {
-          id: userData.id,
-          name: userData.name,
-          phone: userData.phone,
-          xNumber: userData.xNumber || userData.x_number, // Middleware expects xNumber
-          category: userData.category,
-          role: userData.role,
-          convexId: userData.convexId || userData.id, // Use convexId if present, otherwise use id
-        };
-
-        
-        // Set session cookie for middleware
-        document.cookie = `session_token=${JSON.stringify(sessionData)}; path=/; max-age=86400`; // 24 hours
-        
+        // Session cookie is set server-side by /api/auth/verify-otp
         router.push("/dashboard");
         router.refresh();
       } else {

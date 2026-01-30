@@ -21,12 +21,13 @@ export async function PUT(
       emergencyContact,
       address,
       medicalNotes,
+      email,
     } = body;
 
     // Validate required fields
-    if (!name || !phone || !category || !status) {
+    if (!name || !phone || !email || !category || !status) {
       return NextResponse.json(
-        { error: "Name, phone, category, and status are required" },
+        { error: "Name, phone, email, category, and status are required" },
         { status: 400 }
       );
     }
@@ -79,6 +80,7 @@ export async function PUT(
       .update({
         name,
         phone,
+        email,
         category,
         is_active: isActive,
         emergency_contact: emergencyContact || null,
@@ -88,7 +90,7 @@ export async function PUT(
       })
       .eq("id", clientId)
       .select(
-        "id,x_number,name,phone,category,is_active,emergency_contact,address,medical_notes,created_at,updated_at"
+        "id,x_number,name,phone,email,category,is_active,emergency_contact,address,medical_notes,created_at,updated_at"
       )
       .single();
 
@@ -102,6 +104,7 @@ export async function PUT(
         xNumber: updatedClient.x_number,
         name: updatedClient.name,
         phone: updatedClient.phone,
+        email: updatedClient.email,
         category: updatedClient.category,
         status: updatedClient.is_active ? "active" : "inactive",
         emergencyContact: updatedClient.emergency_contact,

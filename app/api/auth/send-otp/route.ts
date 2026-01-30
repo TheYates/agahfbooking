@@ -1,64 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { sendOTP } from "@/lib/auth";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
-
-/**
- * Mask phone number for display purposes
- * Examples: +233240298713 -> +233****8713, +1234567890 -> +1****7890
- */
-function maskPhoneNumber(phone: string): string {
-  if (!phone || phone.length < 6) return phone;
-
-  // Remove any spaces, dashes, or parentheses
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
-
-  if (cleanPhone.length <= 6) {
-    // For very short numbers, mask middle part
-    return cleanPhone.slice(0, 2) + "****" + cleanPhone.slice(-2);
-  }
-
-  // For longer numbers, show country code + first digit and last 4 digits
-  if (cleanPhone.startsWith("+")) {
-    const countryCodeEnd =
-      cleanPhone.indexOf("0") > 0 ? cleanPhone.indexOf("0") : 4;
-    const prefix = cleanPhone.slice(0, Math.min(countryCodeEnd + 1, 5));
-    const suffix = cleanPhone.slice(-4);
-    return prefix + "****" + suffix;
-  }
-
-  // Fallback for numbers without country code
-  return cleanPhone.slice(0, 2) + "****" + cleanPhone.slice(-4);
-}
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   let requestBody: { xNumber?: string } = {};
-  
+
   try {
     requestBody = await request.json();
     const { xNumber } = requestBody;
 
-    // Get client information for rate limiting
     const clientInfo = getClientInfo(request);
 
     // Validate X-number format
     const xNumberRegex = /^X\d{5}\/\d{2}$/;
-    if (!xNumberRegex.test(xNumber)) {
-      // Record failed attempt for invalid format
-      rateLimiter.recordAttempt(
-        clientInfo.ip,
-        false,
-        undefined,
-        clientInfo.userAgent
-      );
-
-      return NextResponse.json(
-        { error: "Invalid X-number format" },
-        { status: 400 }
-      );
+    if (!xNumber || !xNumberRegex.test(xNumber)) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, undefined, clientInfo.userAgent);
+      return NextResponse.json({ error: "Invalid X-number format" }, { status: 400 });
     }
 
-    // Check rate limiting before processing
     const rateLimitResult = rateLimiter.checkRateLimit(
       clientInfo.ip,
       xNumber,
@@ -66,15 +26,10 @@ export async function POST(request: NextRequest) {
     );
 
     if (!rateLimitResult.allowed) {
-      console.log(
-        `🚫 Rate limit exceeded for ${clientInfo.ip} (${xNumber}): ${rateLimitResult.reason}`
-      );
-
       return NextResponse.json(
         {
           error:
-            rateLimitResult.reason ||
-            "Too many attempts. Please try again later.",
+            rateLimitResult.reason || "Too many attempts. Please try again later.",
           rateLimited: true,
           resetTime: rateLimitResult.resetTime,
           blockDuration: rateLimitResult.blockDuration,
@@ -84,20 +39,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use BetterAuth sendOTP function
-    const result = await sendOTP(xNumber);
+    const supabase = createServerSupabaseClient();
 
-    // Record successful attempt
-    rateLimiter.recordAttempt(
-      clientInfo.ip,
-      true,
-      xNumber,
-      clientInfo.userAgent
-    );
+    // Look up client email
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .select("id,email")
+      .eq("x_number", xNumber)
+      .eq("is_active", true)
+      .single();
 
-    // Include rate limiting info in response
+    if (clientErr || !client) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    if (!(client as any).email) {
+      return NextResponse.json(
+        { error: "No email is set for this client. Please contact reception." },
+        { status: 400 }
+      );
+    }
+
+    // Trigger Supabase Email OTP
+    const { error: otpErr } = await supabase.auth.signInWithOtp({
+      email: (client as any).email,
+      options: {
+        shouldCreateUser: false,
+      },
+    });
+
+    if (otpErr) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      return NextResponse.json({ error: otpErr.message }, { status: 500 });
+    }
+
+    rateLimiter.recordAttempt(clientInfo.ip, true, xNumber, clientInfo.userAgent);
+
     return NextResponse.json({
-      ...result,
+      success: true,
+      message: "OTP sent successfully",
+      // We return xNumber so the client can continue the flow; actual OTP goes to email.
+      xNumber,
       rateLimitInfo: {
         remainingAttempts: rateLimitResult.remainingAttempts,
         requiresCaptcha: rateLimitResult.requiresCaptcha,
@@ -107,32 +90,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Send OTP error:", error);
 
-    // Record failed attempt for server errors
     try {
       const clientInfo = getClientInfo(request);
-      const { xNumber } = requestBody; // Use already parsed body
+      const { xNumber } = requestBody;
       if (xNumber) {
-        rateLimiter.recordAttempt(
-          clientInfo.ip,
-          false,
-          xNumber,
-          clientInfo.userAgent
-        );
+        rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
       }
-    } catch (recordError) {
-      console.error("Failed to record rate limit attempt:", recordError);
+    } catch {
+      // ignore
     }
 
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      {
-        status:
-          error instanceof Error && error.message.includes("not found")
-            ? 404
-            : 500,
-      }
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
     );
   }
 }
