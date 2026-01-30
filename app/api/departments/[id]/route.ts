@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
-import { DepartmentService } from '@/lib/db-services';
+import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+const { MemoryCache } = require("@/lib/memory-cache.js");
 
 export async function GET(
   request: Request,
@@ -15,19 +16,25 @@ export async function GET(
       );
     }
 
-    const department = await DepartmentService.findById(id);
-    
-    if (!department) {
+    const supabase = createServerSupabaseClient();
+
+    const { data: department, error } = await supabase
+      .from("departments")
+      .select(
+        "id,name,description,slots_per_day,working_days,working_hours,color,is_active"
+      )
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      // Supabase returns a 'PGRST116' style code for no rows; treat as 404
       return NextResponse.json(
-        { error: 'Department not found' },
+        { error: "Department not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: department
-    });
+    return NextResponse.json({ success: true, data: department });
     
   } catch (error) {
     console.error('Error fetching department:', error);
@@ -56,27 +63,40 @@ export async function PUT(
     }
 
     const body = await request.json();
-    
-    // Validate required fields
-    const { name } = body;
-    
-    if (!name) {
+
+    const supabase = createServerSupabaseClient();
+
+    // Allow partial updates (e.g. toggling `is_active`) but validate if `name` is provided.
+    if (body.name !== undefined && !body.name) {
       return NextResponse.json(
-        { error: 'Department name is required' },
+        { error: "Department name is required" },
         { status: 400 }
       );
     }
 
-    const department = await DepartmentService.update(id, {
-      name,
-      description: body.description,
-      slots_per_day: body.slots_per_day
-    });
-    
-    return NextResponse.json({
-      success: true,
-      data: department
-    });
+    const updatePayload: any = {};
+    if (body.name !== undefined) updatePayload.name = body.name;
+    if (body.description !== undefined) updatePayload.description = body.description;
+    if (body.slots_per_day !== undefined) updatePayload.slots_per_day = body.slots_per_day;
+    if (body.working_days !== undefined) updatePayload.working_days = body.working_days;
+    if (body.working_hours !== undefined) updatePayload.working_hours = body.working_hours;
+    if (body.color !== undefined) updatePayload.color = body.color;
+    if (body.is_active !== undefined) updatePayload.is_active = body.is_active;
+
+    const { data: department, error } = await supabase
+      .from("departments")
+      .update(updatePayload)
+      .eq("id", id)
+      .select(
+        "id,name,description,slots_per_day,working_days,working_hours,color,is_active"
+      )
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    await MemoryCache.invalidate("departments_");
+
+    return NextResponse.json({ success: true, data: department });
     
   } catch (error) {
     console.error('Error updating department:', error);
@@ -104,11 +124,16 @@ export async function DELETE(
       );
     }
 
-    await DepartmentService.delete(id);
-    
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase.from("departments").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    await MemoryCache.invalidate("departments_");
+
     return NextResponse.json({
       success: true,
-      message: 'Department deleted successfully'
+      message: "Department deleted successfully",
     });
     
   } catch (error) {
