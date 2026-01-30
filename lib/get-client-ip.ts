@@ -34,10 +34,12 @@ export function getClientIP(request: NextRequest): string {
   }
 
   // Fallback to connection remote address
-  const remoteAddress = request.ip;
-  if (remoteAddress && isValidIP(remoteAddress)) {
-    return remoteAddress;
-  }
+  // `NextRequest.ip` is not available in all runtimes / typings.
+  // Rely on forwarded headers above; if absent, fall back to localhost.
+  // const remoteAddress = (request as any).ip;
+  // if (remoteAddress && isValidIP(remoteAddress)) {
+  //   return remoteAddress;
+  // }
 
   // Last resort fallback
   return '127.0.0.1';

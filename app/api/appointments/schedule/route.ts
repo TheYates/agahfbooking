@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     endDateObj.setDate(start.getDate() + daysToGenerate - 1);
     const endDate = endDateObj.toISOString().split("T")[0];
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Fetch department config once
     const { data: dept, error: deptErr } = await supabase

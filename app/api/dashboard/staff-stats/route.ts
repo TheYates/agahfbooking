@@ -1,85 +1,101 @@
-// 🚀 MEMORY-CACHED Staff Stats API
-// Expected performance: 10-30ms (vs 200ms+ previous) = 6-20x faster!
+// 🚀 Staff Dashboard Stats API (Supabase + Memory Cache)
 
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 const { MemoryCache } = require("@/lib/memory-cache.js");
 
-export async function GET(request: Request) {
+export async function GET() {
   const requestStart = Date.now();
 
   try {
     const today = new Date().toISOString().split("T")[0];
 
-    // 🚀 MEMORY-CACHED: All stats in a single cached call
     const stats = await MemoryCache.get(
       `staff_stats_${today}`,
       async () => {
-        // Single combined query instead of 5+ separate queries (10x faster)
-        const [statsResult, recentResult] = await Promise.all([
-          query(
-            `
-            WITH today_stats AS (
-              SELECT
-                COUNT(*) FILTER (WHERE DATE(appointment_date) = $1 AND status NOT IN ('cancelled')) as today_count,
-                COUNT(*) FILTER (WHERE DATE(appointment_date) = $1 AND status = 'completed') as completed_today,
-                COUNT(*) FILTER (WHERE DATE_TRUNC('month', appointment_date) = DATE_TRUNC('month', $1::date)) as month_count,
-                COUNT(*) FILTER (WHERE appointment_date >= $1 AND status NOT IN ('cancelled', 'completed', 'no_show')) as upcoming_count
-              FROM appointments
-            ),
-            slots AS (
-              SELECT
-                COALESCE(SUM(dept.slots_per_day), 0) as total_slots,
-                COUNT(a.id) as booked_slots
-              FROM departments dept
-              LEFT JOIN appointments a ON a.department_id = dept.id
-                AND DATE(a.appointment_date) = $1
-                AND a.status NOT IN ('cancelled')
-              WHERE dept.is_active = true
-            )
-            SELECT ts.*, s.total_slots, s.booked_slots
-            FROM today_stats ts, slots s
-          `,
-            [today]
-          ),
-          query(
-            `
-            SELECT
-              a.id, a.appointment_date, a.slot_number, a.status,
-              c.name as client_name, c.x_number as client_x_number,
-              d.name as doctor_name, dept.name as department_name, dept.color as department_color
-            FROM appointments a
-            JOIN clients c ON a.client_id = c.id
-            JOIN departments dept ON a.department_id = dept.id
-            LEFT JOIN doctors d ON a.doctor_id = d.id
-            WHERE DATE(a.appointment_date) = $1
-            ORDER BY a.appointment_date DESC, a.slot_number DESC
-            LIMIT 5
-          `,
-            [today]
-          ),
+        const supabase = await createServerSupabaseClient();
+
+        // Appointment counts
+        const [todayCountRes, completedTodayRes, monthCountRes, upcomingCountRes] =
+          await Promise.all([
+            supabase
+              .from("appointments")
+              .select("id", { count: "exact", head: true })
+              .eq("appointment_date", today)
+              .not("status", "in", "(cancelled)"),
+            supabase
+              .from("appointments")
+              .select("id", { count: "exact", head: true })
+              .eq("appointment_date", today)
+              .eq("status", "completed"),
+            supabase
+              .from("appointments")
+              .select("id", { count: "exact", head: true })
+              .gte("appointment_date", today.slice(0, 7) + "-01")
+              .lte("appointment_date", today),
+            supabase
+              .from("appointments")
+              .select("id", { count: "exact", head: true })
+              .gte("appointment_date", today)
+              .not("status", "in", "(cancelled,completed,no_show)"),
+          ]);
+
+        if (todayCountRes.error) throw new Error(todayCountRes.error.message);
+        if (completedTodayRes.error) throw new Error(completedTodayRes.error.message);
+        if (monthCountRes.error) throw new Error(monthCountRes.error.message);
+        if (upcomingCountRes.error) throw new Error(upcomingCountRes.error.message);
+
+        // Slots: sum department slots_per_day minus booked for today
+        const [deptSlotsRes, bookedTodayRes] = await Promise.all([
+          supabase
+            .from("departments")
+            .select("slots_per_day")
+            .eq("is_active", true),
+          supabase
+            .from("appointments")
+            .select("id", { count: "exact", head: true })
+            .eq("appointment_date", today)
+            .not("status", "in", "(cancelled)"),
         ]);
 
-        const data = statsResult.rows[0];
-        const totalSlots = parseInt(data?.total_slots || "0");
-        const bookedSlots = parseInt(data?.booked_slots || "0");
+        if (deptSlotsRes.error) throw new Error(deptSlotsRes.error.message);
+        if (bookedTodayRes.error) throw new Error(bookedTodayRes.error.message);
+
+        const totalSlots = (deptSlotsRes.data || []).reduce(
+          (sum: number, d: any) => sum + (d.slots_per_day ?? 0),
+          0
+        );
+        const bookedSlots = bookedTodayRes.count ?? 0;
+
+        // Recent appointments (today)
+        const recentRes = await supabase
+          .from("appointments")
+          .select(
+            "id,appointment_date,slot_number,status,clients(name,x_number),departments(name,color),doctors(name)"
+          )
+          .eq("appointment_date", today)
+          .order("appointment_date", { ascending: false })
+          .order("slot_number", { ascending: false })
+          .limit(5);
+
+        if (recentRes.error) throw new Error(recentRes.error.message);
 
         return {
-          upcomingAppointments: parseInt(data?.upcoming_count || "0"),
-          totalAppointments: parseInt(data?.month_count || "0"),
-          completedAppointments: parseInt(data?.completed_today || "0"),
+          upcomingAppointments: upcomingCountRes.count ?? 0,
+          totalAppointments: monthCountRes.count ?? 0,
+          completedAppointments: completedTodayRes.count ?? 0,
           availableSlots: Math.max(0, totalSlots - bookedSlots),
           daysUntilNext: null,
-          recentAppointments: recentResult.rows.map((row: any) => ({
+          recentAppointments: (recentRes.data || []).map((row: any) => ({
             id: row.id,
-            date: row.appointment_date.toISOString().split("T")[0],
+            date: (row.appointment_date || "").toString().split("T")[0],
             slotNumber: row.slot_number,
             status: row.status,
-            doctorName: row.doctor_name,
-            departmentName: row.department_name,
-            departmentColor: row.department_color,
-            clientName: row.client_name,
-            clientXNumber: row.client_x_number,
+            doctorName: row.doctors?.name ?? null,
+            departmentName: row.departments?.name ?? "",
+            departmentColor: row.departments?.color ?? null,
+            clientName: row.clients?.name ?? null,
+            clientXNumber: row.clients?.x_number ?? null,
           })),
         };
       },

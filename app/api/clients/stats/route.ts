@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     const result = await MemoryCache.get(
       cacheKey,
       async () => {
-        const supabase = createServerSupabaseClient();
+        const supabase = await createServerSupabaseClient();
 
         const { column, ascending } = getSort(sortBy, sortOrder);
 
@@ -213,6 +213,6 @@ export async function GET(request: Request) {
   }
 }
 
-export async function invalidateClientsCache() {
-  await MemoryCache.invalidate("clients_stats_");
-}
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// If you need cache invalidation from elsewhere, move a helper to a separate
+// module (not inside `route.ts`) or invalidate within handlers.

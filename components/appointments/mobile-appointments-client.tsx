@@ -71,10 +71,12 @@ export function MobileAppointmentsClient({
   const itemsPerPage = 10;
 
   // Get booking function from context
-  let openBooking: ((departmentId?: number) => void) | undefined;
+  let openBooking:
+    | ((departmentId?: number | string) => void)
+    | undefined;
   try {
     const booking = useBooking();
-    openBooking = booking.openBooking;
+    openBooking = booking.openBooking as any;
   } catch {
     // Not within MobileLayout context
   }

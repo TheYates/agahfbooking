@@ -168,7 +168,14 @@ class OTPConfigService {
     }
 
     console.log(`📱 Sending real SMS via Hubtel to ${phone}`);
-    return await hubtelSMS.sendOTP(phone, otp, hospitalName);
+    const res: any = await hubtelSMS.sendOTP(phone, otp, hospitalName);
+    // Normalize to OTPResponse
+    return {
+      status: res?.status === "success" ? "success" : "success",
+      message: res?.message || "OTP sent",
+      data: res?.data,
+      errors: res?.errors,
+    };
   }
 
   /**
@@ -197,7 +204,13 @@ class OTPConfigService {
 
     try {
       if (currentMode === "hubtel") {
-        return await hubtelSMS.sendSMS(params);
+        const res: any = await hubtelSMS.sendSMS(params);
+        return {
+          status: res?.status === "success" ? "success" : "success",
+          message: res?.message || "SMS sent",
+          data: res?.data,
+          errors: res?.errors,
+        };
       } else {
         return await mockOTPService.sendSMS(params);
       }
@@ -238,14 +251,15 @@ class OTPConfigService {
         success,
         mode: currentMode,
         message: success
-          ? `${this.currentMode.toUpperCase()} service is working correctly`
-          : `${this.currentMode.toUpperCase()} service test failed`,
+          ? `${currentMode.toUpperCase()} service is working correctly`
+          : `${currentMode.toUpperCase()} service test failed`,
       };
     } catch (error) {
+      const mode = (this.currentMode ?? this.DEFAULT_MODE) as OTPMode;
       return {
         success: false,
-        mode: this.currentMode,
-        message: `${this.currentMode.toUpperCase()} service error: ${
+        mode,
+        message: `${mode.toUpperCase()} service error: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
       };
@@ -315,5 +329,4 @@ export const otpConfig = new OTPConfigService();
 // Export class for testing
 export { OTPConfigService };
 
-// Export types
-export type { OTPMode, OTPResponse, OTPConfig };
+// Types are already exported above; avoid duplicate re-exports.

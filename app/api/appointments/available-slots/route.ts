@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const slotsData = await MemoryCache.get(
       cacheKey,
       async () => {
-        const supabase = createServerSupabaseClient();
+        const supabase = await createServerSupabaseClient();
 
         // Load department config (slots per day + working days)
         const { data: dept, error: deptErr } = await supabase
@@ -145,7 +145,5 @@ export async function GET(request: Request) {
   }
 }
 
-export async function invalidateAvailableSlotsCache(departmentId: number, date: string) {
-  await MemoryCache.invalidate(`available_slots_${departmentId}_${date}`);
-  await MemoryCache.invalidate(`available_slots_week_`);
-}
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// Cache invalidation helpers live in `lib/appointments-cache.ts`.

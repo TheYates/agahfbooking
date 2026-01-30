@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { invalidateAvailableSlotsCache } from "@/app/api/appointments/available-slots/route";
-import { invalidateAppointmentsListCache } from "@/app/api/appointments/list/route";
+import {
+  invalidateAvailableSlotsCache,
+  invalidateAppointmentsListCache,
+} from "@/lib/appointments-cache";
 
 export async function DELETE(request: Request) {
   try {
@@ -32,7 +34,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Find appointment
     const { data: appointment, error: findErr } = await supabase

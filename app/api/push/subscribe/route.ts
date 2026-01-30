@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
-// In production, store subscriptions in your database
-// This is a simple in-memory store for demonstration
-const subscriptions = new Map<string, PushSubscription>();
+function extractKeys(subscription: any) {
+  const p256dh = subscription?.keys?.p256dh || null;
+  const authKey = subscription?.keys?.auth || null;
+  return { p256dh, auth: authKey };
+}
 
 export async function POST(request: Request) {
   try {
+    const h = await headers();
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: h,
     });
 
     if (!session?.user) {
@@ -28,17 +32,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Store subscription with user ID
-    // In production, save to database:
-    // await db.pushSubscription.upsert({
-    //   where: { userId: session.user.id },
-    //   create: { userId: session.user.id, subscription: JSON.stringify(subscription) },
-    //   update: { subscription: JSON.stringify(subscription) }
-    // });
+    const { p256dh, auth: authKey } = extractKeys(subscription);
 
-    subscriptions.set(session.user.id, subscription);
+    const supabase = createAdminSupabaseClient();
 
-    console.log(`Push subscription saved for user ${session.user.id}`);
+    const { error } = await supabase
+      .from("push_subscriptions")
+      .upsert(
+        {
+          user_id: session.user.id,
+          endpoint: subscription.endpoint,
+          p256dh,
+          auth: authKey,
+          subscription,
+          user_agent: h.get("user-agent"),
+        } as any,
+        { onConflict: "endpoint" }
+      );
+
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
@@ -47,7 +59,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error saving push subscription:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to save subscription" },
+      {
+        success: false,
+        error: "Failed to save subscription",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

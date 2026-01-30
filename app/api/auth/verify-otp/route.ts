@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Find client email + profile
     const { data: client, error: clientErr } = await supabase

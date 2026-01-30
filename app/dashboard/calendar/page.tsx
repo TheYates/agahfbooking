@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
-// Calendar now uses Convex backend
-import { CalendarViewConvex as CalendarView } from "@/components/calendar/calendar-view-convex";
+
+// Calendar now uses Supabase/API backend
+import { CalendarView } from "@/components/calendar/calendar-view";
 import { MobileCalendarClientTanstack as MobileCalendarClient } from "@/components/calendar/mobile-calendar-client-tanstack";
 
 export default async function CalendarPage() {

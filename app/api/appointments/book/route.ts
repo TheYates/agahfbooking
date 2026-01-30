@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { invalidateAvailableSlotsCache } from "@/app/api/appointments/available-slots/route";
-import { invalidateAppointmentsListCache } from "@/app/api/appointments/list/route";
+import {
+  invalidateAvailableSlotsCache,
+  invalidateAppointmentsListCache,
+} from "@/lib/appointments-cache";
 
 export async function POST(request: Request) {
   try {
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Check if slot is still available
     const { data: existing, error: existingErr } = await supabase

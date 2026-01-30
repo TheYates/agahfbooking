@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { pool } from "@/lib/db";
+import type { QueryResult } from "pg";
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +24,10 @@ export async function GET(request: NextRequest) {
     const searchTerm = `%${query.trim()}%`;
 
     // Search appointments
-    const appointments = await pool.query(
+    const appointments: QueryResult<any> = await pool.query(
       `SELECT 
         a.id,
-        a.date,
+        a.appointment_date as date,
         a.slot_number as slotNumber,
         a.status,
         c.name as clientName,
@@ -36,22 +37,22 @@ export async function GET(request: NextRequest) {
         dept.color as departmentColor
       FROM appointments a
       JOIN clients c ON a.client_id = c.id
-      JOIN doctors d ON a.doctor_id = d.id
+      LEFT JOIN doctors d ON a.doctor_id = d.id
       JOIN departments dept ON a.department_id = dept.id
       WHERE (
         c.name ILIKE $1 OR 
         c.x_number ILIKE $1 OR 
-        d.name ILIKE $1 OR 
+        COALESCE(d.name, '') ILIKE $1 OR 
         dept.name ILIKE $1 OR
         a.status ILIKE $1
       )
-      ORDER BY a.date DESC
+      ORDER BY a.appointment_date DESC
       LIMIT 10`,
       [searchTerm]
     );
 
     // Search clients (only for admin/receptionist)
-    let clients = [];
+    let clients: QueryResult<any> | null = null;
     if (user.role === "admin" || user.role === "receptionist") {
       clients = await pool.query(
         `SELECT 
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Search doctors
-    const doctors = await pool.query(
+    const doctors: QueryResult<any> = await pool.query(
       `SELECT 
         d.id,
         d.name,
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Search departments
-    const departments = await pool.query(
+    const departments: QueryResult<any> = await pool.query(
       `SELECT 
         id,
         name,
@@ -102,7 +103,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         appointments: appointments.rows,
-        clients: clients.rows || [],
+        clients: clients?.rows || [],
         doctors: doctors.rows,
         departments: departments.rows,
       },
@@ -110,7 +111,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Universal search error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to perform search" },
+      {
+        success: false,
+        error: "Failed to perform search",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

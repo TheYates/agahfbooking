@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { invalidateAppointmentsListCache } from "@/app/api/appointments/list/route";
+import { invalidateAppointmentsListCache } from "@/lib/appointments-cache";
 
 export async function PUT(
   request: Request,
@@ -27,7 +27,7 @@ export async function PUT(
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: updated, error } = await supabase
       .from("appointments")

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const departments = await MemoryCache.get(
       cacheKey,
       async () => {
-        const supabase = createServerSupabaseClient();
+        const supabase = await createServerSupabaseClient();
 
         // NOTE: `date` availability enrichment is not implemented yet for Supabase.
         // For now, return active departments and keep the existing cache strategy.
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: department, error } = await supabase
       .from("departments")
@@ -142,10 +142,10 @@ export async function POST(request: Request) {
   }
 }
 
-// 🔄 Cache invalidation helper for when departments change
-export async function invalidateDepartmentsCache() {
-  await MemoryCache.invalidate('departments_');
-}
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// Cache invalidation should be triggered by calling `MemoryCache.invalidate()`
+// within the handler methods (GET/POST/PUT/DELETE) or by moving helpers to a
+// separate module outside `route.ts`.
 
 // 🌟 Expected Performance Results (Memory Cache):
 // - First request (cache miss): 10-50ms (vs 100-200ms previous)

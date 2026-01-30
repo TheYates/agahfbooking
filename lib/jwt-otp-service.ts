@@ -283,5 +283,4 @@ export const jwtOTPService = new JWTOTPService();
 // Export class for testing
 export { JWTOTPService };
 
-// Export types
-export type { OTPTokenData, OTPVerificationResult, OTPGenerationResult };
+// Types are exported via their declarations above; avoid duplicate re-exports.

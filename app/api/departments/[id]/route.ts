@@ -4,19 +4,17 @@ const { MemoryCache } = require("@/lib/memory-cache.js");
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
-    
-    if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid department ID' },
-        { status: 400 }
-      );
+    const { id: idParam } = await context.params;
+    const id = parseInt(idParam);
+
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid department ID" }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: department, error } = await supabase
       .from("departments")
@@ -27,21 +25,16 @@ export async function GET(
       .single();
 
     if (error) {
-      // Supabase returns a 'PGRST116' style code for no rows; treat as 404
-      return NextResponse.json(
-        { error: "Department not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Department not found" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: department });
-    
   } catch (error) {
-    console.error('Error fetching department:', error);
+    console.error("Error fetching department:", error);
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch department', 
-        details: error instanceof Error ? error.message : 'Unknown error'
+      {
+        error: "Failed to fetch department",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
@@ -50,21 +43,19 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
-    
-    if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid department ID' },
-        { status: 400 }
-      );
+    const { id: idParam } = await context.params;
+    const id = parseInt(idParam);
+
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid department ID" }, { status: 400 });
     }
 
     const body = await request.json();
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Allow partial updates (e.g. toggling `is_active`) but validate if `name` is provided.
     if (body.name !== undefined && !body.name) {
@@ -97,13 +88,12 @@ export async function PUT(
     await MemoryCache.invalidate("departments_");
 
     return NextResponse.json({ success: true, data: department });
-    
   } catch (error) {
-    console.error('Error updating department:', error);
+    console.error("Error updating department:", error);
     return NextResponse.json(
-      { 
-        error: 'Failed to update department', 
-        details: error instanceof Error ? error.message : 'Unknown error'
+      {
+        error: "Failed to update department",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
@@ -112,19 +102,17 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
-    
-    if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid department ID' },
-        { status: 400 }
-      );
+    const { id: idParam } = await context.params;
+    const id = parseInt(idParam);
+
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid department ID" }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase.from("departments").delete().eq("id", id);
     if (error) throw new Error(error.message);
@@ -135,13 +123,12 @@ export async function DELETE(
       success: true,
       message: "Department deleted successfully",
     });
-    
   } catch (error) {
-    console.error('Error deleting department:', error);
+    console.error("Error deleting department:", error);
     return NextResponse.json(
-      { 
-        error: 'Failed to delete department', 
-        details: error instanceof Error ? error.message : 'Unknown error'
+      {
+        error: "Failed to delete department",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

@@ -1,70 +1,108 @@
-// 🚀 Reports API - Convex Backend
-// Migrated from PostgreSQL to Convex
+// 🚀 Reports API - Supabase Backend
+// Migrated from Convex to Supabase (Phase 4)
 
 import { NextRequest, NextResponse } from "next/server";
-const { ConvexHttpClient } = require("convex/browser");
-const { api } = require("@/convex/_generated/api");
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-// Helper to get Convex client
-function getConvexClient() {
-  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-  if (!convexUrl) {
-    throw new Error("Convex URL not configured");
-  }
-  return new ConvexHttpClient(convexUrl);
-}
+type AppointmentRow = {
+  id: number;
+  appointment_date: string; // date or timestamp
+  slot_number: number;
+  status: string;
+  client_id: number;
+  department_id: number;
+};
+
+type ClientRow = {
+  id: number;
+  category: string | null;
+  created_at: string | null;
+};
+
+type DepartmentRow = {
+  id: number;
+  name: string;
+};
 
 export async function GET(request: NextRequest) {
   const requestStart = Date.now();
 
   try {
     const { searchParams } = new URL(request.url);
-    const days = parseInt(searchParams.get("days") || "30");
+    const days = Math.max(1, parseInt(searchParams.get("days") || "30"));
+    // `type` currently controls only UI presentation; we accept it for compatibility.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _type = searchParams.get("type") || "overview";
 
+    const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
+
     const startDateStr = startDate.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
 
-    const convexClient = getConvexClient();
+    const supabase = await createServerSupabaseClient();
 
-    // Fetch all required data from Convex
-    const [appointments, clients, departments] = await Promise.all([
-      convexClient.query(api.queries.getAppointmentsByDateRange, {
-        startDate: startDateStr,
-        endDate: new Date().toISOString().split("T")[0],
-      }),
-      convexClient.query(api.queries.getClients, {}),
-      convexClient.query(api.queries.getDepartments, { isActive: true }),
+    // Fetch required datasets.
+    // Note: We keep this straightforward (JS aggregation) to avoid adding RPCs in Phase 4.
+    const [appointmentsRes, clientsRes, departmentsRes] = await Promise.all([
+      supabase
+        .from("appointments")
+        .select("id,appointment_date,slot_number,status,client_id,department_id")
+        .gte("appointment_date", startDateStr)
+        .lte("appointment_date", endDateStr),
+      supabase.from("clients").select("id,category,created_at"),
+      supabase
+        .from("departments")
+        .select("id,name")
+        .eq("is_active", true),
     ]);
 
-    // Calculate appointment statistics
-    const totalAppointments = appointments.length;
-    const completedAppointments = appointments.filter((a: any) => a.status === "completed").length;
-    const cancelledAppointments = appointments.filter((a: any) => a.status === "cancelled").length;
-    const noShowAppointments = appointments.filter((a: any) => a.status === "no_show").length;
+    if (appointmentsRes.error) throw new Error(appointmentsRes.error.message);
+    if (clientsRes.error) throw new Error(clientsRes.error.message);
+    if (departmentsRes.error) throw new Error(departmentsRes.error.message);
 
-    // Calculate patient statistics
-    const uniqueClientIds = new Set(appointments.map((a: any) => a.client_id));
+    const appointments = (appointmentsRes.data || []) as AppointmentRow[];
+    const clients = (clientsRes.data || []) as ClientRow[];
+    const departments = (departmentsRes.data || []) as DepartmentRow[];
+
+    // Appointment statistics
+    const totalAppointments = appointments.length;
+    const completedAppointments = appointments.filter(
+      (a) => a.status === "completed"
+    ).length;
+    const cancelledAppointments = appointments.filter(
+      (a) => a.status === "cancelled"
+    ).length;
+    const noShowAppointments = appointments.filter(
+      (a) => a.status === "no_show"
+    ).length;
+
+    // Patient statistics
+    const uniqueClientIds = new Set(appointments.map((a) => a.client_id));
     const totalPatients = uniqueClientIds.size;
-    
-    // New patients - clients created within the date range
-    const newPatients = clients.filter((c: any) => {
-      if (!c._creationTime) return false;
-      const createdDate = new Date(c._creationTime);
-      return createdDate >= startDate;
+
+    // New patients: created within date range
+    const newPatients = clients.filter((c) => {
+      if (!c.created_at) return false;
+      const created = new Date(c.created_at);
+      return created >= startDate;
     }).length;
 
-    // Calculate department statistics
-    const departmentStatsMap = new Map<string, {
-      name: string;
-      appointments: number;
-      completed: number;
-      cancelled: number;
-      noShow: number;
-    }>();
+    // Department statistics
+    const departmentStatsMap = new Map<
+      number,
+      {
+        name: string;
+        appointments: number;
+        completed: number;
+        cancelled: number;
+        noShow: number;
+      }
+    >();
 
-    departments.forEach((dept: any) => {
-      departmentStatsMap.set(dept._id, {
+    departments.forEach((dept) => {
+      departmentStatsMap.set(dept.id, {
         name: dept.name,
         appointments: 0,
         completed: 0,
@@ -73,96 +111,95 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    appointments.forEach((apt: any) => {
+    appointments.forEach((apt) => {
       const deptStats = departmentStatsMap.get(apt.department_id);
-      if (deptStats) {
-        deptStats.appointments++;
-        if (apt.status === "completed") deptStats.completed++;
-        if (apt.status === "cancelled") deptStats.cancelled++;
-        if (apt.status === "no_show") deptStats.noShow++;
-      }
+      if (!deptStats) return;
+
+      deptStats.appointments++;
+      if (apt.status === "completed") deptStats.completed++;
+      if (apt.status === "cancelled") deptStats.cancelled++;
+      if (apt.status === "no_show") deptStats.noShow++;
     });
 
     const departmentStats = Array.from(departmentStatsMap.values())
       .filter((d) => d.appointments > 0)
       .map((d) => ({
         ...d,
-        completionRate: d.appointments > 0 
-          ? Math.round((d.completed / d.appointments) * 1000) / 10 
-          : 0,
+        completionRate:
+          d.appointments > 0
+            ? Math.round((d.completed / d.appointments) * 1000) / 10
+            : 0,
       }))
       .sort((a, b) => b.appointments - a.appointments);
 
-    // Calculate category statistics
-    const categoryMap = new Map<string, number>();
-    const clientMap = new Map(clients.map((c: any) => [c._id, c]));
+    // Category statistics
+    const clientById = new Map<number, ClientRow>();
+    clients.forEach((c) => clientById.set(c.id, c));
 
-    appointments.forEach((apt: any) => {
-      const client: any = clientMap.get(apt.client_id);
-      if (client) {
-        const category = client.category || "Unknown";
-        categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
-      }
+    const categoryMap = new Map<string, number>();
+    appointments.forEach((apt) => {
+      const client = clientById.get(apt.client_id);
+      const category = client?.category || "Unknown";
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
     });
 
     const categoryStats = Array.from(categoryMap.entries())
       .map(([category, count]) => ({
         category,
         count,
-        percentage: totalAppointments > 0 
-          ? Math.round((count / totalAppointments) * 1000) / 10 
-          : 0,
+        percentage:
+          totalAppointments > 0
+            ? Math.round((count / totalAppointments) * 1000) / 10
+            : 0,
       }))
       .sort((a, b) => b.count - a.count);
 
-    // Calculate daily statistics for the last 7 days
+    // Daily stats (last 7 days)
     const last7Days = new Date();
     last7Days.setDate(last7Days.getDate() - 7);
     const last7DaysStr = last7Days.toISOString().split("T")[0];
 
     const dailyMap = new Map<string, { appointments: number; completed: number }>();
-    
     appointments
-      .filter((a: any) => a.appointment_date >= last7DaysStr)
-      .forEach((apt: any) => {
-        const date = apt.appointment_date;
-        if (!dailyMap.has(date)) {
-          dailyMap.set(date, { appointments: 0, completed: 0 });
-        }
-        const stats = dailyMap.get(date)!;
-        stats.appointments++;
-        if (apt.status === "completed") stats.completed++;
+      .filter((a) => {
+        const d = a.appointment_date.includes("T")
+          ? a.appointment_date.split("T")[0]
+          : a.appointment_date;
+        return d >= last7DaysStr;
+      })
+      .forEach((apt) => {
+        const date = apt.appointment_date.includes("T")
+          ? apt.appointment_date.split("T")[0]
+          : apt.appointment_date;
+        if (!dailyMap.has(date)) dailyMap.set(date, { appointments: 0, completed: 0 });
+        const s = dailyMap.get(date)!;
+        s.appointments++;
+        if (apt.status === "completed") s.completed++;
       });
 
     const dailyStats = Array.from(dailyMap.entries())
-      .map(([date, stats]) => ({
-        date,
-        appointments: stats.appointments,
-        completed: stats.completed,
-      }))
+      .map(([date, stats]) => ({ date, ...stats }))
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 7);
 
-    // Calculate time slot utilization
+    // Time slot utilization
     const slotMap = new Map<number, number>();
-    
-    appointments.forEach((apt: any) => {
-      const slot = apt.slot_number;
-      slotMap.set(slot, (slotMap.get(slot) || 0) + 1);
+    appointments.forEach((apt) => {
+      slotMap.set(apt.slot_number, (slotMap.get(apt.slot_number) || 0) + 1);
     });
 
     const timeSlotStats = Array.from(slotMap.entries())
       .map(([slot, bookings]) => ({
         slot,
         bookings,
-        utilization: totalAppointments > 0 
-          ? Math.round((bookings / totalAppointments) * 1000) / 10 
-          : 0,
+        utilization:
+          totalAppointments > 0
+            ? Math.round((bookings / totalAppointments) * 1000) / 10
+            : 0,
       }))
       .sort((a, b) => a.slot - b.slot);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Reports API: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
@@ -180,13 +217,19 @@ export async function GET(request: NextRequest) {
       },
       meta: {
         responseTime: `${responseTime}ms`,
+        startDate: startDateStr,
+        endDate: endDateStr,
       },
     });
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Reports API error (${responseTime}ms):`, error);
     return NextResponse.json(
-      { success: false, error: "Failed to generate reports" },
+      {
+        success: false,
+        error: "Failed to generate reports",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

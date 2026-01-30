@@ -15,10 +15,7 @@ export async function PUT(
     const id = parseInt(idRaw, 10);
 
     if (Number.isNaN(id)) {
-      return NextResponse.json(
-        { error: "Invalid doctor ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid doctor ID" }, { status: 400 });
     }
 
     const { name, department_id } = body || {};
@@ -30,7 +27,7 @@ export async function PUT(
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: doctor, error } = await supabase
       .from("doctors")
@@ -75,13 +72,10 @@ export async function DELETE(
     const id = parseInt(idRaw, 10);
 
     if (Number.isNaN(id)) {
-      return NextResponse.json(
-        { error: "Invalid doctor ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid doctor ID" }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase.from("doctors").delete().eq("id", id);
     if (error) throw new Error(error.message);

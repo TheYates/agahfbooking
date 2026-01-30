@@ -208,9 +208,9 @@ export const resolvers = {
       for (let i = 0; i < 30; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
-        const dayName = date.toLocaleDateString("en-US", {
-          weekday: "lowercase",
-        });
+        const dayName = date
+          .toLocaleDateString("en-US", { weekday: "long" })
+          .toLowerCase();
 
         if (department.working_days.includes(dayName)) {
           availableDates.push(date.toISOString().split("T")[0]);
@@ -382,11 +382,9 @@ export const resolvers = {
     },
 
     updateAppointment: async (_: any, args: { id: string; input: any }) => {
-      const appointment = await AppointmentService.update(parseInt(args.id), {
+      const appointment = await AppointmentService.updateStatus(parseInt(args.id), {
         status: args.input.status?.toLowerCase(),
         notes: args.input.notes,
-        appointment_date: args.input.appointmentDate,
-        slot_number: args.input.slotNumber,
       });
 
       return appointment;

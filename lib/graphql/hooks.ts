@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useSubscription } from '@apollo/client';
+import { useQuery, useMutation, useSubscription, useApolloClient } from '@apollo/client';
 import { 
   GET_CALENDAR_DATA, 
   GET_DASHBOARD_STATS, 
@@ -150,21 +150,13 @@ export function useCalendarSubscription(departmentId?: string) {
 
 // Utility hook for cache management
 export function useGraphQLCache() {
-  const { cache } = useQuery(GET_DASHBOARD_STATS, { skip: true });
-  
+  const client = useApolloClient();
+
   return {
-    clearCache: () => {
-      cache.reset();
-    },
-    evictAppointments: () => {
-      cache.evict({ fieldName: 'appointments' });
-    },
-    evictCalendarData: () => {
-      cache.evict({ fieldName: 'calendarData' });
-    },
-    evictDashboardStats: () => {
-      cache.evict({ fieldName: 'dashboardStats' });
-    },
+    clearCache: () => client.cache.reset(),
+    evictAppointments: () => client.cache.evict({ fieldName: 'appointments' }),
+    evictCalendarData: () => client.cache.evict({ fieldName: 'calendarData' }),
+    evictDashboardStats: () => client.cache.evict({ fieldName: 'dashboardStats' }),
   };
 }
 

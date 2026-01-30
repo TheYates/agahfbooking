@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
           departments: parseInt(departmentCount.rows[0].count),
         },
         sampleAppointments: sampleAppointments.rows,
-        statusDistribution: statusStats.rows.map((row) => ({
+        statusDistribution: statusStats.rows.map((row: any) => ({
           status: row.status,
           count: parseInt(row.count),
         })),
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: "Failed to fetch debug data",
-        details: error.message,
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

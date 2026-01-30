@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const appointmentsData = await MemoryCache.get(
       cacheKey,
       async () => {
-        const supabase = createServerSupabaseClient();
+        const supabase = await createServerSupabaseClient();
 
         // Derived date filtering.
         const today = new Date().toISOString().split("T")[0];
@@ -177,7 +177,5 @@ export async function GET(request: Request) {
   }
 }
 
-export async function invalidateAppointmentsListCache() {
-  await MemoryCache.invalidate("appointments_list_");
-  await MemoryCache.invalidate("appointment_status_colors");
-}
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// Cache invalidation helpers live in `lib/appointments-cache.ts`.

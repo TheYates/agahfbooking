@@ -61,7 +61,7 @@ export async function PUT(
     }
     const isActive = status === "active";
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Check if client exists
     const { data: existing, error: existErr } = await supabase
@@ -131,7 +131,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Invalid client ID" }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Check if client exists
     const { data: existing, error: existErr } = await supabase

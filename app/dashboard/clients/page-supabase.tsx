@@ -441,8 +441,8 @@ export default function ClientsPageSupabase() {
 
       {/* Add Client */}
       <AddClientModal
-        open={showAddModal}
-        onOpenChange={setShowAddModal}
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
         onClientAdded={() => {
           // hooks invalidate internally, but close modal anyway
           setShowAddModal(false);
@@ -487,10 +487,10 @@ export default function ClientsPageSupabase() {
           {selectedClient ? (
             <EditClientForm
               client={selectedClient as any}
-              onSuccess={() => {
+              onClientUpdated={() => {
                 setShowEditModal(false);
               }}
-              onCancel={() => setShowEditModal(false)}
+              onClose={() => setShowEditModal(false)}
             />
           ) : null}
         </DialogContent>

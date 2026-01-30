@@ -68,14 +68,18 @@ export function MobileAppointmentsClientTanstack({
     data: appointmentsData,
     isLoading: appointmentsLoading,
     error: appointmentsError,
-    isPreviousData,
+    // React Query v5 no longer exposes `isPreviousData`.
+    // We keep the UX by treating `isFetching` as the indicator while paginating.
+    isFetching,
   } = useClientAppointmentsPaginated(user.id, currentPage, itemsPerPage);
 
   // Get booking function from context
-  let openBooking: ((departmentId?: number) => void) | undefined;
+  let openBooking:
+    | ((departmentId?: number | string) => void)
+    | undefined;
   try {
     const booking = useBooking();
-    openBooking = booking.openBooking;
+    openBooking = booking.openBooking as any;
   } catch {
     // Not within MobileLayout context
   }
@@ -368,7 +372,7 @@ export function MobileAppointmentsClientTanstack({
             ) : (
               <div className="space-y-3">
                 {/* Show loading indicator for page changes */}
-                {appointmentsLoading && isPreviousData && (
+                {isFetching && (
                   <div className="text-center py-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto"></div>
                   </div>
@@ -379,7 +383,7 @@ export function MobileAppointmentsClientTanstack({
                     key={appointment.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ 
-                      opacity: appointmentsLoading && isPreviousData ? 0.6 : 1, 
+                      opacity: isFetching ? 0.6 : 1, 
                       x: 0 
                     }}
                     transition={{ delay: 0.8 + index * 0.1 }}
@@ -462,7 +466,8 @@ export function MobileAppointmentsClientTanstack({
                 totalPages={pagination.totalPages}
                 onPageChange={handlePageChange}
                 className="px-6 pb-4"
-                disabled={appointmentsLoading} // Prevent rapid pagination clicks
+                // DataPaginationCompact doesn't support `disabled`; disable clicks in handler if needed.
+                // disabled={appointmentsLoading}
               />
             )}
           </CardContent>

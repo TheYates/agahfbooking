@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const departmentIdRaw = searchParams.get("departmentId");
     const date = searchParams.get("date");
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     // Default: today
     const today = new Date().toISOString().split("T")[0];
@@ -65,16 +65,20 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { client_id, department_id, appointment_date, slot_number, notes } = body || {};
+    const { client_id, department_id, appointment_date, slot_number, notes } =
+      body || {};
 
     if (!client_id || !department_id || !appointment_date || !slot_number) {
       return NextResponse.json(
-        { error: "client_id, department_id, appointment_date and slot_number are required" },
+        {
+          error:
+            "client_id, department_id, appointment_date and slot_number are required",
+        },
         { status: 400 }
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: created, error } = await supabase
       .from("appointments")
@@ -123,7 +127,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Appointment id is required" }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: updated, error } = await supabase
       .from("appointments")
@@ -171,7 +175,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Invalid appointment id" }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { error } = await supabase.from("appointments").delete().eq("id", id);
     if (error) throw new Error(error.message);

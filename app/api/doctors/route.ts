@@ -21,13 +21,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const departmentIdRaw = searchParams.get("departmentId");
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     let query = supabase
       .from("doctors")
-      .select(
-        "id,name,department_id,is_active,departments(name,color)"
-      )
+      .select("id,name,department_id,is_active,departments(name,color)")
       .eq("is_active", true)
       .order("name", { ascending: true });
 
@@ -86,7 +84,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data: doctor, error } = await supabase
       .from("doctors")

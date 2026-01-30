@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
   try {
+    const h = await headers();
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: h,
     });
 
     if (!session?.user) {
@@ -24,13 +26,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Remove subscription from database
-    // In production:
-    // await db.pushSubscription.delete({
-    //   where: { userId: session.user.id }
-    // });
+    const supabase = createAdminSupabaseClient();
 
-    console.log(`Push subscription removed for user ${session.user.id}`);
+    const { error } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("endpoint", endpoint)
+      .eq("user_id", session.user.id);
+
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
@@ -39,7 +43,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error removing push subscription:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to remove subscription" },
+      {
+        success: false,
+        error: "Failed to remove subscription",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

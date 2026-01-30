@@ -1,4 +1,9 @@
 import { ApolloServer } from "@apollo/server";
+import type {
+  GraphQLRequestContext,
+  GraphQLRequestListener,
+  BaseContext,
+} from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { NextRequest } from "next/server";
 import typeDefs from "@/lib/graphql/schema";
@@ -10,15 +15,14 @@ const server = new ApolloServer({
   resolvers,
   introspection: process.env.NODE_ENV === "development",
   plugins: [
-    // Add performance monitoring
     {
-      requestDidStart() {
+      async requestDidStart(
+        _requestContext: GraphQLRequestContext<BaseContext>
+      ): Promise<void | GraphQLRequestListener<BaseContext>> {
         return {
-          willSendResponse(requestContext) {
+          async willSendResponse(requestContext) {
             const { request, response } = requestContext;
-            console.log(
-              `GraphQL ${request.operationName}: ${response.http?.statusCode}`
-            );
+            console.log(`GraphQL ${request.operationName}`);
           },
         };
       },
@@ -26,11 +30,8 @@ const server = new ApolloServer({
   ],
 });
 
-// Create the handler
 const handler = startServerAndCreateNextHandler<NextRequest>(server, {
   context: async (req) => {
-    // For now, return basic context without auth
-    // TODO: Add authentication later
     return {
       user: null,
       req,
@@ -38,4 +39,11 @@ const handler = startServerAndCreateNextHandler<NextRequest>(server, {
   },
 });
 
-export { handler as GET, handler as POST };
+// Next.js expects GET/POST handlers with a single request argument.
+export async function GET(req: NextRequest) {
+  return handler(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handler(req);
+}

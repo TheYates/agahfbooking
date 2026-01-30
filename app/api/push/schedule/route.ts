@@ -1,24 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-
-// In production, use a job scheduler like BullMQ, Agenda, or a cloud service
-// This is a placeholder for the scheduling logic
-
-interface ScheduledReminder {
-  appointmentId: string;
-  userId: string;
-  title: string;
-  body: string;
-  scheduledTime: Date;
-}
-
-const scheduledReminders = new Map<string, ScheduledReminder>();
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
   try {
+    const h = await headers();
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: h,
     });
 
     if (!session?.user) {
@@ -37,34 +26,45 @@ export async function POST(request: Request) {
       );
     }
 
-    const reminder: ScheduledReminder = {
-      appointmentId,
-      userId: session.user.id,
-      title,
-      body: body || "",
-      scheduledTime: new Date(scheduledTime),
-    };
+    const scheduled = new Date(scheduledTime);
+    if (Number.isNaN(scheduled.getTime())) {
+      return NextResponse.json(
+        { success: false, error: "Invalid scheduledTime" },
+        { status: 400 }
+      );
+    }
 
-    // In production, schedule with a job queue:
-    // await reminderQueue.add('send-reminder', reminder, {
-    //   delay: reminder.scheduledTime.getTime() - Date.now()
-    // });
+    const supabase = createAdminSupabaseClient();
 
-    scheduledReminders.set(appointmentId, reminder);
-
-    console.log(
-      `Reminder scheduled for appointment ${appointmentId} at ${reminder.scheduledTime}`
+    const { error } = await supabase.from("push_reminders").upsert(
+      {
+        appointment_id: appointmentId,
+        user_id: session.user.id,
+        title,
+        body: body || "",
+        scheduled_time: scheduled.toISOString(),
+        status: "scheduled",
+      } as any,
+      {
+        onConflict: "appointment_id",
+      }
     );
+
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
       message: "Reminder scheduled",
-      scheduledTime: reminder.scheduledTime,
+      scheduledTime: scheduled,
     });
   } catch (error) {
     console.error("Error scheduling reminder:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to schedule reminder" },
+      {
+        success: false,
+        error: "Failed to schedule reminder",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -72,8 +72,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const h = await headers();
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: h,
     });
 
     if (!session?.user) {
@@ -92,8 +93,15 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Remove scheduled reminder
-    scheduledReminders.delete(appointmentId);
+    const supabase = createAdminSupabaseClient();
+
+    const { error } = await supabase
+      .from("push_reminders")
+      .delete()
+      .eq("appointment_id", appointmentId)
+      .eq("user_id", session.user.id);
+
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
@@ -102,7 +110,11 @@ export async function DELETE(request: Request) {
   } catch (error) {
     console.error("Error cancelling reminder:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to cancel reminder" },
+      {
+        success: false,
+        error: "Failed to cancel reminder",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

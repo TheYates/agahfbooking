@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { ClientService } from "./db-services";
 import { otpConfig } from "./otp-config-service";
 import { jwtOTPService } from "./jwt-otp-service";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 // Create PostgreSQL connection pool for BetterAuth
 const pool = new Pool({

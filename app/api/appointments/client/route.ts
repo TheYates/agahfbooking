@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     let query = supabase
       .from("appointments")
@@ -62,7 +62,8 @@ export async function GET(request: Request) {
       departmentId: appointment.department_id,
       departmentName: appointment.departments?.name,
       departmentColor: appointment.departments?.color,
-      doctorName: appointment.doctor_name || null,
+      // Doctor name not currently stored on appointment; department is the scheduling unit.
+      doctorName: null,
       createdAt: appointment.created_at,
     }));
 

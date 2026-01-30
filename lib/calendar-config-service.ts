@@ -224,5 +224,4 @@ export const calendarConfig = new CalendarConfigService();
 // Export class for testing
 export { CalendarConfigService };
 
-// Export types
-export type { CalendarVisibility, CalendarConfig };
+// Types are already exported above; avoid duplicate re-exports.
