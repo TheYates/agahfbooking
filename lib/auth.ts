@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { Pool } from "pg";
+import { createHash, randomUUID } from "node:crypto";
 import { query } from "./db";
 import bcrypt from "bcryptjs";
 import { ClientService } from "./db-services";
@@ -12,7 +13,22 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL!,
 });
 
+// BetterAuth secret
+//
+// BetterAuth logs an error if you do not provide a secret and it falls back to
+// its internal default. To avoid noisy build/prerender logs (and to ensure
+// sessions are signed with a consistent secret), we explicitly set one.
+//
+// - In production, set BETTER_AUTH_SECRET.
+// - In dev/build, we derive a deterministic fallback from DATABASE_URL.
+const BETTER_AUTH_SECRET =
+  process.env.BETTER_AUTH_SECRET ||
+  createHash("sha256")
+    .update(process.env.DATABASE_URL || "local")
+    .digest("hex");
+
 export const auth = betterAuth({
+  secret: BETTER_AUTH_SECRET,
   database: pool,
   emailAndPassword: {
     enabled: false, // We'll use custom providers instead
@@ -26,7 +42,7 @@ export const auth = betterAuth({
     },
   },
   advanced: {
-    generateId: () => crypto.randomUUID(),
+    generateId: () => randomUUID(),
   },
 });
 
