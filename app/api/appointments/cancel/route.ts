@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { invalidateAvailableSlotsCache } from "@/app/api/appointments/available-slots/route";
+import { invalidateAppointmentsListCache } from "@/app/api/appointments/list/route";
 
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const departmentId = searchParams.get("departmentId");
+    const departmentIdRaw = searchParams.get("departmentId");
     const date = searchParams.get("date");
-    const slotNumber = searchParams.get("slotNumber");
-    const clientId = searchParams.get("clientId");
+    const slotNumberRaw = searchParams.get("slotNumber");
+    const clientIdRaw = searchParams.get("clientId");
 
-    if (!departmentId || !date || !slotNumber || !clientId) {
+    if (!departmentIdRaw || !date || !slotNumberRaw || !clientIdRaw) {
       return NextResponse.json(
         {
           success: false,
@@ -19,44 +21,45 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // First, find the appointment to ensure it exists and belongs to the client
-    const findAppointmentResult = await query(
-      `
-      SELECT id, client_id, status 
-      FROM appointments 
-      WHERE department_id = $1 
-      AND DATE(appointment_date) = DATE($2)
-      AND slot_number = $3
-      AND client_id = $4
-      AND status != 'cancelled'
-    `,
-      [departmentId, date, slotNumber, clientId]
-    );
+    const departmentId = parseInt(departmentIdRaw, 10);
+    const slotNumber = parseInt(slotNumberRaw, 10);
+    const clientId = parseInt(clientIdRaw, 10);
 
-    if (findAppointmentResult.rows.length === 0) {
+    if ([departmentId, slotNumber, clientId].some((n) => Number.isNaN(n))) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Appointment not found or already cancelled",
-        },
+        { success: false, error: "Invalid departmentId, slotNumber, or clientId" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServerSupabaseClient();
+
+    // Find appointment
+    const { data: appointment, error: findErr } = await supabase
+      .from("appointments")
+      .select("id,client_id,status")
+      .eq("department_id", departmentId)
+      .eq("appointment_date", date)
+      .eq("slot_number", slotNumber)
+      .eq("client_id", clientId)
+      .neq("status", "cancelled")
+      .single();
+
+    if (findErr || !appointment) {
+      return NextResponse.json(
+        { success: false, error: "Appointment not found or already cancelled" },
         { status: 404 }
       );
     }
 
-    const appointment = findAppointmentResult.rows[0];
-
-    // Check if the appointment belongs to the requesting client
-    if (appointment.client_id !== parseInt(clientId)) {
+    if (appointment.client_id !== clientId) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "You can only cancel your own appointments",
-        },
+        { success: false, error: "You can only cancel your own appointments" },
         { status: 403 }
       );
     }
 
-    // Check if the appointment is in the past
+    // Check if in the past
     const appointmentDate = new Date(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -64,42 +67,28 @@ export async function DELETE(request: Request) {
 
     if (appointmentDate < today) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Cannot cancel past appointments",
-        },
+        { success: false, error: "Cannot cancel past appointments" },
         { status: 400 }
       );
     }
 
-    // Update the appointment status to 'cancelled'
-    const cancelResult = await query(
-      `
-      UPDATE appointments 
-      SET status = 'cancelled', updated_at = NOW()
-      WHERE id = $1
-      RETURNING *
-    `,
-      [appointment.id]
-    );
+    // Cancel
+    const { data: cancelled, error: cancelErr } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("id", appointment.id)
+      .select("id,status")
+      .single();
 
-    if (cancelResult.rows.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to cancel appointment",
-        },
-        { status: 500 }
-      );
-    }
+    if (cancelErr) throw new Error(cancelErr.message);
+
+    await invalidateAvailableSlotsCache(departmentId, date);
+    await invalidateAppointmentsListCache();
 
     return NextResponse.json({
       success: true,
       message: "Appointment cancelled successfully",
-      data: {
-        id: appointment.id,
-        status: "cancelled",
-      },
+      data: cancelled,
     });
   } catch (error) {
     console.error("Error cancelling appointment:", error);

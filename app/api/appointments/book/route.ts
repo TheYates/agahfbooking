@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
 import { cookies } from "next/headers";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { invalidateAvailableSlotsCache } from "@/app/api/appointments/available-slots/route";
+import { invalidateAppointmentsListCache } from "@/app/api/appointments/list/route";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { departmentId, clientId, date, slotNumber } = body;
+    const { departmentId, clientId, date, slotNumber } = body || {};
 
     if (!departmentId || !date || !slotNumber) {
       return NextResponse.json(
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
     let finalClientId = clientId;
 
     // If no clientId provided, get from session (for client self-booking)
-    if (!clientId) {
+    if (!finalClientId) {
       const cookieStore = await cookies();
       const sessionToken = cookieStore.get("session_token");
 
@@ -37,60 +39,63 @@ export async function POST(request: Request) {
       try {
         const sessionData = JSON.parse(sessionToken.value);
         finalClientId = sessionData.id;
-      } catch (parseError) {
-        return NextResponse.json(
-          { success: false, error: "Invalid session" },
-          { status: 401 }
-        );
+      } catch {
+        return NextResponse.json({ success: false, error: "Invalid session" }, { status: 401 });
       }
     }
 
-    // Check if slot is still available
-    const existingAppointment = await query(
-      `
-      SELECT id FROM appointments 
-      WHERE department_id = $1 
-      AND DATE(appointment_date) = DATE($2)
-      AND slot_number = $3
-      AND status != 'cancelled'
-    `,
-      [departmentId, date, slotNumber]
-    );
+    const supabase = createServerSupabaseClient();
 
-    if (existingAppointment.rows.length > 0) {
+    // Check if slot is still available
+    const { data: existing, error: existingErr } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("department_id", departmentId)
+      .eq("appointment_date", date)
+      .eq("slot_number", slotNumber)
+      .neq("status", "cancelled")
+      .maybeSingle();
+
+    if (existingErr) throw new Error(existingErr.message);
+
+    if (existing) {
       return NextResponse.json(
         { success: false, error: "This time slot is no longer available" },
         { status: 409 }
       );
     }
 
-    // Create the appointment
-    const appointmentResult = await query(
-      `
-      INSERT INTO appointments (
-        client_id, 
-        department_id, 
-        appointment_date, 
-        slot_number, 
-        status,
-        created_at
-      ) VALUES ($1, $2, $3, $4, 'booked', NOW())
-      RETURNING *
-    `,
-      [finalClientId, departmentId, date, slotNumber]
-    );
+    const { data: created, error: createErr } = await supabase
+      .from("appointments")
+      .insert({
+        client_id: finalClientId,
+        department_id: departmentId,
+        appointment_date: date,
+        slot_number: slotNumber,
+        status: "booked",
+      })
+      .select("*")
+      .single();
 
-    const appointment = appointmentResult.rows[0];
+    if (createErr) throw new Error(createErr.message);
+
+    // Invalidate caches relevant to booking
+    await invalidateAvailableSlotsCache(Number(departmentId), date);
+    await invalidateAppointmentsListCache();
 
     return NextResponse.json({
       success: true,
-      data: appointment,
+      data: created,
       message: "Appointment booked successfully",
     });
   } catch (error) {
     console.error("Error booking appointment:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to book appointment" },
+      {
+        success: false,
+        error: "Failed to book appointment",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
