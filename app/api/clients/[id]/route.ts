@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function PUT(
   request: NextRequest,
@@ -7,8 +7,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const clientId = parseInt(id);
-    if (isNaN(clientId)) {
+    const clientId = parseInt(id, 10);
+    if (Number.isNaN(clientId)) {
       return NextResponse.json({ error: "Invalid client ID" }, { status: 400 });
     }
 
@@ -60,36 +60,39 @@ export async function PUT(
     }
     const isActive = status === "active";
 
-    // Check if client exists
-    const existingClient = await query("SELECT id FROM clients WHERE id = $1", [
-      clientId,
-    ]);
+    const supabase = createServerSupabaseClient();
 
-    if (existingClient.rows.length === 0) {
+    // Check if client exists
+    const { data: existing, error: existErr } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .single();
+
+    if (existErr || !existing) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
     // Update client
-    const result = await query(
-      `UPDATE clients
-       SET name = $1, phone = $2, category = $3, is_active = $4,
-           emergency_contact = $5, address = $6, medical_notes = $7,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8
-       RETURNING *`,
-      [
+    const { data: updatedClient, error: updateErr } = await supabase
+      .from("clients")
+      .update({
         name,
         phone,
         category,
-        isActive,
-        emergencyContact || null,
-        address || null,
-        medicalNotes || null,
-        clientId,
-      ]
-    );
+        is_active: isActive,
+        emergency_contact: emergencyContact || null,
+        address: address || null,
+        medical_notes: medicalNotes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", clientId)
+      .select(
+        "id,x_number,name,phone,category,is_active,emergency_contact,address,medical_notes,created_at,updated_at"
+      )
+      .single();
 
-    const updatedClient = result.rows[0];
+    if (updateErr) throw new Error(updateErr.message);
 
     return NextResponse.json({
       success: true,
@@ -110,10 +113,7 @@ export async function PUT(
     });
   } catch (error) {
     console.error("Error updating client:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -123,53 +123,63 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const clientId = parseInt(id);
-    if (isNaN(clientId)) {
+    const clientId = parseInt(id, 10);
+    if (Number.isNaN(clientId)) {
       return NextResponse.json({ error: "Invalid client ID" }, { status: 400 });
     }
 
-    // Check if client exists
-    const existingClient = await query("SELECT id FROM clients WHERE id = $1", [
-      clientId,
-    ]);
+    const supabase = createServerSupabaseClient();
 
-    if (existingClient.rows.length === 0) {
+    // Check if client exists
+    const { data: existing, error: existErr } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .single();
+
+    if (existErr || !existing) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
     // Check if client has appointments
-    const appointments = await query(
-      "SELECT COUNT(*) as count FROM appointments WHERE client_id = $1",
-      [clientId]
-    );
+    const { count, error: countErr } = await supabase
+      .from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId);
 
-    const appointmentCount = parseInt(appointments.rows[0].count);
+    if (countErr) throw new Error(countErr.message);
+
+    const appointmentCount = count || 0;
 
     if (appointmentCount > 0) {
       // Instead of deleting, mark as inactive
-      await query(
-        "UPDATE clients SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1",
-        [clientId]
-      );
+      const { error: updateErr } = await supabase
+        .from("clients")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", clientId);
+
+      if (updateErr) throw new Error(updateErr.message);
 
       return NextResponse.json({
         success: true,
         message: "Client marked as inactive (has existing appointments)",
       });
-    } else {
-      // Safe to delete if no appointments
-      await query("DELETE FROM clients WHERE id = $1", [clientId]);
-
-      return NextResponse.json({
-        success: true,
-        message: "Client deleted successfully",
-      });
     }
+
+    // Safe to delete if no appointments
+    const { error: deleteErr } = await supabase
+      .from("clients")
+      .delete()
+      .eq("id", clientId);
+
+    if (deleteErr) throw new Error(deleteErr.message);
+
+    return NextResponse.json({
+      success: true,
+      message: "Client deleted successfully",
+    });
   } catch (error) {
     console.error("Error deleting client:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

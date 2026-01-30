@@ -1,6 +1,6 @@
-// Clients page now uses Convex backend
-import ClientsPageConvex from "./page-convex";
+// Clients page now uses Supabase-backed API routes
+import ClientsPageSupabase from "./page-supabase";
 
 export default function ClientsPage() {
-  return <ClientsPageConvex />;
+  return <ClientsPageSupabase />;
 }

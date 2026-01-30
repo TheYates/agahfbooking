@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server";
-import { ClientService } from "@/lib/db-services";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
-    let clients;
+    const supabase = createServerSupabaseClient();
+
+    let query = supabase
+      .from("clients")
+      .select("id,x_number,name,phone,category,is_active,created_at")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
 
     if (search) {
-      clients = await ClientService.search(search);
-    } else {
-      clients = await ClientService.getAll();
+      const escaped = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+      query = query.or(
+        `name.ilike.%${escaped}%,x_number.ilike.%${escaped}%,phone.ilike.%${escaped}%`
+      );
     }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
-      data: clients,
+      data: data || [],
     });
   } catch (error) {
     console.error("Error fetching clients:", error);
@@ -53,14 +63,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = await ClientService.create({
-      x_number: xNumber,
-      name,
-      phone,
-      category,
-      emergency_contact: emergencyContact || null,
-      address: address || null,
-    });
+    const supabase = createServerSupabaseClient();
+
+    const { data: client, error } = await supabase
+      .from("clients")
+      .insert({
+        x_number: xNumber,
+        name,
+        phone,
+        category,
+        emergency_contact: emergencyContact || null,
+        address: address || null,
+        is_active: true,
+      })
+      .select("id,x_number,name,phone,category,is_active,created_at")
+      .single();
+
+    if (error) {
+      // Unique constraint violations (duplicate X-number)
+      if ((error as any).code === "23505") {
+        return NextResponse.json(
+          { error: "A client with this X-Number already exists" },
+          { status: 409 }
+        );
+      }
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
       success: true,
@@ -68,14 +96,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error creating client:", error);
-
-    // Handle unique constraint violations (duplicate X-number)
-    if (error instanceof Error && error.message.includes("duplicate key")) {
-      return NextResponse.json(
-        { error: "A client with this X-Number already exists" },
-        { status: 409 }
-      );
-    }
 
     return NextResponse.json(
       {
