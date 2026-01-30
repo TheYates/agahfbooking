@@ -1,31 +1,18 @@
 /**
  * Calendar Configuration Service
- * 
+ *
  * Manages calendar visibility settings for clients.
  * Allows admins to control whether clients see only their own appointments
  * or all appointments in the system.
- * 
- * Migrated from PostgreSQL to Convex
  */
+
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export type CalendarVisibility = "own_only" | "all_appointments";
 
 export interface CalendarConfig {
   clientVisibility: CalendarVisibility;
   description: string;
-}
-
-// Helper to get Convex client (lazy loaded to avoid issues)
-async function getConvexClient() {
-  const { ConvexHttpClient } = await import("convex/browser");
-  const { api } = await import("@/convex/_generated/api");
-  
-  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-  if (!convexUrl) {
-    throw new Error("Convex URL not configured");
-  }
-  
-  return { client: new ConvexHttpClient(convexUrl), api };
 }
 
 class CalendarConfigService {
@@ -43,23 +30,31 @@ class CalendarConfigService {
   }
 
   /**
-   * Get initial calendar visibility from Convex, or default
+   * Get initial calendar visibility from Supabase, or default
    */
   private async getInitialVisibility(): Promise<CalendarVisibility> {
     try {
-      const { client, api } = await getConvexClient();
-      const setting = await client.query(api.queries.getSystemSetting, {
-        key: this.SETTING_KEY,
-      });
-      
-      if (setting?.setting_value === "own_only" || setting?.setting_value === "all_appointments") {
-        return setting.setting_value as CalendarVisibility;
+      const supabase = createAdminSupabaseClient();
+
+      const { data, error } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", this.SETTING_KEY)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("Could not load calendar visibility from Supabase:", error);
+        return this.DEFAULT_VISIBILITY;
+      }
+
+      const value = (data as any)?.setting_value;
+      if (value === "own_only" || value === "all_appointments") {
+        return value as CalendarVisibility;
       }
     } catch (error) {
-      console.warn("Could not load calendar visibility from Convex:", error);
+      console.warn("Could not load calendar visibility from Supabase:", error);
     }
 
-    // Fallback to default
     return this.DEFAULT_VISIBILITY;
   }
 
@@ -72,28 +67,40 @@ class CalendarConfigService {
   }
 
   /**
-   * Set calendar visibility and persist to Convex
+   * Set calendar visibility and persist to Supabase
    */
-  async setVisibility(visibility: CalendarVisibility, updatedBy?: string): Promise<void> {
+  async setVisibility(visibility: CalendarVisibility, updatedBy?: number | string): Promise<void> {
     if (visibility !== "own_only" && visibility !== "all_appointments") {
       throw new Error('Invalid calendar visibility. Must be "own_only" or "all_appointments"');
     }
 
-    // Save to Convex
     try {
-      const { client, api } = await getConvexClient();
-      await client.mutation(api.mutations.updateSystemSetting, {
-        setting_key: this.SETTING_KEY,
-        setting_value: visibility,
-        description: "Calendar visibility setting for clients",
-      });
+      const supabase = createAdminSupabaseClient();
+
+      const { error } = await supabase.from("system_settings").upsert(
+        {
+          setting_key: this.SETTING_KEY,
+          setting_value: visibility,
+          description: "Calendar visibility setting for clients",
+          // updated_by is optional and schema-dependent.
+          updated_by: typeof updatedBy === "number" ? updatedBy : null,
+          updated_at: new Date().toISOString(),
+        } as any,
+        { onConflict: "setting_key" }
+      );
+
+      if (error) {
+        console.error("Failed to save calendar visibility to Supabase:", error);
+        throw new Error(error.message);
+      }
+
       this.currentVisibility = visibility;
       console.log(
-        `🔧 Calendar visibility changed to: ${visibility.toUpperCase()} and saved to Convex`
+        `🔧 Calendar visibility changed to: ${visibility.toUpperCase()} and saved to Supabase`
       );
     } catch (error) {
-      console.error("Failed to save calendar visibility to Convex:", error);
-      throw new Error("Failed to save calendar visibility to Convex");
+      console.error("Failed to save calendar visibility to Supabase:", error);
+      throw new Error("Failed to save calendar visibility");
     }
   }
 
