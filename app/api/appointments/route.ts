@@ -1,18 +1,7 @@
-// 🚀 Appointments API - Convex Backend
-// Migrated from PostgreSQL to Convex
+// 🚀 Appointments API - Supabase Backend
 
 import { NextResponse } from "next/server";
-const { ConvexHttpClient } = require("convex/browser");
-const { api } = require("@/convex/_generated/api");
-
-// Helper to get Convex client
-function getConvexClient() {
-  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-  if (!convexUrl) {
-    throw new Error("Convex URL not configured");
-  }
-  return new ConvexHttpClient(convexUrl);
-}
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
@@ -21,47 +10,46 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
-    const departmentId = searchParams.get("departmentId");
+    const departmentIdRaw = searchParams.get("departmentId");
     const date = searchParams.get("date");
 
-    const convexClient = getConvexClient();
-    let appointments;
+    const supabase = createServerSupabaseClient();
 
-    if (departmentId && date) {
-      // Get appointments for specific department and date
-      appointments = await convexClient.query(api.queries.getAppointmentsByDateRange, {
-        startDate: date,
-        endDate: date,
-        department_id: departmentId, // Convex ID
-      });
-    } else if (startDate && endDate) {
-      // Get appointments for date range
-      appointments = await convexClient.query(api.queries.getAppointmentsByDateRange, {
-        startDate,
-        endDate,
-      });
-    } else {
-      // Default: get appointments for today
-      const today = new Date().toISOString().split("T")[0];
-      appointments = await convexClient.query(api.queries.getAppointmentsByDateRange, {
-        startDate: today,
-        endDate: today,
-      });
+    // Default: today
+    const today = new Date().toISOString().split("T")[0];
+    const start = date || startDate || today;
+    const end = date || endDate || today;
+
+    let query = supabase
+      .from("appointments")
+      .select(
+        "id,client_id,department_id,appointment_date,slot_number,status,notes,created_at,updated_at",
+        { count: "exact" }
+      )
+      .gte("appointment_date", start)
+      .lte("appointment_date", end)
+      .order("appointment_date", { ascending: true })
+      .order("slot_number", { ascending: true });
+
+    if (departmentIdRaw) {
+      const departmentId = parseInt(departmentIdRaw, 10);
+      if (!Number.isNaN(departmentId)) query = query.eq("department_id", departmentId);
     }
 
+    const { data: appointments, error } = await query;
+    if (error) throw new Error(error.message);
+
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Appointments API: ${responseTime}ms, ${appointments.length} results`);
 
     return NextResponse.json({
       success: true,
-      data: appointments,
-      meta: {
-        responseTime: `${responseTime}ms`,
-      },
+      data: appointments || [],
+      meta: { responseTime: `${responseTime}ms` },
     });
   } catch (error) {
     const responseTime = Date.now() - requestStart;
-    console.error(`❌ Appointments API error (${responseTime}ms):`, error);
+    console.error(`❌ Appointments fetch error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to fetch appointments",
@@ -77,70 +65,43 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
+    const { client_id, department_id, appointment_date, slot_number, notes } = body || {};
 
-    // Validate required fields
-    const {
-      client_id,
-      department_id,
-      appointment_date,
-      slot_number,
-      booked_by,
-    } = body;
-
-    if (
-      !client_id ||
-      !department_id ||
-      !appointment_date ||
-      !slot_number ||
-      !booked_by
-    ) {
+    if (!client_id || !department_id || !appointment_date || !slot_number) {
       return NextResponse.json(
-        {
-          error:
-            "Missing required fields: client_id, department_id, appointment_date, slot_number, booked_by",
-        },
+        { error: "client_id, department_id, appointment_date and slot_number are required" },
         { status: 400 }
       );
     }
 
-    // Validate appointment date is not in the past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const appointmentDateObj = new Date(appointment_date);
-    appointmentDateObj.setHours(0, 0, 0, 0);
+    const supabase = createServerSupabaseClient();
 
-    if (appointmentDateObj < today) {
-      return NextResponse.json(
-        { error: "Cannot book appointments in the past" },
-        { status: 400 }
-      );
-    }
+    const { data: created, error } = await supabase
+      .from("appointments")
+      .insert({
+        client_id,
+        department_id,
+        appointment_date,
+        slot_number,
+        status: "booked",
+        notes: notes || null,
+      })
+      .select("*")
+      .single();
 
-    const convexClient = getConvexClient();
-
-    const appointmentId = await convexClient.mutation(api.mutations.createAppointment, {
-      client_id,
-      department_id,
-      doctor_id: body.doctor_id || undefined, // optional specific doctor
-      appointment_date,
-      slot_number: parseInt(slot_number),
-      notes: body.notes || "",
-      booked_by,
-    });
+    if (error) throw new Error(error.message);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Appointment creation: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
-      data: { _id: appointmentId, appointment_date, slot_number },
-      meta: {
-        responseTime: `${responseTime}ms`,
-      },
+      data: created,
+      meta: { responseTime: `${responseTime}ms` },
     });
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Appointment creation error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to create appointment",
@@ -156,36 +117,34 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, status, notes } = body;
+    const { id, ...patch } = body || {};
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Appointment ID is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Appointment id is required" }, { status: 400 });
     }
 
-    const convexClient = getConvexClient();
+    const supabase = createServerSupabaseClient();
 
-    await convexClient.mutation(api.mutations.updateAppointment, {
-      id,
-      status,
-      notes,
-    });
+    const { data: updated, error } = await supabase
+      .from("appointments")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Appointment update: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
-      data: { _id: id, status, notes },
-      meta: {
-        responseTime: `${responseTime}ms`,
-      },
+      data: updated,
+      meta: { responseTime: `${responseTime}ms` },
     });
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Appointment update error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to update appointment",
@@ -201,34 +160,33 @@ export async function DELETE(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const idRaw = searchParams.get("id");
 
-    if (!id) {
-      return NextResponse.json(
-        { error: "Appointment ID is required" },
-        { status: 400 }
-      );
+    if (!idRaw) {
+      return NextResponse.json({ error: "Appointment id is required" }, { status: 400 });
     }
 
-    const convexClient = getConvexClient();
+    const id = parseInt(idRaw, 10);
+    if (Number.isNaN(id)) {
+      return NextResponse.json({ error: "Invalid appointment id" }, { status: 400 });
+    }
 
-    await convexClient.mutation(api.mutations.deleteAppointment, {
-      id,
-    });
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase.from("appointments").delete().eq("id", id);
+    if (error) throw new Error(error.message);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Appointment deletion: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
       message: "Appointment deleted successfully",
-      meta: {
-        responseTime: `${responseTime}ms`,
-      },
+      meta: { responseTime: `${responseTime}ms` },
     });
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Appointment deletion error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to delete appointment",

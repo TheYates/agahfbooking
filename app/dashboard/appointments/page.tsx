@@ -2,17 +2,17 @@ import { requireAuth } from "@/lib/auth-server";
 import { MobileAppointmentsClient } from "@/components/appointments/mobile-appointments-client";
 import { MobileAppointmentsWrapper } from "@/components/appointments/mobile-appointments-wrapper";
 
-// Desktop appointments component (Convex version)
-import DesktopAppointmentsConvex from "./desktop-appointments-convex";
+// Desktop appointments component (Supabase/API driven)
+import DesktopAppointments from "./desktop-appointments";
 
 export default async function AppointmentsPage() {
   const user = await requireAuth();
 
   return (
     <>
-      {/* Desktop View - for staff or large screens - Now using Convex */}
+      {/* Desktop View - for staff or large screens */}
       <div className="hidden md:block">
-        <DesktopAppointmentsConvex />
+        <DesktopAppointments />
       </div>
 
       {/* Mobile View - conditional based on user role */}
@@ -20,7 +20,7 @@ export default async function AppointmentsPage() {
         {user.role === "client" ? (
           <MobileAppointmentsWrapper user={user} />
         ) : (
-          <DesktopAppointmentsConvex />
+          <DesktopAppointments />
         )}
       </div>
     </>
