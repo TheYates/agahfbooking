@@ -1,65 +1,55 @@
-// 🚀 Doctors API - Convex Backend
-// Migrated from PostgreSQL to Convex
+// 🚀 Doctors API - Supabase Backend
 
 import { NextResponse } from "next/server";
-const { ConvexHttpClient } = require("convex/browser");
-const { api } = require("@/convex/_generated/api");
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+type DoctorRow = {
+  id: number;
+  name: string;
+  department_id: number;
+  is_active?: boolean;
+  departments?: {
+    name?: string;
+    color?: string;
+  } | null;
+};
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
 
   try {
     const { searchParams } = new URL(request.url);
-    const departmentId = searchParams.get("departmentId");
+    const departmentIdRaw = searchParams.get("departmentId");
 
-    // Use Convex instead of PostgreSQL
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-    if (!convexUrl) {
-      throw new Error("Convex URL not configured");
-    }
+    const supabase = createServerSupabaseClient();
 
-    const convexClient = new ConvexHttpClient(convexUrl);
+    let query = supabase
+      .from("doctors")
+      .select(
+        "id,name,department_id,is_active,departments(name,color)"
+      )
+      .eq("is_active", true)
+      .order("name", { ascending: true });
 
-    let doctors;
-
-    if (departmentId) {
-      // Get doctors for specific department
-      // Note: Convex uses document IDs, so we need to handle this appropriately
-      // For now, get all doctors and filter, or pass department_id if it's a Convex ID
-      const allDoctors = await convexClient.query(api.queries.getDoctors, {
-        isActive: true,
-      });
-      
-      // Filter by department if departmentId looks like a Convex ID
-      if (departmentId.includes(":")) {
-        doctors = allDoctors.filter((d: any) => d.department_id === departmentId);
-      } else {
-        // Legacy numeric ID - return all doctors for now
-        doctors = allDoctors;
+    if (departmentIdRaw) {
+      const departmentId = parseInt(departmentIdRaw, 10);
+      if (!Number.isNaN(departmentId)) {
+        query = query.eq("department_id", departmentId);
       }
-    } else {
-      // Get all active doctors
-      doctors = await convexClient.query(api.queries.getDoctors, {
-        isActive: true,
-      });
     }
 
-    // Enrich with department info
-    const departments = await convexClient.query(api.queries.getDepartments, {});
-    const departmentMap = new Map(departments.map((d: any) => [d._id, d]));
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
 
-    const enrichedDoctors = doctors.map((doctor: any) => {
-      const department: any = departmentMap.get(doctor.department_id);
-      return {
-        ...doctor,
-        id: doctor._id, // Add id field for backward compatibility
-        department_name: department?.name || "Unknown",
-        department_color: department?.color || "#3B82F6",
-      };
-    });
+    const enrichedDoctors = ((data || []) as DoctorRow[]).map((doctor) => ({
+      id: doctor.id,
+      name: doctor.name,
+      department_id: doctor.department_id,
+      department_name: doctor.departments?.name || "Unknown",
+      department_color: doctor.departments?.color || "#3B82F6",
+    }));
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Doctors API: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
@@ -71,6 +61,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Doctors API error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to fetch doctors",
@@ -86,9 +77,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-
-    // Validate required fields
-    const { name, department_id } = body;
+    const { name, department_id } = body || {};
 
     if (!name || !department_id) {
       return NextResponse.json(
@@ -97,25 +86,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use Convex instead of PostgreSQL
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-    if (!convexUrl) {
-      throw new Error("Convex URL not configured");
-    }
+    const supabase = createServerSupabaseClient();
 
-    const convexClient = new ConvexHttpClient(convexUrl);
+    const { data: doctor, error } = await supabase
+      .from("doctors")
+      .insert({
+        name,
+        department_id,
+        is_active: true,
+      })
+      .select("id,name,department_id,is_active")
+      .single();
 
-    const doctorId = await convexClient.mutation(api.mutations.createDoctor, {
-      name,
-      department_id, // Should be a Convex document ID
-    });
+    if (error) throw new Error(error.message);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Doctor creation: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
-      data: { _id: doctorId, name, department_id },
+      data: doctor,
       meta: {
         responseTime: `${responseTime}ms`,
       },
@@ -123,6 +112,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Doctor creation error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to create doctor",

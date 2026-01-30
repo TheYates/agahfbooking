@@ -1,18 +1,7 @@
-// 🚀 Doctor [id] API - Convex Backend
-// Migrated from PostgreSQL to Convex
+// 🚀 Doctor [id] API - Supabase Backend
 
 import { NextResponse } from "next/server";
-const { ConvexHttpClient } = require("convex/browser");
-const { api } = require("@/convex/_generated/api");
-
-// Helper to get Convex client
-function getConvexClient() {
-  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-  if (!convexUrl) {
-    throw new Error("Convex URL not configured");
-  }
-  return new ConvexHttpClient(convexUrl);
-}
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function PUT(
   request: Request,
@@ -22,9 +11,17 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { id } = await params;
+    const { id: idRaw } = await params;
+    const id = parseInt(idRaw, 10);
 
-    const { name, department_id } = body;
+    if (Number.isNaN(id)) {
+      return NextResponse.json(
+        { error: "Invalid doctor ID" },
+        { status: 400 }
+      );
+    }
+
+    const { name, department_id } = body || {};
 
     if (!name || !department_id) {
       return NextResponse.json(
@@ -33,21 +30,22 @@ export async function PUT(
       );
     }
 
-    const convexClient = getConvexClient();
+    const supabase = createServerSupabaseClient();
 
-    // Update using Convex mutation
-    await convexClient.mutation(api.mutations.updateDoctor, {
-      id, // Convex document ID
-      name,
-      department_id,
-    });
+    const { data: doctor, error } = await supabase
+      .from("doctors")
+      .update({ name, department_id })
+      .eq("id", id)
+      .select("id,name,department_id")
+      .single();
+
+    if (error) throw new Error(error.message);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Doctor update: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
-      data: { _id: id, name, department_id },
+      data: doctor,
       meta: {
         responseTime: `${responseTime}ms`,
       },
@@ -55,6 +53,7 @@ export async function PUT(
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Doctor update error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to update doctor",
@@ -72,17 +71,22 @@ export async function DELETE(
   const requestStart = Date.now();
 
   try {
-    const { id } = await params;
+    const { id: idRaw } = await params;
+    const id = parseInt(idRaw, 10);
 
-    const convexClient = getConvexClient();
+    if (Number.isNaN(id)) {
+      return NextResponse.json(
+        { error: "Invalid doctor ID" },
+        { status: 400 }
+      );
+    }
 
-    // Delete using Convex mutation
-    await convexClient.mutation(api.mutations.deleteDoctor, {
-      id, // Convex document ID
-    });
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase.from("doctors").delete().eq("id", id);
+    if (error) throw new Error(error.message);
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Doctor deletion: ${responseTime}ms`);
 
     return NextResponse.json({
       success: true,
@@ -94,6 +98,7 @@ export async function DELETE(
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Doctor deletion error (${responseTime}ms):`, error);
+
     return NextResponse.json(
       {
         error: "Failed to delete doctor",
