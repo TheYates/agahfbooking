@@ -1,6 +1,6 @@
-// Users page now uses Convex backend
-import UsersPageConvex from "./page-convex";
+// Users page now uses Supabase-backed API routes
+import UsersPageSupabase from "./page-supabase";
 
 export default function UsersPage() {
-  return <UsersPageConvex />;
+  return <UsersPageSupabase />;
 }

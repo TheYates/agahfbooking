@@ -28,13 +28,13 @@ import {
   Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useConvexAuth } from "@/hooks/use-convex-auth";
+import { useSessionUser } from "@/hooks/use-session-user";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useInstallPrompt } from "@/hooks/use-pwa";
 import { toast } from "sonner";
 
 export default function ProfilePage() {
-  const { user: authUser } = useConvexAuth();
+  const { user: authUser } = useSessionUser();
   const [userData, setUserData] = useState<any>(null);
   
   // PWA and Notification hooks

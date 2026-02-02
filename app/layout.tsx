@@ -3,8 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ConvexClientProvider } from "@/components/providers/convex-provider";
-// Legacy providers (keep during migration)
+// Legacy providers
 import QueryProvider from "@/components/providers/query-provider";
 import { PWAProvider } from "@/components/pwa";
 
@@ -73,8 +72,7 @@ html {
         `}</style>
       </head>
       <body className="safe-area-inset">
-        <ConvexClientProvider>
-          <QueryProvider>
+        <QueryProvider>
             <ThemeProvider
               attribute="class"
               defaultTheme="system"
@@ -86,7 +84,6 @@ html {
               </PWAProvider>
             </ThemeProvider>
           </QueryProvider>
-        </ConvexClientProvider>
       </body>
     </html>
   );
