@@ -1,9 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-client'
 import { toast } from 'sonner'
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
+import { useSupabaseRealtime } from './use-supabase-realtime'
 
 // Types (matching your existing interfaces)
 export interface Department {
@@ -584,6 +586,14 @@ export const useBookAppointment = () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.appointments.byClient(variables.clientId)
       })
+      // Invalidate dashboard stats for the client
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboardStats.byClient(variables.clientId)
+      })
+      // Invalidate staff dashboard stats as well
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboardStats.forStaff()
+      })
 
       toast.success('Booking Successful! 🎉', {
         description: 'Your appointment has been booked successfully.',
@@ -662,17 +672,28 @@ export const useCancelAppointment = () => {
   })
 }
 
-// Dashboard Stats Hook
+// Dashboard Stats Hook with Realtime
 export const useDashboardStats = (clientId: number | undefined, enabled: boolean = true) => {
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.dashboardStats.byClient(clientId!),
     queryFn: () => fetchDashboardStats(clientId!),
     enabled: enabled && !!clientId,
-    staleTime: 30 * 1000, // 30 seconds - stats update frequently
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchInterval: 60 * 1000, // Refresh every minute for real-time stats
-    refetchIntervalInBackground: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes - user stats don't change that often
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: false, // Don't refetch if data is still fresh
   })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    filter: clientId ? `client_id=eq.${clientId}` : undefined,
+    queryKey: queryKeys.dashboardStats.byClient(clientId!),
+    enabled: enabled && !!clientId,
+    debug: true,
+  })
+
+  return query
 }
 
 // Staff Dashboard Stats Hook
@@ -681,16 +702,17 @@ export const useStaffDashboardStats = (enabled: boolean = true) => {
     queryKey: queryKeys.dashboardStats.forStaff(),
     queryFn: fetchStaffDashboardStats,
     enabled,
-    staleTime: 30 * 1000, // 30 seconds - stats update frequently
-    gcTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes - staff stats are still fairly fresh
+    gcTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 60 * 1000, // Refresh every minute for real-time stats
     refetchIntervalInBackground: true,
+    refetchOnMount: false, // Don't refetch if data is still fresh
   })
 }
 
 // Unified Dashboard Stats Hook (handles both client and staff)
 export const useUnifiedDashboardStats = (
-  userRole: 'client' | 'staff' | 'receptionist' | 'admin',
+  userRole: 'client' | 'staff' | 'receptionist' | 'admin' | 'reviewer',
   userId?: number,
   enabled: boolean = true
 ) => {
@@ -708,14 +730,14 @@ export const useUnifiedDashboardStats = (
   return isClient ? clientStats : staffStats
 }
 
-// Paginated Appointments Hook
+// Paginated Appointments Hook with Realtime
 export const useClientAppointmentsPaginated = (
   clientId: number | undefined,
   page: number = 1,
   limit: number = 10,
   enabled: boolean = true
 ) => {
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.appointments.byClientPaginated(clientId!, page, limit),
     queryFn: () => fetchClientAppointmentsPaginated(clientId!, page, limit),
     enabled: enabled && !!clientId,
@@ -723,6 +745,17 @@ export const useClientAppointmentsPaginated = (
     gcTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: (previousData) => previousData, // Keep previous page data while loading next page
   })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    filter: clientId ? `client_id=eq.${clientId}` : undefined,
+    queryKey: queryKeys.appointments.byClientPaginated(clientId!, page, limit),
+    enabled: enabled && !!clientId,
+    debug: true,
+  })
+
+  return query
 }
 
 // Desktop Appointments List Hook (with filters)
@@ -767,15 +800,23 @@ export const useCalendarAppointments = (
   const isValidUserId = userId !== undefined && userId !== null &&
     (typeof userId === 'string' ? userId.length > 0 && userId !== 'NaN' && userId !== 'undefined' : !isNaN(userId))
 
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
     queryFn: () => fetchCalendarAppointments(userRole, userId, startDate, endDate),
     enabled: enabled && isValidUserId,
     staleTime: 30 * 1000, // 30 seconds - calendar data changes frequently
     gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 30 * 1000, // Background refresh every 30 seconds for real-time calendar
-    refetchIntervalInBackground: true,
   })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
+    enabled: enabled && isValidUserId,
+    debug: true,
+  })
+
+  return query
 }
 
 // Calendar Endpoint Hook (cached for session)
@@ -1259,6 +1300,14 @@ export const useAppointmentsListManagement = (params: AppointmentsListQueryParam
     queryFn: () => fetchAppointmentsListManagement(params),
     staleTime: 30 * 1000, // 30 seconds
     placeholderData: (previousData) => previousData, // Show previous data while loading
+  })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    queryKey: ['appointments', 'list'],
+    enabled: true,
+    debug: true,
   })
 
   // Prefetch next page for instant navigation

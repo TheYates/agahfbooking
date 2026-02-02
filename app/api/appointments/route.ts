@@ -2,6 +2,10 @@
 
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  invalidateAvailableSlotsCache,
+  invalidateAppointmentsListCache,
+} from "@/lib/appointments-cache";
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
@@ -23,7 +27,21 @@ export async function GET(request: Request) {
     let query = supabase
       .from("appointments")
       .select(
-        "id,client_id,department_id,appointment_date,slot_number,status,notes,created_at,updated_at",
+        `
+        id,
+        client_id,
+        department_id,
+        doctor_id,
+        appointment_date,
+        slot_number,
+        status,
+        notes,
+        created_at,
+        updated_at,
+        clients(id, x_number, name, phone, category),
+        departments(id, name, color),
+        doctors(id, name)
+        `,
         { count: "exact" }
       )
       .gte("appointment_date", start)
@@ -39,11 +57,32 @@ export async function GET(request: Request) {
     const { data: appointments, error } = await query;
     if (error) throw new Error(error.message);
 
+    // Transform the data to include related fields at the top level
+    const transformedAppointments = (appointments || []).map((apt: any) => ({
+      id: apt.id,
+      client_id: apt.client_id,
+      client_name: apt.clients?.name || 'Unknown',
+      client_x_number: apt.clients?.x_number || '',
+      client_phone: apt.clients?.phone || '',
+      client_category: apt.clients?.category || '',
+      department_id: apt.department_id,
+      department_name: apt.departments?.name || 'Unknown',
+      department_color: apt.departments?.color || '#6B7280',
+      doctor_id: apt.doctor_id,
+      doctor_name: apt.doctors?.name || null,
+      appointment_date: apt.appointment_date,
+      slot_number: apt.slot_number,
+      status: apt.status,
+      notes: apt.notes,
+      created_at: apt.created_at,
+      updated_at: apt.updated_at,
+    }));
+
     const responseTime = Date.now() - requestStart;
 
     return NextResponse.json({
       success: true,
-      data: appointments || [],
+      data: transformedAppointments,
       meta: { responseTime: `${responseTime}ms` },
     });
   } catch (error) {
@@ -65,7 +104,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { client_id, department_id, appointment_date, slot_number, notes } =
+    const { client_id, department_id, appointment_date, slot_number, notes, booked_by } =
       body || {};
 
     if (!client_id || !department_id || !appointment_date || !slot_number) {
@@ -80,6 +119,57 @@ export async function POST(request: Request) {
 
     const supabase = await createServerSupabaseClient();
 
+    // Determine who is booking the appointment
+    // booked_by must reference users table (staff), not clients table
+    let bookedById = booked_by;
+    
+    // If booked_by is provided, validate it exists in users table
+    if (bookedById) {
+      const { data: userExists } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", bookedById)
+        .single();
+      
+      // If the provided ID doesn't exist in users table, use default admin
+      if (!userExists) {
+        bookedById = null;
+      }
+    }
+    
+    // If no valid booked_by, use default admin user
+    if (!bookedById) {
+      const { data: adminUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("role", "admin")
+        .limit(1)
+        .single();
+      bookedById = adminUser?.id || 1; // Fallback to ID 1 if no admin found
+    }
+
+    // Check if slot is still available
+    const { data: existing, error: existingErr } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("department_id", department_id)
+      .eq("appointment_date", appointment_date)
+      .eq("slot_number", slot_number)
+      .neq("status", "cancelled")
+      .maybeSingle();
+
+    if (existingErr) throw new Error(existingErr.message);
+
+    if (existing) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "This time slot is no longer available" 
+        },
+        { status: 409 }
+      );
+    }
+
     const { data: created, error } = await supabase
       .from("appointments")
       .insert({
@@ -89,11 +179,16 @@ export async function POST(request: Request) {
         slot_number,
         status: "booked",
         notes: notes || null,
+        booked_by: bookedById,
       })
       .select("*")
       .single();
 
     if (error) throw new Error(error.message);
+
+    // Invalidate caches relevant to booking
+    await invalidateAvailableSlotsCache(Number(department_id), appointment_date);
+    await invalidateAppointmentsListCache();
 
     const responseTime = Date.now() - requestStart;
 

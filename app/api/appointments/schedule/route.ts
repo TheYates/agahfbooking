@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSlotTimeInfo, type WorkingHours } from "@/lib/slot-time-utils";
 
 const dayNamesLong = [
   "Sunday",
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
     // Fetch department config once
     const { data: dept, error: deptErr } = await supabase
       .from("departments")
-      .select("slots_per_day,working_days")
+      .select("slots_per_day,working_days,working_hours,slot_duration_minutes")
       .eq("id", departmentId)
       .single();
 
@@ -106,6 +107,8 @@ export async function GET(request: Request) {
 
     const slotsPerDay = (dept as any).slots_per_day || 10;
     const workingDays = ((dept as any).working_days || []) as string[];
+    const workingHours = (dept as any).working_hours as WorkingHours | null;
+    const slotDuration = (dept as any).slot_duration_minutes || 30;
 
     // Fetch all appointments for the week in one query
     const { data: appts, error: apptsErr } = await supabase
@@ -161,8 +164,19 @@ export async function GET(request: Request) {
         for (let slotNum = 1; slotNum <= slotsPerDay; slotNum++) {
           const isBooked = bookedSlots.has(slotNum);
           const slotData = isBooked ? bookedSlots.get(slotNum) : null;
+
+          // Calculate slot time info
+          const slotTimeInfo = workingHours
+            ? getSlotTimeInfo(workingHours, slotNum, slotDuration)
+            : null;
+
           slots.push({
-            time: `Slot ${slotNum}`,
+            slotNumber: slotNum,
+            time: slotTimeInfo?.displayTime || `Slot ${slotNum}`,
+            startTime: slotTimeInfo?.startTime || null,
+            endTime: slotTimeInfo?.endTime || null,
+            startTimeFormatted: slotTimeInfo?.startTimeFormatted || null,
+            endTimeFormatted: slotTimeInfo?.endTimeFormatted || null,
             available: !isBooked,
             clientXNumber: slotData?.clientXNumber,
             clientId: slotData?.clientId,
@@ -170,8 +184,18 @@ export async function GET(request: Request) {
         }
       } else {
         for (let slotNum = 1; slotNum <= slotsPerDay; slotNum++) {
+          // Calculate slot time info even for non-working days
+          const slotTimeInfo = workingHours
+            ? getSlotTimeInfo(workingHours, slotNum, slotDuration)
+            : null;
+
           slots.push({
-            time: `Slot ${slotNum}`,
+            slotNumber: slotNum,
+            time: slotTimeInfo?.displayTime || `Slot ${slotNum}`,
+            startTime: slotTimeInfo?.startTime || null,
+            endTime: slotTimeInfo?.endTime || null,
+            startTimeFormatted: slotTimeInfo?.startTimeFormatted || null,
+            endTimeFormatted: slotTimeInfo?.endTimeFormatted || null,
             available: false,
             clientXNumber: null,
             clientId: null,

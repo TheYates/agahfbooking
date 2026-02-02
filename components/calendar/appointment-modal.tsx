@@ -45,7 +45,7 @@ interface AppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   appointment: Appointment | null;
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
   onAppointmentUpdate: (appointment: Appointment) => void;
   onAppointmentDelete: (appointmentId: number) => void;

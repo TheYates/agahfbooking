@@ -31,7 +31,7 @@ import {
 
 interface MobileCalendarClientTanstackProps {
   user: User;
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
 }
 

@@ -13,7 +13,6 @@ import { ViewSwitcher } from "./view-switcher";
 import { AppointmentModal } from "./appointment-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DayAppointmentsPopover } from "./day-appointments-popover";
-import { AppointmentAlerts } from "./appointment-alerts";
 import {
   isValidBookingDate,
   isWorkingDayForAnyDepartment,
@@ -55,7 +54,7 @@ interface Department {
 }
 
 interface CalendarViewProps {
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
 }
 
@@ -1061,13 +1060,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Appointment Alerts - Shows toast notifications for upcoming appointments */}
-      <AppointmentAlerts
-        userRole={userRole}
-        currentUserId={currentUserId}
-        enabled={true}
-      />
-
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
       {view === "day" && renderDayView()}

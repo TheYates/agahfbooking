@@ -2,8 +2,9 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardClient } from "@/components/dashboard-client";
+import { DashboardClientTanstack as DashboardClient } from "@/components/dashboard-client-tanstack";
 import { MobileDashboardClient } from "@/components/dashboard/mobile-dashboard-client";
+import { AdminDashboardClient } from "@/components/dashboard/admin-dashboard-client";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
 
@@ -29,6 +30,11 @@ export function DashboardPageClient({ user }: DashboardPageClientProps) {
     // Also trigger a refresh of dashboard data
     setRefreshKey((prev) => prev + 1);
   };
+
+  // If user is not a client (Admin, Receptionist, Doctor), show the Admin Dashboard
+  if (user.role !== "client") {
+    return <AdminDashboardClient user={user} />;
+  }
 
   return (
     <div className="space-y-6">

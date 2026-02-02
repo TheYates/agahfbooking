@@ -4,7 +4,7 @@ export interface User {
   id: number;
   name: string;
   phone: string;
-  role: "receptionist" | "admin";
+  role: "receptionist" | "admin" | "reviewer";
   employee_id?: string;
   is_active: boolean;
   created_at: Date;
@@ -32,6 +32,9 @@ export interface Department {
   working_hours: { start: string; end: string }; // {"start": "09:00", "end": "17:00"}
   color?: string; // Hex color code for UI display
   icon?: string; // Icon name for UI display (optional, handled in frontend)
+  slot_duration_minutes: number; // Duration of each slot in minutes (default 30)
+  require_review: boolean; // Whether appointments require review before confirmation
+  auto_confirm_staff_bookings: boolean; // Whether staff bookings skip review
   created_at: Date;
 }
 
@@ -63,6 +66,16 @@ export interface DepartmentAvailability {
   created_at: Date;
 }
 
+export type AppointmentStatus =
+  | "pending_review"
+  | "booked"
+  | "arrived"
+  | "waiting"
+  | "completed"
+  | "no_show"
+  | "cancelled"
+  | "rescheduled";
+
 export interface Appointment {
   id: number;
   client_id: number;
@@ -70,21 +83,26 @@ export interface Appointment {
   doctor_id: number | null;
   appointment_date: Date;
   slot_number: number;
-  status:
-    | "booked"
-    | "arrived"
-    | "waiting"
-    | "completed"
-    | "no_show"
-    | "cancelled"
-    | "rescheduled";
+  slot_start_time: string | null; // Calculated slot start time (HH:MM:SS)
+  slot_end_time: string | null; // Calculated slot end time (HH:MM:SS)
+  status: AppointmentStatus;
   notes: string | null;
   booked_by: number;
+  // Review fields
+  reviewer_notes: string | null;
+  reviewed_by: number | null;
+  reviewed_at: Date | null;
+  // Reschedule fields
+  rescheduled_from_id: number | null;
+  rescheduled_to_id: number | null;
+  reschedule_reason: string | null;
+  rescheduled_by: number | null;
+  rescheduled_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
-export interface AppointmentStatus {
+export interface AppointmentStatusRecord {
   id: number;
   status_name: string;
   status_color: string | null;
@@ -126,7 +144,7 @@ export interface DoctorWithDepartment extends Doctor {
 export interface CreateUserInput {
   name: string;
   phone: string;
-  role?: "receptionist" | "admin";
+  role?: "receptionist" | "admin" | "reviewer";
   employee_id?: string;
 }
 
@@ -150,16 +168,11 @@ export interface CreateAppointmentInput {
 }
 
 export interface UpdateAppointmentInput {
-  status?:
-    | "booked"
-    | "arrived"
-    | "waiting"
-    | "completed"
-    | "no_show"
-    | "cancelled"
-    | "rescheduled";
+  status?: AppointmentStatus;
   notes?: string;
   doctor_id?: number; // assign specific doctor
+  reviewer_notes?: string;
+  reviewed_by?: number;
 }
 
 export interface CreateDepartmentAvailabilityInput {
@@ -178,9 +191,56 @@ export interface CreateDepartmentInput {
   working_days?: string[];
   working_hours?: { start: string; end: string };
   color?: string;
+  slot_duration_minutes?: number;
+  require_review?: boolean;
+  auto_confirm_staff_bookings?: boolean;
 }
 
 export interface CreateDoctorInput {
   name: string;
   department_id: number;
+}
+
+// Notification types
+export type NotificationType = "sms" | "push" | "email";
+export type NotificationEventType =
+  | "booking_confirmation"
+  | "reschedule_request"
+  | "reschedule_completed"
+  | "review_confirmed"
+  | "reminder";
+export type NotificationStatus = "pending" | "sent" | "failed" | "delivered";
+
+export interface NotificationLog {
+  id: number;
+  appointment_id: number | null;
+  client_id: number;
+  notification_type: NotificationType;
+  event_type: NotificationEventType;
+  recipient_contact: string;
+  message_content: string | null;
+  status: NotificationStatus;
+  error_message: string | null;
+  external_id: string | null;
+  sent_at: Date | null;
+  delivered_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateNotificationLogInput {
+  appointment_id?: number;
+  client_id: number;
+  notification_type: NotificationType;
+  event_type: NotificationEventType;
+  recipient_contact: string;
+  message_content?: string;
+}
+
+// Reschedule input type
+export interface RescheduleAppointmentInput {
+  appointment_id: number;
+  new_date: string; // YYYY-MM-DD format
+  new_slot_number: number;
+  reason?: string;
 }

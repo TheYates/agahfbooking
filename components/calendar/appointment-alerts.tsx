@@ -21,7 +21,7 @@ interface Appointment {
 }
 
 interface AppointmentAlertsProps {
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number | string;
   enabled?: boolean;
 }

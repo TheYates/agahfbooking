@@ -11,6 +11,7 @@ import {
   LogOut,
   MessageSquare,
   UserCog,
+  ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -59,8 +60,16 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
   ];
 
+  const reviewerMenuItems = [
+    { title: "Dashboard", url: "/dashboard", icon: Home },
+    { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
+    { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
+    { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
+  ];
+
   const adminMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
+    { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
     { title: "Clients", url: "/dashboard/clients", icon: Users },
@@ -75,6 +84,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
     switch (user.role) {
       case "admin":
         return adminMenuItems;
+      case "reviewer":
+        return reviewerMenuItems;
       case "receptionist":
         return receptionistMenuItems;
       default:

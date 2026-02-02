@@ -37,46 +37,61 @@ export async function GET(request: Request) {
       async () => {
         const supabase = await createServerSupabaseClient();
 
-        // If you have a view `dashboard_stats_mv` in Supabase, use it.
-        const mvRes = await supabase
-          .from("dashboard_stats_mv")
-          .select(
-            "upcoming_count,total_month_count,completed_count,next_appointment_date"
-          )
-          .eq("client_id", clientId)
-          .maybeSingle();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        if (mvRes.error) {
-          // If the view isn't available via Supabase, fall back to safe defaults.
-          console.warn("dashboard_stats_mv query failed:", mvRes.error.message);
-        }
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-        const dashboardData = mvRes.data;
+        // Query appointments directly instead of using materialized view
+        const [upcomingCount, totalMonthCount, completedCount, nextAppointment] = await Promise.all([
+          // Upcoming appointments (today and future, not cancelled/completed)
+          supabase
+            .from("appointments")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .gte("appointment_date", today.toISOString().split('T')[0])
+            .not("status", "in", "(cancelled,completed,no_show)")
+            .then(res => res.count || 0),
 
-        if (!dashboardData) {
-          return {
-            upcomingAppointments: 0,
-            totalAppointments: 0,
-            completedAppointments: 0,
-            availableSlots: 0,
-            daysUntilNext: null,
-            recentAppointments: [],
-          } satisfies DashboardStats;
-        }
+          // Total appointments this month
+          supabase
+            .from("appointments")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .gte("appointment_date", firstDayOfMonth.toISOString().split('T')[0])
+            .then(res => res.count || 0),
+
+          // Completed appointments
+          supabase
+            .from("appointments")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .eq("status", "completed")
+            .then(res => res.count || 0),
+
+          // Next appointment
+          supabase
+            .from("appointments")
+            .select("appointment_date")
+            .eq("client_id", clientId)
+            .gte("appointment_date", today.toISOString().split('T')[0])
+            .not("status", "in", "(cancelled)")
+            .order("appointment_date", { ascending: true })
+            .limit(1)
+            .maybeSingle()
+            .then(res => res.data)
+        ]);
 
         // Days until next appointment
         let daysUntilNext: number | null = null;
-        if (dashboardData.next_appointment_date) {
-          const nextDate = new Date(dashboardData.next_appointment_date);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
+        if (nextAppointment?.appointment_date) {
+          const nextDate = new Date(nextAppointment.appointment_date);
+          nextDate.setHours(0, 0, 0, 0);
           daysUntilNext = Math.ceil(
             (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           );
         }
 
-        // Available slots is currently a rough estimate in existing implementation.
-        // Keep behavior stable for now.
         const availableSlots = 50;
 
         // Recent appointments
@@ -109,9 +124,9 @@ export async function GET(request: Request) {
         );
 
         return {
-          upcomingAppointments: parseInt(dashboardData.upcoming_count || "0"),
-          totalAppointments: parseInt(dashboardData.total_month_count || "0"),
-          completedAppointments: parseInt(dashboardData.completed_count || "0"),
+          upcomingAppointments: upcomingCount,
+          totalAppointments: totalMonthCount,
+          completedAppointments: completedCount,
           availableSlots,
           daysUntilNext,
           recentAppointments,

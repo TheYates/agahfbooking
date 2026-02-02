@@ -5,6 +5,11 @@ import {
   invalidateAvailableSlotsCache,
   invalidateAppointmentsListCache,
 } from "@/lib/appointments-cache";
+import { calculateSlotTimes } from "@/lib/slot-time-utils";
+import {
+  sendBookingConfirmation,
+  fetchAppointmentForNotification,
+} from "@/lib/notification-service";
 
 export async function POST(request: Request) {
   try {
@@ -24,10 +29,10 @@ export async function POST(request: Request) {
     let finalClientId = clientId;
 
     // If no clientId provided, get from session (for client self-booking)
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get("session_token");
+    
     if (!finalClientId) {
-      const cookieStore = await cookies();
-      const sessionToken = cookieStore.get("session_token");
-
       if (!sessionToken) {
         return NextResponse.json(
           {
@@ -48,6 +53,33 @@ export async function POST(request: Request) {
 
     const supabase = await createServerSupabaseClient();
 
+    // Determine who is booking the appointment
+    // booked_by must reference users table (staff), not clients table
+    let bookedById;
+    
+    if (sessionToken) {
+      try {
+        const sessionData = JSON.parse(sessionToken.value);
+        // If it's a staff member (admin/receptionist), use their ID
+        if (sessionData.role === "admin" || sessionData.role === "receptionist") {
+          bookedById = sessionData.id;
+        }
+      } catch {
+        // Session parsing failed, will use default admin below
+      }
+    }
+    
+    // If bookedById is not set (client booking or no valid staff session), use default admin
+    if (!bookedById) {
+      const { data: adminUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("role", "admin")
+        .limit(1)
+        .single();
+      bookedById = adminUser?.id || 1; // Fallback to ID 1 if no admin found
+    }
+
     // Check if slot is still available
     const { data: existing, error: existingErr } = await supabase
       .from("appointments")
@@ -56,6 +88,7 @@ export async function POST(request: Request) {
       .eq("appointment_date", date)
       .eq("slot_number", slotNumber)
       .neq("status", "cancelled")
+      .neq("status", "rescheduled")
       .maybeSingle();
 
     if (existingErr) throw new Error(existingErr.message);
@@ -67,6 +100,59 @@ export async function POST(request: Request) {
       );
     }
 
+    // Fetch department for slot time calculation and review settings
+    const { data: department, error: deptErr } = await supabase
+      .from("departments")
+      .select("working_hours, slot_duration_minutes, require_review, auto_confirm_staff_bookings")
+      .eq("id", departmentId)
+      .single();
+
+    if (deptErr || !department) {
+      return NextResponse.json(
+        { success: false, error: "Department not found" },
+        { status: 404 }
+      );
+    }
+
+    // Calculate slot times
+    const workingHours = department.working_hours as { start: string; end: string } | null;
+    const slotDuration = department.slot_duration_minutes || 30;
+
+    // Only calculate slot times if working_hours is available
+    let slotStartTime: string | null = null;
+    let slotEndTime: string | null = null;
+
+    if (workingHours && workingHours.start) {
+      const slotTimes = calculateSlotTimes(workingHours, slotNumber, slotDuration);
+      slotStartTime = slotTimes.startTime;
+      slotEndTime = slotTimes.endTime;
+    }
+
+    // Determine initial status based on review settings
+    const isStaffBooking = sessionToken ? (() => {
+      try {
+        const sessionData = JSON.parse(sessionToken.value);
+        return ["admin", "receptionist", "reviewer"].includes(sessionData.role);
+      } catch {
+        return false;
+      }
+    })() : false;
+
+    let initialStatus: "booked" | "pending_review" = "pending_review";
+
+    // If department requires review
+    if (department.require_review) {
+      // Staff bookings can auto-confirm if setting is enabled
+      if (isStaffBooking && department.auto_confirm_staff_bookings) {
+        initialStatus = "booked";
+      } else {
+        initialStatus = "pending_review";
+      }
+    } else {
+      // No review required, auto-confirm
+      initialStatus = "booked";
+    }
+
     const { data: created, error: createErr } = await supabase
       .from("appointments")
       .insert({
@@ -74,7 +160,10 @@ export async function POST(request: Request) {
         department_id: departmentId,
         appointment_date: date,
         slot_number: slotNumber,
-        status: "booked",
+        slot_start_time: slotStartTime,
+        slot_end_time: slotEndTime,
+        status: initialStatus,
+        booked_by: bookedById,
       })
       .select("*")
       .single();
@@ -84,6 +173,19 @@ export async function POST(request: Request) {
     // Invalidate caches relevant to booking
     await invalidateAvailableSlotsCache(Number(departmentId), date);
     await invalidateAppointmentsListCache();
+
+    // Send notification if appointment was auto-confirmed (status is "booked")
+    if (initialStatus === "booked") {
+      try {
+        const appointmentForNotification = await fetchAppointmentForNotification(created.id);
+        if (appointmentForNotification) {
+          await sendBookingConfirmation(appointmentForNotification);
+        }
+      } catch (notificationError) {
+        console.error("Failed to send booking notification:", notificationError);
+        // Don't fail the booking if notification fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

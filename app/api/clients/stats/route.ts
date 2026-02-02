@@ -30,11 +30,9 @@ type ClientRow = {
   x_number: string;
   name: string;
   phone: string;
-  email: string | null;
   category: string;
   emergency_contact: string | null;
   address: string | null;
-  medical_notes: string | null;
   created_at: string;
   is_active: boolean;
 };
@@ -71,7 +69,7 @@ export async function GET(request: Request) {
         let query = supabase
           .from("clients")
           .select(
-            "id,x_number,name,phone,email,category,emergency_contact,address,medical_notes,created_at,is_active",
+            "id,x_number,name,phone,category,emergency_contact,address,created_at,is_active",
             { count: "exact" }
           )
           .eq("is_active", true)
@@ -143,7 +141,6 @@ export async function GET(request: Request) {
               xNumber: row.x_number,
               name: row.name,
               phone: row.phone,
-              email: (row as any).email,
               category: row.category,
               joinDate: toDateOnly(row.created_at) || row.created_at,
               totalAppointments: stats.total,
@@ -151,7 +148,6 @@ export async function GET(request: Request) {
               status: derivedStatus,
               emergencyContact: row.emergency_contact,
               address: row.address,
-              medicalNotes: row.medical_notes,
             };
           })
           .filter((c) => {

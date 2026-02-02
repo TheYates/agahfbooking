@@ -5,5 +5,5 @@ export interface User {
   phone: string;
   email?: string;
   category: string;
-  role: "client" | "receptionist" | "admin";
+  role: "client" | "receptionist" | "admin" | "reviewer";
 }

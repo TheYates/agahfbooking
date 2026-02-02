@@ -48,7 +48,7 @@ interface User {
   id: number;
   name: string;
   phone: string;
-  role: "receptionist" | "admin";
+  role: "receptionist" | "admin" | "reviewer";
   employee_id: string;
   is_active: boolean;
   created_at: string;
@@ -58,7 +58,7 @@ interface User {
 interface UserFormData {
   name: string;
   phone: string;
-  role: "receptionist" | "admin";
+  role: "receptionist" | "admin" | "reviewer";
   employee_id: string;
   password: string;
 }
@@ -495,7 +495,7 @@ export default function UsersPage() {
               <Label htmlFor="role">Role *</Label>
               <Select
                 value={formData.role}
-                onValueChange={(value: "receptionist" | "admin") =>
+                onValueChange={(value: "receptionist" | "admin" | "reviewer") =>
                   setFormData({ ...formData, role: value })
                 }
               >
@@ -504,6 +504,7 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="receptionist">Receptionist</SelectItem>
+                  <SelectItem value="reviewer">Reviewer</SelectItem>
                   <SelectItem value="admin">Administrator</SelectItem>
                 </SelectContent>
               </Select>
@@ -592,7 +593,7 @@ export default function UsersPage() {
               <Label htmlFor="edit-role">Role *</Label>
               <Select
                 value={formData.role}
-                onValueChange={(value: "receptionist" | "admin") =>
+                onValueChange={(value: "receptionist" | "admin" | "reviewer") =>
                   setFormData({ ...formData, role: value })
                 }
               >
@@ -601,6 +602,7 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="receptionist">Receptionist</SelectItem>
+                  <SelectItem value="reviewer">Reviewer</SelectItem>
                   <SelectItem value="admin">Administrator</SelectItem>
                 </SelectContent>
               </Select>

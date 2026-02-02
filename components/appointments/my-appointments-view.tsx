@@ -24,6 +24,7 @@ import {
 } from "@/hooks/use-hospital-queries";
 
 import { MobileAppointmentsList } from "./mobile-appointments-list";
+import { RescheduleDialog } from "./reschedule-dialog";
 
 interface Appointment {
   id: number;
@@ -44,6 +45,14 @@ interface MyAppointmentsViewProps {
 export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
   const [filter, setFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [appointmentToReschedule, setAppointmentToReschedule] = useState<{
+    id: number;
+    departmentId: number;
+    departmentName: string;
+    date: string;
+    slotNumber: number;
+  } | null>(null);
 
   // 🚀 TanStack Query: Replace manual fetch with optimized hook
   const {
@@ -71,8 +80,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     if (!appointment) return;
 
     const confirmCancel = window.confirm(
-      `Are you sure you want to cancel your appointment with Dr. ${appointment.doctorName
-      } on ${new Date(appointment.date).toLocaleDateString()}?`
+      `Are you sure you want to cancel your appointment${appointment.doctorName ? ` with Dr. ${appointment.doctorName}` : ''} on ${new Date(appointment.date).toLocaleDateString()}?`
     );
 
     if (!confirmCancel) return;
@@ -116,7 +124,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     // Search Filter
     const query = searchQuery.toLowerCase();
     const searchMatch =
-      appointment.doctorName.toLowerCase().includes(query) ||
+      (appointment.doctorName && appointment.doctorName.toLowerCase().includes(query)) ||
       appointment.departmentName.toLowerCase().includes(query) ||
       (appointment.notes && appointment.notes.toLowerCase().includes(query));
 
@@ -124,11 +132,41 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
   });
 
   const handleReschedule = (id: number) => {
-    toast.info("Rescheduling feature coming soon!");
+    const appointment = appointments.find((apt) => apt.id === id);
+    if (!appointment) return;
+
+    // Check if appointment can be rescheduled
+    const nonReschedulableStatuses = ["cancelled", "rescheduled", "completed", "no_show"];
+    if (nonReschedulableStatuses.includes(appointment.status)) {
+      toast.error(`Cannot reschedule an appointment with status: ${appointment.status}`);
+      return;
+    }
+
+    setAppointmentToReschedule({
+      id: appointment.id,
+      departmentId: appointment.departmentId,
+      departmentName: appointment.departmentName,
+      date: appointment.date,
+      slotNumber: appointment.slotNumber,
+    });
+    setRescheduleDialogOpen(true);
   };
 
   return (
     <div className="space-y-6">
+      {/* Live Updates Indicator */}
+      {/* <div className="flex items-center justify-end">
+        <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
+          <span className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            Live Updates
+          </span>
+        </Badge>
+      </div> */}
+      
       {/* Filter Buttons */}
       {/* Mobile Filter & Search (Reference Style) */}
       <div className="md:hidden space-y-3 mb-2">
@@ -238,15 +276,30 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
               {Object.entries(
                 filteredAppointments.reduce((groups, appointment) => {
                   const date = new Date(appointment.date);
+                  date.setHours(0, 0, 0, 0); // Normalize to start of day
+                  
                   const today = new Date();
-                  const yesterday = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  
+                  const yesterday = new Date(today);
                   yesterday.setDate(yesterday.getDate() - 1);
+                  
+                  const sevenDaysAgo = new Date(today);
+                  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
                   let groupKey = "Older";
-                  if (date.toDateString() === today.toDateString()) groupKey = "Today";
-                  else if (date.toDateString() === yesterday.toDateString()) groupKey = "Yesterday";
-                  else if (date > new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)) groupKey = "Last Week";
-                  else if (date > today) groupKey = "Upcoming";
+                  
+                  // Check in order: Today, Future (Upcoming), Yesterday, Last Week, Older
+                  if (date.getTime() === today.getTime()) {
+                    groupKey = "Today";
+                  } else if (date > today) {
+                    groupKey = "Upcoming";
+                  } else if (date.getTime() === yesterday.getTime()) {
+                    groupKey = "Yesterday";
+                  } else if (date > sevenDaysAgo && date < today) {
+                    groupKey = "Last Week";
+                  }
+                  // else stays "Older"
 
                   if (!groups[groupKey]) groups[groupKey] = [];
                   groups[groupKey].push(appointment);
@@ -270,7 +323,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-                              Appointment <span className="font-light text-xs text-muted-foreground">with</span> {appointment.doctorName}
+                              Appointment {appointment.doctorName && <><span className="font-light text-xs text-muted-foreground">with</span> {appointment.doctorName}</>}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               {appointment.departmentName} • Slot #{appointment.slotNumber}
@@ -346,9 +399,15 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
 
                         {/* Doctor/Recipients Column */}
                         <div className="flex -space-x-2">
-                          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                            {appointment.doctorName.split(' ').map(n => n[0]).join('').substring(0, 2)}
-                          </div>
+                          {appointment.doctorName ? (
+                            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                              {appointment.doctorName.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                            </div>
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">
+                              ?
+                            </div>
+                          )}
                           <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
                             DE
                           </div>
@@ -381,6 +440,16 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
           </div>
         )}
       </div>
+
+      {/* Reschedule Dialog */}
+      <RescheduleDialog
+        isOpen={rescheduleDialogOpen}
+        onClose={() => {
+          setRescheduleDialogOpen(false);
+          setAppointmentToReschedule(null);
+        }}
+        appointment={appointmentToReschedule}
+      />
     </div>
   );
 }

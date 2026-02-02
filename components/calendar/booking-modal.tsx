@@ -51,7 +51,7 @@ interface BookingModalProps {
   onClose: () => void;
   selectedDate: Date | null;
   selectedSlot: number | null;
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
   onAppointmentBooked: () => void;
 }
@@ -197,7 +197,12 @@ export function BookingModal({
         userRole === "client"
           ? currentUserId
           : Number.parseInt(selectedClientId);
-      const bookedBy = currentUserId || 1; // Default to 1 if no currentUserId
+      
+      // booked_by should only be set for staff members (admin/receptionist)
+      // For clients, omit it and let the API use default admin
+      const bookedBy = (userRole === "admin" || userRole === "receptionist") 
+        ? currentUserId 
+        : undefined;
 
       // Create appointment via API
       const response = await fetch("/api/appointments", {
@@ -211,7 +216,7 @@ export function BookingModal({
           appointment_date: selectedDate.toISOString().split("T")[0],
           slot_number: selectedSlot,
           notes: notes || null,
-          booked_by: bookedBy,
+          ...(bookedBy && { booked_by: bookedBy }), // Only include if defined
         }),
       });
 

@@ -42,7 +42,7 @@ export function middleware(request: NextRequest) {
       }
 
       // Validate role
-      if (!["client", "receptionist", "admin"].includes(userData.role)) {
+      if (!["client", "receptionist", "admin", "reviewer"].includes(userData.role)) {
         const response = NextResponse.redirect(new URL("/login", request.url));
         response.cookies.delete("session_token");
         return response;

@@ -7,7 +7,7 @@ import { MobileBookingSheet } from "@/components/dashboard/mobile-booking-sheet"
 import type { User } from "@/lib/types";
 
 interface BookingContextType {
-  openBooking: (departmentId?: string) => void;
+  openBooking: (departmentId?: number) => void;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -28,10 +28,10 @@ interface MobileLayoutProps {
 export function MobileLayout({ children, user }: MobileLayoutProps) {
   const [isBookingSheetOpen, setIsBookingSheetOpen] = useState(false);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<
-    string | undefined
+    number | undefined
   >();
 
-  const handleBookingClick = (departmentId?: string) => {
+  const handleBookingClick = (departmentId?: number) => {
     setSelectedDepartmentId(departmentId);
     setIsBookingSheetOpen(true);
   };

@@ -63,7 +63,15 @@ export async function requireAdminAuth(): Promise<User> {
 
 export async function requireStaffAuth(): Promise<User> {
   const user = await getCurrentUser();
-  if (!user || !["admin", "receptionist"].includes(user.role)) {
+  if (!user || !["admin", "receptionist", "reviewer"].includes(user.role)) {
+    redirect("/login");
+  }
+  return user;
+}
+
+export async function requireReviewerAuth(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user || !["admin", "reviewer"].includes(user.role)) {
     redirect("/login");
   }
   return user;
@@ -82,6 +90,8 @@ export async function redirectBasedOnRole(user: User) {
     redirect("/dashboard");
   } else if (user.role === "receptionist") {
     redirect("/dashboard");
+  } else if (user.role === "reviewer") {
+    redirect("/dashboard/reviews");
   } else if (user.role === "client") {
     redirect("/dashboard");
   } else {

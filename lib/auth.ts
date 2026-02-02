@@ -53,9 +53,16 @@ export async function staffLogin(username: string, password: string) {
   }
 
   try {
-    const user = await UserService.findByEmployeeId(username);
+    // Use Supabase instead of pg pool
+    const supabase = await createAdminSupabaseClient();
+    
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("employee_id", username)
+      .single();
 
-    if (!user) {
+    if (error || !user) {
       throw new Error("Invalid username or password");
     }
 
@@ -68,20 +75,21 @@ export async function staffLogin(username: string, password: string) {
       throw new Error("Invalid username or password");
     }
 
-    // Check if user has a password hash
+    // Verify password using bcrypt
     if (!user.password_hash) {
-      throw new Error(
-        "User account not properly configured. Please contact administrator."
-      );
+      throw new Error("Password not set. Please contact administrator.");
     }
 
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
-
-    if (!isValidPassword) {
+    const passwordValid = await bcrypt.compare(password, user.password_hash);
+    if (!passwordValid) {
       throw new Error("Invalid username or password");
     }
 
-    await UserService.updateLastLogin(user.id);
+    // Update last login timestamp using Supabase
+    await supabase
+      .from("users")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", user.id);
 
     return {
       id: user.id,

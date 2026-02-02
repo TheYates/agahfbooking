@@ -82,7 +82,7 @@ interface QuickBookingDialogProps {
   onTimeSlotSelect?: (day: string, time: string, departmentId: number) => void;
   onWeekChange?: (direction: "prev" | "next") => void;
   enableAnimations?: boolean;
-  userRole?: "client" | "receptionist" | "admin";
+  userRole?: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
 }
 
@@ -286,26 +286,14 @@ export function QuickBookingDialogTanstack({
     error: departmentsError
   } = useDepartments();
 
-  // Debug logging
-  if (process.env.NODE_ENV === 'development' && departmentsError) {
-    console.error('Departments query error:', departmentsError);
-  }
-  if (process.env.NODE_ENV === 'development' && fetchedDepartments) {
-    console.log('Fetched departments:', {
-      isArray: Array.isArray(fetchedDepartments),
-      length: Array.isArray(fetchedDepartments) ? fetchedDepartments.length : 'N/A',
-      type: typeof fetchedDepartments,
-      value: fetchedDepartments
-    });
-  }
 
-  const { 
-    data: clients = [], 
-    isLoading: clientsLoading 
+  const {
+    data: clients = [],
+    isLoading: clientsLoading
   } = useClients(
-    clientSearchTerm, 
-    userRole, 
-    currentUserId, 
+    clientSearchTerm,
+    userRole,
+    currentUserId,
     isOpen
   );
 
@@ -416,7 +404,7 @@ export function QuickBookingDialogTanstack({
     if (!selectedTimeSlot || !selectedDepartment || !selectedClient) return;
 
     const slotNumber = parseInt(selectedTimeSlot.time.replace("Slot ", ""));
-    
+
     // Convert date string back to ISO date
     const currentYear = new Date().getFullYear();
     const dateStr = selectedTimeSlot.day; // e.g., "Jan 15"
@@ -644,8 +632,9 @@ export function QuickBookingDialogTanstack({
               className="w-full h-full flex flex-col"
             >
               <motion.div
+                key={`${isOpen}-${selectedDepartment?.id}`}
                 variants={shouldAnimate ? containerVariants : {}}
-                initial={shouldAnimate ? "hidden" : "visible"}
+                initial="visible"
                 animate="visible"
                 className="p-4 pt-2 flex flex-col h-full overflow-y-auto"
               >
@@ -721,9 +710,11 @@ export function QuickBookingDialogTanstack({
                         {/* TanStack Query Status Debug (development only) */}
                         {process.env.NODE_ENV === "development" && (
                           <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-                            TanStack Status: {weekSchedule.length} days • 
+                            TanStack Status: {weekSchedule.length} days •
                             Loading: {scheduleLoading ? 'Yes' : 'No'} •
-                            Error: {scheduleError ? 'Yes' : 'No'}
+                            Error: {scheduleError ? 'Yes' : 'No'} •
+                            Slots: {weekSchedule.reduce((acc: number, day: DaySchedule) => acc + day.slots.length, 0)} •
+                            Animations: {shouldAnimate ? 'On' : 'Off'}
                           </div>
                         )}
 
@@ -735,7 +726,9 @@ export function QuickBookingDialogTanstack({
                           weekSchedule.map((day: DaySchedule) => (
                             <motion.div
                               key={day.date}
-                              variants={shouldAnimate ? itemVariants : {}}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.3 }}
                               className="space-y-3"
                             >
                               {/* Day Header */}
@@ -752,36 +745,10 @@ export function QuickBookingDialogTanstack({
 
                               {/* Time Slots */}
                               {day.hasAvailability ? (
-                                <motion.div
-                                  variants={
-                                    shouldAnimate ? containerVariants : {}
-                                  }
-                                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2"
-                                >
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2">
                                   {day.slots.map((slot: TimeSlot) => (
-                                    <motion.button
+                                    <button
                                       key={`${day.date}-${slot.time}`}
-                                      variants={
-                                        shouldAnimate ? timeSlotVariants : {}
-                                      }
-                                      whileHover={
-                                        shouldAnimate && slot.available
-                                          ? {
-                                              scale: 1.05,
-                                              y: -2,
-                                              transition: {
-                                                type: "spring",
-                                                stiffness: 400,
-                                                damping: 25,
-                                              },
-                                            }
-                                          : {}
-                                      }
-                                      whileTap={
-                                        shouldAnimate && slot.available
-                                          ? { scale: 0.98 }
-                                          : {}
-                                      }
                                       onClick={() => {
                                         if (
                                           slot.available &&
@@ -806,11 +773,9 @@ export function QuickBookingDialogTanstack({
                                         bookMutation.isPending ||
                                         cancelMutation.isPending
                                       }
-                                      aria-label={`${
-                                        slot.available ? "Book" : "Occupied"
-                                      } time slot ${slot.time} on ${
-                                        day.dayName
-                                      }, ${day.date}`}
+                                      aria-label={`${slot.available ? "Book" : "Occupied"
+                                        } time slot ${slot.time} on ${day.dayName
+                                        }, ${day.date}`}
                                       className={cn(
                                         "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
                                         getSlotStyling(slot, day.fullDate)
@@ -830,9 +795,9 @@ export function QuickBookingDialogTanstack({
                                             </div>
                                           )}
                                       </div>
-                                    </motion.button>
+                                    </button>
                                   ))}
-                                </motion.div>
+                                </div>
                               ) : (
                                 <div className="text-center py-4 text-muted-foreground text-sm">
                                   No available slots for this day
@@ -853,8 +818,8 @@ export function QuickBookingDialogTanstack({
                       {!selectedDepartment && !selectedClient
                         ? "Please select a department and client to view available time slots"
                         : !selectedDepartment
-                        ? "Please select a department to continue"
-                        : "Please select a client to continue"}
+                          ? "Please select a department to continue"
+                          : "Please select a client to continue"}
                     </p>
                   </motion.div>
                 )}
@@ -873,6 +838,9 @@ export function QuickBookingDialogTanstack({
                 stiffness: 300,
                 damping: 30,
                 mass: 0.8,
+              }}
+              style={{
+                pointerEvents: showConfirmationView ? "auto" : "none",
               }}
               className="absolute top-0 left-0 w-full h-full bg-card overflow-y-auto"
             >
@@ -986,8 +954,8 @@ export function QuickBookingDialogTanstack({
             >
               Keep Appointment
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={confirmCancelAppointment}
               disabled={cancelMutation.isPending}
             >

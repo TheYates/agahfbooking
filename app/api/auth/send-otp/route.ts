@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient();
 
-    // Look up client email
+    // Look up client
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id,email")
+      .select("id,x_number,phone,name")
       .eq("x_number", xNumber)
       .eq("is_active", true)
       .single();
@@ -54,33 +54,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    if (!(client as any).email) {
-      return NextResponse.json(
-        { error: "No email is set for this client. Please contact reception." },
-        { status: 400 }
-      );
+    // Generate a simple 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store OTP in database
+    const { error: otpInsertErr } = await supabase
+      .from("otp_codes")
+      .insert({
+        x_number: xNumber,
+        otp_code: otp,
+        expires_at: expiresAt.toISOString(),
+        is_used: false,
+      });
+
+    if (otpInsertErr) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      return NextResponse.json({ error: "Failed to generate OTP" }, { status: 500 });
     }
 
-    // Trigger Supabase Email OTP
-    const { error: otpErr } = await supabase.auth.signInWithOtp({
-      email: (client as any).email,
-      options: {
-        shouldCreateUser: false,
-      },
-    });
-
-    if (otpErr) {
-      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
-      return NextResponse.json({ error: otpErr.message }, { status: 500 });
+    // In production, send SMS here
+    // For now, just log it (check OTP_MODE env var)
+    const otpMode = process.env.OTP_MODE || "mock";
+    
+    if (otpMode === "mock") {
+      console.log(`\n🔐 OTP for ${xNumber} (${client.name}): ${otp}`);
+      console.log(`   Phone: ${client.phone}`);
+      console.log(`   Expires: ${expiresAt.toLocaleTimeString()}\n`);
     }
 
     rateLimiter.recordAttempt(clientInfo.ip, true, xNumber, clientInfo.userAgent);
 
     return NextResponse.json({
       success: true,
-      message: "OTP sent successfully",
-      // We return xNumber so the client can continue the flow; actual OTP goes to email.
+      message: otpMode === "mock" 
+        ? `OTP sent successfully. Check console logs (DEV MODE)` 
+        : `OTP sent to ${client.phone}`,
       xNumber,
+      // In mock mode, return the OTP for testing (REMOVE IN PRODUCTION!)
+      ...(otpMode === "mock" && { otp }),
       rateLimitInfo: {
         remainingAttempts: rateLimitResult.remainingAttempts,
         requiresCaptcha: rateLimitResult.requiresCaptcha,
