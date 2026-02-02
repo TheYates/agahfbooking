@@ -270,26 +270,29 @@ Implement 4 major features for the appointment booking system:
 ### 6.1 Display Timed Slots
 **Modify**: `components/calendar/booking-modal.tsx`
 
-- [ ] Update to show formatted time range instead of "Slot X"
-- [ ] Pass slot time info from parent or fetch from schedule
+- [x] Update to show formatted time range instead of "Slot X"
+- [x] Calculate slot time info based on selected department
 
 **Verify**: `components/ui/quick-booking-dialog-tanstack.tsx`
 
-- [ ] Verify it uses `slot.time` from API (should auto-work after API update)
-- [ ] Test display after API changes
+- [x] Verify it uses `slot.time` from API (should auto-work after API update)
+- [x] Update TimeSlot interface to include slotNumber
+- [x] Fix handleTimeSlotClick to pass slotNumber
+- [x] Fix handleConfirmBooking to use slotNumber instead of parsing time string
+- [x] Fix confirmCancelAppointment to use slotNumber
 
 ### 6.2 Users Management
 **Modify**: `app/dashboard/users/page-supabase.tsx`
 
-- [ ] Add "Reviewer" option to role dropdown in create/edit user forms
+- [x] Add "Reviewer" option to role dropdown in create/edit user forms (already done)
 
 ### 6.3 Department Settings
 
-- [ ] Find or create department settings UI
-- [ ] Add `slot_duration_minutes` number input (default 30, min 5, max 120)
-- [ ] Add `require_review` toggle switch
-- [ ] Add `auto_confirm_staff_bookings` toggle switch
-- [ ] Update department update API to handle new fields
+- [x] Find or create department settings UI (`app/dashboard/departments/page-supabase.tsx`)
+- [x] Add `slot_duration_minutes` number input (default 30, min 5, max 120)
+- [x] Add `require_review` toggle switch
+- [x] Add `auto_confirm_staff_bookings` toggle switch
+- [x] Update department update API to handle new fields
 
 ---
 
@@ -359,7 +362,7 @@ Implement 4 major features for the appointment booking system:
 | Phase 3: Rescheduling | ✅ Complete (API + UI) |
 | Phase 4: Reviewer Role | ✅ Complete (Auth, API, Dashboard, UI) |
 | Phase 5: Notifications | ✅ Complete |
-| Phase 6: UI Updates | ⬜ Not Started |
+| Phase 6: UI Updates | ✅ Complete |
 | Testing | ⬜ Not Started |
 
 ---

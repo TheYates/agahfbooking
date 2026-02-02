@@ -111,6 +111,8 @@ export function MobileAppointmentsClientTanstack({
   // Helper function to get status colors
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
+      pending_review: "#F59E0B",
+      reschedule_requested: "#DC2626",
       booked: "#3B82F6",
       confirmed: "#10B981",
       arrived: "#F59E0B",
@@ -121,6 +123,23 @@ export function MobileAppointmentsClientTanstack({
       rescheduled: "#F97316",
     };
     return colors[status] || "#6B7280";
+  };
+
+  // Helper function to get status display label
+  const getStatusLabel = (status: string) => {
+    const labels: { [key: string]: string } = {
+      pending_review: "Pending Confirmation",
+      reschedule_requested: "Reschedule Requested",
+      booked: "Confirmed",
+      confirmed: "Confirmed",
+      arrived: "Arrived",
+      waiting: "Waiting",
+      completed: "Completed",
+      no_show: "No Show",
+      cancelled: "Cancelled",
+      rescheduled: "Rescheduled",
+    };
+    return labels[status] || status;
   };
 
   // Filter appointments
@@ -396,14 +415,14 @@ export function MobileAppointmentsClientTanstack({
                             {appointment.departmentName}
                           </h3>
                           <span
-                            className="px-2 py-1 text-xs rounded-full capitalize font-medium"
+                            className="px-2 py-1 text-xs rounded-full font-medium"
                             style={{
                               backgroundColor:
                                 getStatusColor(appointment.status) + "20",
                               color: getStatusColor(appointment.status),
                             }}
                           >
-                            {appointment.status.replace("_", " ")}
+                            {getStatusLabel(appointment.status)}
                           </span>
                         </div>
 

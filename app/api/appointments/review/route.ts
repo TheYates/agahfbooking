@@ -303,12 +303,13 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Update appointment with reschedule request info
-    // We keep it in pending_review but add the reviewer's notes
+    // Update appointment status to reschedule_requested
+    // This removes it from the pending review queue and signals to client to pick a new time
     const { data: updated, error: updateError } = await supabase
       .from("appointments")
       .update({
-        reviewer_notes: `Reschedule requested: ${reason.trim()}`,
+        status: "reschedule_requested",
+        reschedule_reason: reason.trim(),
         reviewed_by: sessionData.id,
         reviewed_at: new Date().toISOString(),
       })

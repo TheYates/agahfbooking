@@ -13,7 +13,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Calendar, Clock, User, Building, Search, CheckCircle2, Sparkles, CircleDashed, XCircle, MapPin, UserX, RefreshCw, Check } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  User,
+  Building,
+  Search,
+  CheckCircle2,
+  Sparkles,
+  CircleDashed,
+  XCircle,
+  MapPin,
+  UserX,
+  RefreshCw,
+  Check,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -72,15 +87,13 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
   const appointments: Appointment[] = (appointmentsData as any)?.data || [];
   const error = queryError?.message || "";
 
-
-
   // 🚀 TanStack Query: Simplified cancel with optimistic updates
   const handleCancelAppointment = async (appointmentId: number) => {
     const appointment = appointments.find((apt) => apt.id === appointmentId);
     if (!appointment) return;
 
     const confirmCancel = window.confirm(
-      `Are you sure you want to cancel your appointment${appointment.doctorName ? ` with Dr. ${appointment.doctorName}` : ''} on ${new Date(appointment.date).toLocaleDateString()}?`
+      `Are you sure you want to cancel your appointment${appointment.doctorName ? ` with Dr. ${appointment.doctorName}` : ""} on ${new Date(appointment.date).toLocaleDateString()}?`
     );
 
     if (!confirmCancel) return;
@@ -124,7 +137,8 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     // Search Filter
     const query = searchQuery.toLowerCase();
     const searchMatch =
-      (appointment.doctorName && appointment.doctorName.toLowerCase().includes(query)) ||
+      (appointment.doctorName &&
+        appointment.doctorName.toLowerCase().includes(query)) ||
       appointment.departmentName.toLowerCase().includes(query) ||
       (appointment.notes && appointment.notes.toLowerCase().includes(query));
 
@@ -136,9 +150,16 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     if (!appointment) return;
 
     // Check if appointment can be rescheduled
-    const nonReschedulableStatuses = ["cancelled", "rescheduled", "completed", "no_show"];
+    const nonReschedulableStatuses = [
+      "cancelled",
+      "rescheduled",
+      "completed",
+      "no_show",
+    ];
     if (nonReschedulableStatuses.includes(appointment.status)) {
-      toast.error(`Cannot reschedule an appointment with status: ${appointment.status}`);
+      toast.error(
+        `Cannot reschedule an appointment with status: ${appointment.status}`
+      );
       return;
     }
 
@@ -166,7 +187,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
           </span>
         </Badge>
       </div> */}
-      
+
       {/* Filter Buttons */}
       {/* Mobile Filter & Search (Reference Style) */}
       <div className="md:hidden space-y-3 mb-2">
@@ -199,7 +220,12 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
 
       {/* Desktop Filter & Search */}
       <div className="hidden md:flex flex-row gap-4 items-center justify-between">
-        <Tabs defaultValue="all" value={filter} onValueChange={setFilter} className="w-auto">
+        <Tabs
+          defaultValue="all"
+          value={filter}
+          onValueChange={setFilter}
+          className="w-auto"
+        >
           <TabsList className="grid w-full grid-cols-5 md:w-auto">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
@@ -235,7 +261,10 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-4 p-4 border rounded-lg">
+              <div
+                key={i}
+                className="flex items-center gap-4 p-4 border rounded-lg"
+              >
                 <Skeleton className="h-10 w-10" />
                 <div className="flex-1 space-y-2">
                   <Skeleton className="h-4 w-1/3" />
@@ -263,7 +292,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
         ) : (
           <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
             {/* Header Row */}
-            <div className="grid grid-cols-[2.5fr_1fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[2.5fr_1.5fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div>Title</div>
               <div>Status</div>
               <div>Doctor</div>
@@ -274,168 +303,250 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
             {/* Appointment Groups */}
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {Object.entries(
-                filteredAppointments.reduce((groups, appointment) => {
-                  const date = new Date(appointment.date);
-                  date.setHours(0, 0, 0, 0); // Normalize to start of day
-                  
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  
-                  const yesterday = new Date(today);
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  
-                  const sevenDaysAgo = new Date(today);
-                  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                filteredAppointments.reduce(
+                  (groups, appointment) => {
+                    const date = new Date(appointment.date);
+                    date.setHours(0, 0, 0, 0); // Normalize to start of day
 
-                  let groupKey = "Older";
-                  
-                  // Check in order: Today, Future (Upcoming), Yesterday, Last Week, Older
-                  if (date.getTime() === today.getTime()) {
-                    groupKey = "Today";
-                  } else if (date > today) {
-                    groupKey = "Upcoming";
-                  } else if (date.getTime() === yesterday.getTime()) {
-                    groupKey = "Yesterday";
-                  } else if (date > sevenDaysAgo && date < today) {
-                    groupKey = "Last Week";
-                  }
-                  // else stays "Older"
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
 
-                  if (!groups[groupKey]) groups[groupKey] = [];
-                  groups[groupKey].push(appointment);
-                  return groups;
-                }, {} as Record<string, Appointment[]>)
-              ).sort((a, b) => { // Custom sort order
-                const order = ["Today", "Upcoming", "Yesterday", "Last Week", "Older"];
-                return order.indexOf(a[0]) - order.indexOf(b[0]);
-              }).map(([groupName, groupAppointments]) => (
-                <div key={groupName}>
-                  <div className="px-6 py-3 bg-zinc-50/30 dark:bg-zinc-900/30 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                    {groupName}
-                  </div>
-                  <div>
-                    {groupAppointments.map((appointment) => (
-                      <div key={appointment.id} className="grid grid-cols-[2.5fr_1fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 items-center group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                        {/* Title Column */}
-                        <div className="flex items-start gap-3">
-                          <div className="h-10 w-10 text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center shrink-0">
-                            <Building className="h-5 w-5" />
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+
+                    const sevenDaysAgo = new Date(today);
+                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+                    let groupKey = "Older";
+
+                    // Check in order: Today, Future (Upcoming), Yesterday, Last Week, Older
+                    if (date.getTime() === today.getTime()) {
+                      groupKey = "Today";
+                    } else if (date > today) {
+                      groupKey = "Upcoming";
+                    } else if (date.getTime() === yesterday.getTime()) {
+                      groupKey = "Yesterday";
+                    } else if (date > sevenDaysAgo && date < today) {
+                      groupKey = "Last Week";
+                    }
+                    // else stays "Older"
+
+                    if (!groups[groupKey]) groups[groupKey] = [];
+                    groups[groupKey].push(appointment);
+                    return groups;
+                  },
+                  {} as Record<string, Appointment[]>
+                )
+              )
+                .sort((a, b) => {
+                  // Custom sort order
+                  const order = [
+                    "Today",
+                    "Upcoming",
+                    "Yesterday",
+                    "Last Week",
+                    "Older",
+                  ];
+                  return order.indexOf(a[0]) - order.indexOf(b[0]);
+                })
+                .map(([groupName, groupAppointments]) => (
+                  <div key={groupName}>
+                    <div className="px-6 py-3 bg-zinc-50/30 dark:bg-zinc-900/30 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      {groupName}
+                    </div>
+                    <div>
+                      {groupAppointments.map((appointment) => (
+                        <div
+                          key={appointment.id}
+                          className="grid grid-cols-[2.5fr_1.5fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 items-center group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                        >
+                          {/* Title Column */}
+                          <div className="flex items-start gap-3">
+                            <div className="h-10 w-10 text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center shrink-0">
+                              <Building className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
+                                Appointment{" "}
+                                {appointment.doctorName && (
+                                  <>
+                                    <span className="font-light text-xs text-muted-foreground">
+                                      with
+                                    </span>{" "}
+                                    {appointment.doctorName}
+                                  </>
+                                )}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {appointment.departmentName} • Slot #
+                                {appointment.slotNumber}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
-                              Appointment {appointment.doctorName && <><span className="font-light text-xs text-muted-foreground">with</span> {appointment.doctorName}</>}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {appointment.departmentName} • Slot #{appointment.slotNumber}
-                            </p>
+
+                          {/* Status Column */}
+                          <div className="flex items-center">
+                            {(() => {
+                              const statusConfig: Record<
+                                string,
+                                { icon: any; label: string; className: string }
+                              > = {
+                                pending_review: {
+                                  icon: Clock,
+                                  label: "Pending Confirmation",
+                                  className:
+                                    "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400",
+                                },
+                                reschedule_requested: {
+                                  icon: AlertTriangle,
+                                  label: "Reschedule Requested",
+                                  className:
+                                    "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400",
+                                },
+                                booked: {
+                                  icon: CheckCircle2,
+                                  label: "Confirmed",
+                                  className:
+                                    "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400",
+                                },
+                                confirmed: {
+                                  icon: CheckCircle2,
+                                  label: "Confirmed",
+                                  className:
+                                    "bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-950/30 dark:border-cyan-800 dark:text-cyan-400",
+                                },
+                                arrived: {
+                                  icon: MapPin,
+                                  label: "Arrived",
+                                  className:
+                                    "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/30 dark:border-indigo-800 dark:text-indigo-400",
+                                },
+                                waiting: {
+                                  icon: Clock,
+                                  label: "Waiting",
+                                  className:
+                                    "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-400",
+                                },
+                                completed: {
+                                  icon: Check,
+                                  label: "Completed",
+                                  className:
+                                    "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400",
+                                },
+                                no_show: {
+                                  icon: UserX,
+                                  label: "No Show",
+                                  className:
+                                    "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400",
+                                },
+                                cancelled: {
+                                  icon: XCircle,
+                                  label: "Cancelled",
+                                  className:
+                                    "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400",
+                                },
+                                rescheduled: {
+                                  icon: RefreshCw,
+                                  label: "Rescheduled",
+                                  className:
+                                    "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400",
+                                },
+                              };
+
+                              const config = statusConfig[
+                                appointment.status
+                              ] || {
+                                icon: CircleDashed,
+                                label: appointment.status,
+                                className:
+                                  "bg-zinc-50 border-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400",
+                              };
+
+                              const StatusIcon = config.icon;
+
+                              return (
+                                <div
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium shadow-sm transition-colors",
+                                    config.className
+                                  )}
+                                >
+                                  <StatusIcon className="h-3.5 w-3.5" />
+                                  <span className="capitalize">
+                                    {config.label}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
-                        </div>
 
-                        {/* Status Column */}
-                        <div className="flex items-center">
-                          {(() => {
-                            const statusConfig: Record<string, { icon: any, label: string, className: string }> = {
-                              booked: {
-                                icon: Calendar,
-                                label: "Booked",
-                                className: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400"
-                              },
-                              confirmed: {
-                                icon: CheckCircle2,
-                                label: "Confirmed",
-                                className: "bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-950/30 dark:border-cyan-800 dark:text-cyan-400"
-                              },
-                              arrived: {
-                                icon: MapPin,
-                                label: "Arrived",
-                                className: "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/30 dark:border-indigo-800 dark:text-indigo-400"
-                              },
-                              waiting: {
-                                icon: Clock,
-                                label: "Waiting",
-                                className: "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-400"
-                              },
-                              completed: {
-                                icon: Check,
-                                label: "Completed",
-                                className: "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400"
-                              },
-                              no_show: {
-                                icon: UserX,
-                                label: "No Show",
-                                className: "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400"
-                              },
-                              cancelled: {
-                                icon: XCircle,
-                                label: "Cancelled",
-                                className: "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
-                              },
-                              rescheduled: {
-                                icon: RefreshCw,
-                                label: "Rescheduled",
-                                className: "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400"
-                              }
-                            };
-
-                            const config = statusConfig[appointment.status] || {
-                              icon: CircleDashed,
-                              label: appointment.status,
-                              className: "bg-zinc-50 border-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
-                            };
-
-                            const StatusIcon = config.icon;
-
-                            return (
-                              <div className={cn(
-                                "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium shadow-sm transition-colors",
-                                config.className
-                              )}>
-                                <StatusIcon className="h-3.5 w-3.5" />
-                                <span className="capitalize">{config.label}</span>
+                          {/* Doctor/Recipients Column */}
+                          <div className="flex -space-x-2">
+                            {appointment.doctorName ? (
+                              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
+                                {appointment.doctorName
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .substring(0, 2)}
                               </div>
-                            );
-                          })()}
-                        </div>
+                            ) : (
+                              <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">
+                                ?
+                              </div>
+                            )}
+                            <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                              DE
+                            </div>
+                          </div>
 
-                        {/* Doctor/Recipients Column */}
-                        <div className="flex -space-x-2">
-                          {appointment.doctorName ? (
-                            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                              {appointment.doctorName.split(' ').map(n => n[0]).join('').substring(0, 2)}
-                            </div>
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">
-                              ?
-                            </div>
-                          )}
-                          <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                            DE
+                          {/* Date Column */}
+                          <div className="text-sm text-zinc-500">
+                            {new Date(appointment.date).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              }
+                            )}
+                          </div>
+
+                          {/* Actions Column */}
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {(appointment.status === "pending_review" ||
+                              appointment.status === "reschedule_requested" ||
+                              appointment.status === "booked" ||
+                              appointment.status === "confirmed") && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-xs"
+                                  onClick={() =>
+                                    handleReschedule(appointment.id)
+                                  }
+                                >
+                                  Reschedule
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() =>
+                                    handleCancelAppointment(appointment.id)
+                                  }
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
-
-                        {/* Date Column */}
-                        <div className="text-sm text-zinc-500">
-                          {new Date(appointment.date).toLocaleDateString("en-US", { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
-
-                        {/* Actions Column */}
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {(appointment.status === "booked" || appointment.status === "confirmed") && (
-                            <>
-                              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => handleReschedule(appointment.id)}>
-                                Reschedule
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleCancelAppointment(appointment.id)}>
-                                Cancel
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}

@@ -203,13 +203,16 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
   const getStatusColor = (status: string) => {
     const statusColors: { [key: string]: string } = {
+      pending_review: "#F59E0B",
+      reschedule_requested: "#DC2626",
       booked: "#3B82F6",
+      confirmed: "#10B981",
       arrived: "#10B981",
       waiting: "#F59E0B",
       completed: "#059669",
       no_show: "#EF4444",
       cancelled: "#6B7280",
-      rescheduled: "#8B5CF6",
+      rescheduled: "#F97316",
     };
     return statusColors[status] || "#6B7280";
   };

@@ -32,12 +32,14 @@ function AppointmentRow({
     apt,
     onCancel,
     onReschedule,
-    getStatusColor
+    getStatusColor,
+    getStatusLabel
 }: {
     apt: Appointment,
     onCancel: (id: number) => void,
     onReschedule?: (id: number) => void,
-    getStatusColor: (s: string) => string
+    getStatusColor: (s: string) => string,
+    getStatusLabel: (s: string) => string
 }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -64,16 +66,17 @@ function AppointmentRow({
                 <div className="flex-1 ml-4 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                         <h4 className="font-bold text-sm text-foreground truncate pr-2">
-                            Dr. {apt.doctorName}
+                            {apt.departmentName}
                         </h4>
                         {/* Status Dot */}
-                        {apt.status === 'confirmed' && <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />}
-                        {apt.status === 'booked' && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
+                        {apt.status === 'pending_review' && <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />}
+                        {apt.status === 'reschedule_requested' && <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />}
+                        {(apt.status === 'confirmed' || apt.status === 'booked') && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
                         {apt.status === 'cancelled' && <div className="h-1.5 w-1.5 rounded-full bg-zinc-300 shrink-0" />}
                     </div>
 
                     <p className="text-xs text-muted-foreground truncate">
-                        {apt.departmentName} • Slot #{apt.slotNumber}
+                        {apt.doctorName ? `Dr. ${apt.doctorName} • ` : ''}Slot #{apt.slotNumber}
                     </p>
                 </div>
 
@@ -94,14 +97,14 @@ function AppointmentRow({
                 <div className="min-h-0 pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-800">
                     <div className="flex items-center justify-between mb-4 mt-2">
                         <Badge variant="secondary" className="text-[10px] h-5 px-1.5 uppercase tracking-widest font-bold">
-                            {apt.status.replace("_", " ")}
+                            {getStatusLabel(apt.status)}
                         </Badge>
                         <span className="text-xs text-muted-foreground font-medium">
                             {format(new Date(apt.date), "EEEE")}
                         </span>
                     </div>
 
-                    {(apt.status === "booked" || apt.status === "confirmed") ? (
+                    {(apt.status === "pending_review" || apt.status === "reschedule_requested" || apt.status === "booked" || apt.status === "confirmed") ? (
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"
@@ -144,6 +147,8 @@ export function MobileAppointmentsList({
 
     const getStatusColor = (status: string) => {
         const colors: { [key: string]: string } = {
+            pending_review: "bg-amber-50/50 text-amber-700 border-amber-200 dark:bg-amber-900/10 dark:text-amber-400 dark:border-amber-800",
+            reschedule_requested: "bg-red-50/50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-400 dark:border-red-800",
             booked: "bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/10 dark:text-blue-400 dark:border-blue-800",
             confirmed: "bg-green-50/50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-400 dark:border-green-800",
             arrived: "bg-yellow-50/50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-400 dark:border-yellow-800",
@@ -154,6 +159,23 @@ export function MobileAppointmentsList({
             rescheduled: "bg-orange-50/50 text-orange-700 border-orange-200 dark:bg-orange-900/10 dark:text-orange-400 dark:border-orange-800",
         };
         return colors[status] || "bg-zinc-50 border-zinc-200";
+    };
+
+    // Get display label for status
+    const getStatusLabel = (status: string) => {
+        const labels: { [key: string]: string } = {
+            pending_review: "Pending Confirmation",
+            reschedule_requested: "Reschedule Requested",
+            booked: "Confirmed",
+            confirmed: "Confirmed",
+            arrived: "Arrived",
+            waiting: "Waiting",
+            completed: "Completed",
+            no_show: "No Show",
+            cancelled: "Cancelled",
+            rescheduled: "Rescheduled",
+        };
+        return labels[status] || status;
     };
 
     if (isLoading) {
@@ -197,6 +219,7 @@ export function MobileAppointmentsList({
                         onCancel={onCancel}
                         onReschedule={onReschedule}
                         getStatusColor={getStatusColor}
+                        getStatusLabel={getStatusLabel}
                     />
                 ))}
             </div>

@@ -140,16 +140,12 @@ export async function POST(request: Request) {
 
     let initialStatus: "booked" | "pending_review" = "pending_review";
 
-    // If department requires review
-    if (department.require_review) {
-      // Staff bookings can auto-confirm if setting is enabled
-      if (isStaffBooking && department.auto_confirm_staff_bookings) {
-        initialStatus = "booked";
-      } else {
-        initialStatus = "pending_review";
-      }
-    } else {
-      // No review required, auto-confirm
+    // Staff bookings are always auto-confirmed (they're acting as confirmation)
+    // Client bookings follow the department's require_review setting
+    if (isStaffBooking) {
+      initialStatus = "booked";
+    } else if (!department.require_review) {
+      // No review required, auto-confirm for clients too
       initialStatus = "booked";
     }
 

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -62,6 +63,9 @@ interface Department {
   };
   color: string;
   is_active: boolean;
+  slot_duration_minutes?: number;
+  require_review?: boolean;
+  auto_confirm_staff_bookings?: boolean;
 }
 
 const DAYS_OF_WEEK = [
@@ -92,6 +96,9 @@ type DepartmentCreateInput = {
   working_days: string[];
   working_hours: { start: string; end: string };
   color: string;
+  slot_duration_minutes: number;
+  require_review: boolean;
+  auto_confirm_staff_bookings: boolean;
 };
 
 type DepartmentUpdateInput = Partial<DepartmentCreateInput> & {
@@ -155,6 +162,9 @@ export default function DepartmentsPageSupabase() {
     working_days: ["monday", "tuesday", "wednesday", "thursday", "friday"],
     working_hours: { start: "09:00", end: "17:00" },
     color: DEPARTMENT_COLORS[0],
+    slot_duration_minutes: 30,
+    require_review: true,
+    auto_confirm_staff_bookings: false,
   });
 
   const departmentsQuery = useAllDepartments();
@@ -253,6 +263,9 @@ export default function DepartmentsPageSupabase() {
       working_days: department.working_days,
       working_hours: department.working_hours,
       color: department.color,
+      slot_duration_minutes: department.slot_duration_minutes ?? 30,
+      require_review: department.require_review ?? true,
+      auto_confirm_staff_bookings: department.auto_confirm_staff_bookings ?? false,
     });
     setIsEditDialogOpen(true);
   };
@@ -270,6 +283,9 @@ export default function DepartmentsPageSupabase() {
       working_days: ["monday", "tuesday", "wednesday", "thursday", "friday"],
       working_hours: { start: "09:00", end: "17:00" },
       color: DEPARTMENT_COLORS[0],
+      slot_duration_minutes: 30,
+      require_review: true,
+      auto_confirm_staff_bookings: false,
     });
   };
 
@@ -585,6 +601,57 @@ export default function DepartmentsPageSupabase() {
                 ))}
               </div>
             </div>
+            <div>
+              <Label htmlFor="slot-duration">Slot Duration (minutes) *</Label>
+              <Input
+                id="slot-duration"
+                type="number"
+                min="5"
+                max="120"
+                value={formData.slot_duration_minutes}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    slot_duration_minutes: parseInt(e.target.value) || 30,
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Duration of each appointment slot (5-120 minutes)
+              </p>
+            </div>
+            <div className="space-y-4 border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="require-review">Require Review</Label>
+                  <p className="text-xs text-muted-foreground">
+                    New bookings need reviewer approval before confirmation
+                  </p>
+                </div>
+                <Switch
+                  id="require-review"
+                  checked={formData.require_review}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, require_review: checked })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="auto-confirm-staff">Auto-confirm Staff Bookings</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Bookings made by staff skip review process
+                  </p>
+                </div>
+                <Switch
+                  id="auto-confirm-staff"
+                  checked={formData.auto_confirm_staff_bookings}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, auto_confirm_staff_bookings: checked })
+                  }
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -717,6 +784,55 @@ export default function DepartmentsPageSupabase() {
                     onClick={() => setFormData({ ...formData, color })}
                   />
                 ))}
+              </div>
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="edit-slot-duration">Slot Duration (minutes) *</Label>
+              <Input
+                id="edit-slot-duration"
+                type="number"
+                min="5"
+                max="120"
+                value={formData.slot_duration_minutes}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    slot_duration_minutes: parseInt(e.target.value) || 30,
+                  })
+                }
+                className="mt-1"
+              />
+            </div>
+            <div className="col-span-2 space-y-4 border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="edit-require-review">Require Review</Label>
+                  <p className="text-xs text-muted-foreground">
+                    New bookings need reviewer approval
+                  </p>
+                </div>
+                <Switch
+                  id="edit-require-review"
+                  checked={formData.require_review}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, require_review: checked })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="edit-auto-confirm-staff">Auto-confirm Staff Bookings</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Staff bookings skip review
+                  </p>
+                </div>
+                <Switch
+                  id="edit-auto-confirm-staff"
+                  checked={formData.auto_confirm_staff_bookings}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, auto_confirm_staff_bookings: checked })
+                  }
+                />
               </div>
             </div>
           </div>

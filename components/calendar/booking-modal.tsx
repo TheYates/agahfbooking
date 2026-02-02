@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
 import { isWorkingDay } from "@/lib/working-days-utils";
+import { getSlotTimeInfo, type WorkingHours } from "@/lib/slot-time-utils";
 import { toast } from "sonner";
 
 interface Department {
@@ -33,7 +34,8 @@ interface Department {
   description: string;
   slots_per_day: number;
   working_days: string[];
-  working_hours: { start: string; end: string };
+  working_hours: WorkingHours;
+  slot_duration_minutes?: number;
   color: string;
   is_active: boolean;
 }
@@ -231,10 +233,19 @@ export function BookingModal({
       const selectedClient = clients.find((c) => c.id === clientId);
       const formattedDate = selectedDate.toLocaleDateString();
 
-      toast.success("Appointment Booked Successfully! 🎉", {
+      // Calculate display time for toast
+      const toastSlotText = department.working_hours
+        ? getSlotTimeInfo(
+            department.working_hours,
+            selectedSlot,
+            department.slot_duration_minutes || 30
+          ).displayTime
+        : `Slot ${selectedSlot}`;
+
+      toast.success("Appointment Booked Successfully!", {
         description: `${selectedClient?.name || "Client"} - ${
           department.name
-        } on ${formattedDate}, Slot ${selectedSlot}`,
+        } on ${formattedDate}, ${toastSlotText}`,
         duration: 5000,
       });
 
@@ -264,6 +275,27 @@ export function BookingModal({
     return isWorkingDay(department as any, selectedDate);
   });
 
+  // Get selected department for slot time calculation
+  const selectedDepartment = departments.find(
+    (d) => d.id === Number.parseInt(selectedDepartmentId)
+  );
+
+  // Calculate slot time display
+  const getSlotDisplayText = (): string => {
+    if (!selectedSlot) return "";
+    if (!selectedDepartment?.working_hours) {
+      return `Slot ${selectedSlot}`;
+    }
+    const slotInfo = getSlotTimeInfo(
+      selectedDepartment.working_hours,
+      selectedSlot,
+      selectedDepartment.slot_duration_minutes || 30
+    );
+    return slotInfo.displayTime;
+  };
+
+  const slotDisplayText = getSlotDisplayText();
+
   // Prepare client options for combobox
   const clientOptions = clients.map((client) => ({
     value: client.id.toString(),
@@ -285,7 +317,7 @@ export function BookingModal({
               month: "long",
               day: "numeric",
             })}{" "}
-            - Slot {selectedSlot}
+            - {slotDisplayText || `Slot ${selectedSlot}`}
           </DialogDescription>
         </DialogHeader>
 

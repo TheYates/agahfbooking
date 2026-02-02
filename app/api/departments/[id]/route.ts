@@ -19,7 +19,7 @@ export async function GET(
     const { data: department, error } = await supabase
       .from("departments")
       .select(
-        "id,name,description,slots_per_day,working_days,working_hours,color,is_active"
+        "id,name,description,slots_per_day,working_days,working_hours,color,is_active,slot_duration_minutes,require_review,auto_confirm_staff_bookings"
       )
       .eq("id", id)
       .single();
@@ -73,13 +73,16 @@ export async function PUT(
     if (body.working_hours !== undefined) updatePayload.working_hours = body.working_hours;
     if (body.color !== undefined) updatePayload.color = body.color;
     if (body.is_active !== undefined) updatePayload.is_active = body.is_active;
+    if (body.slot_duration_minutes !== undefined) updatePayload.slot_duration_minutes = body.slot_duration_minutes;
+    if (body.require_review !== undefined) updatePayload.require_review = body.require_review;
+    if (body.auto_confirm_staff_bookings !== undefined) updatePayload.auto_confirm_staff_bookings = body.auto_confirm_staff_bookings;
 
     const { data: department, error } = await supabase
       .from("departments")
       .update(updatePayload)
       .eq("id", id)
       .select(
-        "id,name,description,slots_per_day,working_days,working_hours,color,is_active"
+        "id,name,description,slots_per_day,working_days,working_hours,color,is_active,slot_duration_minutes,require_review,auto_confirm_staff_bookings"
       )
       .single();
 

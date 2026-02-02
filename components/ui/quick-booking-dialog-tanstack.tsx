@@ -42,6 +42,7 @@ import { queryKeys } from "@/lib/query-client";
 
 // Types (same as your existing interfaces)
 interface TimeSlot {
+  slotNumber: number;
   time: string;
   available: boolean;
   clientXNumber?: string;
@@ -84,6 +85,26 @@ interface QuickBookingDialogProps {
   enableAnimations?: boolean;
   userRole?: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
+  /** Pre-loaded client info for logged-in clients - avoids API fetch */
+  clientInfo?: {
+    id: number;
+    name: string;
+    x_number: string;
+    phone?: string;
+    category?: string;
+  };
+  /** Mode: "book" for new bookings, "reschedule" for rescheduling */
+  mode?: "book" | "reschedule";
+  /** Appointment to reschedule (required when mode is "reschedule") */
+  rescheduleAppointment?: {
+    id: number;
+    departmentId: number;
+    departmentName: string;
+    date: string;
+    slotNumber: number;
+  };
+  /** Callback when reschedule is successful */
+  onRescheduleSuccess?: () => void;
 }
 
 // Client Selector Component (simplified with TanStack Query)
@@ -255,6 +276,7 @@ export function QuickBookingDialogTanstack({
   enableAnimations = true,
   userRole = "receptionist",
   currentUserId,
+  clientInfo,
 }: QuickBookingDialogProps) {
   // Local state (much simpler now!)
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
@@ -265,6 +287,7 @@ export function QuickBookingDialogTanstack({
     day: string;
     time: string;
     dayName: string;
+    slotNumber: number;
   } | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<{
@@ -286,16 +309,20 @@ export function QuickBookingDialogTanstack({
     error: departmentsError
   } = useDepartments();
 
-
+  // Skip client fetch if clientInfo is provided (for logged-in clients)
+  const shouldFetchClients = !clientInfo && isOpen;
   const {
-    data: clients = [],
+    data: fetchedClients = [],
     isLoading: clientsLoading
   } = useClients(
     clientSearchTerm,
     userRole,
     currentUserId,
-    isOpen
+    shouldFetchClients
   );
+
+  // Use pre-loaded clientInfo for clients, or fetched clients for staff
+  const clients = clientInfo ? [clientInfo as Client] : fetchedClients;
 
   const {
     data: weekSchedule = [],
@@ -317,8 +344,9 @@ export function QuickBookingDialogTanstack({
     : (Array.isArray(fetchedDepartments) ? fetchedDepartments : []);
 
   // Prefetch client data when dialog opens for faster initial load
+  // Skip if clientInfo is already provided (instant for logged-in clients)
   useEffect(() => {
-    if (isOpen && userRole) {
+    if (isOpen && userRole && !clientInfo) {
       // Prefetch client data immediately
       queryClient.prefetchQuery({
         queryKey: queryKeys.clients.search("", userRole, currentUserId),
@@ -343,12 +371,18 @@ export function QuickBookingDialogTanstack({
         staleTime: 5 * 60 * 1000,
       });
     }
-  }, [isOpen, userRole, currentUserId, queryClient]);
+  }, [isOpen, userRole, currentUserId, queryClient, clientInfo]);
 
-  // Auto-select client if user is a client and only one client is returned
-  if (userRole === "client" && clients.length === 1 && !selectedClient) {
-    setSelectedClient(clients[0]);
-  }
+  // Auto-select client instantly when clientInfo is provided or when client data loads
+  useEffect(() => {
+    if (clientInfo && !selectedClient) {
+      // Instant selection for logged-in clients
+      setSelectedClient(clientInfo as Client);
+    } else if (userRole === "client" && clients.length === 1 && !selectedClient) {
+      // Fallback: auto-select when fetched
+      setSelectedClient(clients[0]);
+    }
+  }, [clientInfo, clients, userRole, selectedClient]);
 
   const handleDepartmentChange = (departmentId: string) => {
     const department = availableDepartments.find(
@@ -360,13 +394,14 @@ export function QuickBookingDialogTanstack({
     }
   };
 
-  const handleTimeSlotClick = (day: string, time: string) => {
+  const handleTimeSlotClick = (day: string, time: string, slotNumber: number) => {
     if (selectedDepartment && selectedClient) {
       const dayInfo = weekSchedule.find((d: DaySchedule) => d.date === day);
       setSelectedTimeSlot({
         day,
         time,
         dayName: dayInfo?.dayName || day,
+        slotNumber,
       });
       setShowConfirmationView(true);
       onTimeSlotSelect?.(day, time, selectedDepartment.id);
@@ -383,7 +418,8 @@ export function QuickBookingDialogTanstack({
     if (!appointmentToCancel || !selectedDepartment || !currentUserId) return;
 
     const { day, slot } = appointmentToCancel;
-    const slotNumber = parseInt(slot.time.replace("Slot ", ""));
+    // Use slotNumber from the slot object
+    const slotNumber = slot.slotNumber;
 
     try {
       await cancelMutation.mutateAsync({
@@ -403,7 +439,8 @@ export function QuickBookingDialogTanstack({
   const handleConfirmBooking = async () => {
     if (!selectedTimeSlot || !selectedDepartment || !selectedClient) return;
 
-    const slotNumber = parseInt(selectedTimeSlot.time.replace("Slot ", ""));
+    // Use slotNumber from the selected time slot
+    const slotNumber = selectedTimeSlot.slotNumber;
 
     // Convert date string back to ISO date
     const currentYear = new Date().getFullYear();
@@ -545,7 +582,7 @@ export function QuickBookingDialogTanstack({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] h-[90vh] max-h-[90vh] overflow-hidden p-0 flex flex-col">
+        <DialogContent className="max-w-3xl w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] h-[70vh] sm:h-[80vh] md:h-[85vh] max-h-[70vh] sm:max-h-[80vh] md:max-h-[85vh] overflow-hidden p-0 flex flex-col">
           <DialogHeader className="p-4 pb-2">
             <DialogTitle>Quick Booking</DialogTitle>
             <DialogDescription className="mb-4">
@@ -748,7 +785,7 @@ export function QuickBookingDialogTanstack({
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2">
                                   {day.slots.map((slot: TimeSlot) => (
                                     <button
-                                      key={`${day.date}-${slot.time}`}
+                                      key={`${day.date}-${slot.slotNumber}`}
                                       onClick={() => {
                                         if (
                                           slot.available &&
@@ -757,7 +794,8 @@ export function QuickBookingDialogTanstack({
                                         ) {
                                           handleTimeSlotClick(
                                             day.date,
-                                            slot.time
+                                            slot.time,
+                                            slot.slotNumber
                                           );
                                         } else if (
                                           isOwnAppointment(slot) &&

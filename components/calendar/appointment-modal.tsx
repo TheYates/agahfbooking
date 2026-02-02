@@ -52,7 +52,8 @@ interface AppointmentModalProps {
 }
 
 const statusOptions = [
-  { value: "booked", label: "Booked", color: "#3B82F6" },
+  { value: "pending_review", label: "Pending Confirmation", color: "#F59E0B" },
+  { value: "booked", label: "Confirmed", color: "#3B82F6" },
   { value: "confirmed", label: "Confirmed", color: "#8B5CF6" },
   { value: "arrived", label: "Arrived", color: "#10B981" },
   { value: "waiting", label: "Waiting", color: "#F59E0B" },
@@ -60,6 +61,7 @@ const statusOptions = [
   { value: "completed", label: "Completed", color: "#059669" },
   { value: "no_show", label: "No Show", color: "#EF4444" },
   { value: "cancelled", label: "Cancelled", color: "#6B7280" },
+  { value: "rescheduled", label: "Rescheduled", color: "#F97316" },
 ];
 
 export function AppointmentModal({

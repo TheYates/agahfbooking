@@ -25,7 +25,7 @@ export async function GET(request: Request) {
         const query = supabase
           .from("departments")
           .select(
-            "id,name,description,slots_per_day,working_days,working_hours,color,is_active"
+            "id,name,description,slots_per_day,working_days,working_hours,color,is_active,slot_duration_minutes,require_review,auto_confirm_staff_bookings"
           )
           .eq("is_active", true)
           .order("name", { ascending: true });
@@ -106,9 +106,12 @@ export async function POST(request: Request) {
         working_hours: body.working_hours ?? { start: "09:00", end: "17:00" },
         color: body.color ?? "#3B82F6",
         is_active: true,
+        slot_duration_minutes: body.slot_duration_minutes ?? 30,
+        require_review: body.require_review ?? true,
+        auto_confirm_staff_bookings: body.auto_confirm_staff_bookings ?? false,
       })
       .select(
-        "id,name,description,slots_per_day,working_days,working_hours,color,is_active"
+        "id,name,description,slots_per_day,working_days,working_hours,color,is_active,slot_duration_minutes,require_review,auto_confirm_staff_bookings"
       )
       .single();
 

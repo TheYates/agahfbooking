@@ -18,7 +18,7 @@ import {
   ChevronRight,
   Lightbulb,
   Mail,
-  CalendarCheck
+  CalendarCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { QuickBookingDialogTanstack } from "@/components/ui/quick-booking-dialog-tanstack";
@@ -31,7 +31,9 @@ interface DashboardClientTanstackProps {
   user: User;
 }
 
-export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) {
+export function DashboardClientTanstack({
+  user,
+}: DashboardClientTanstackProps) {
   const [isQuickBookingOpen, setIsQuickBookingOpen] = useState(false);
 
   // TanStack Query hook - This replaces ALL the useEffect and fetch logic!
@@ -55,6 +57,8 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
   // Helper function to get status colors
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
+      pending_review: "#F59E0B",
+      reschedule_requested: "#DC2626",
       booked: "#3B82F6",
       confirmed: "#10B981",
       arrived: "#F59E0B",
@@ -65,6 +69,23 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
       rescheduled: "#F97316",
     };
     return colors[status] || "#6B7280";
+  };
+
+  // Helper function to get status display label
+  const getStatusLabel = (status: string) => {
+    const labels: { [key: string]: string } = {
+      pending_review: "Pending Confirmation",
+      reschedule_requested: "Reschedule Requested",
+      booked: "Confirmed",
+      confirmed: "Confirmed",
+      arrived: "Arrived",
+      waiting: "Waiting",
+      completed: "Completed",
+      no_show: "No Show",
+      cancelled: "Cancelled",
+      rescheduled: "Rescheduled",
+    };
+    return labels[status] || status;
   };
 
   const handleTimeSlotSelect = (
@@ -91,34 +112,39 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column (Stats + Appointments) */}
         <div className="lg:col-span-2 space-y-8">
-
           {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
             {/* Card 1: Next Appointment (Featured) */}
             <div className="bg-card rounded-xl p-6 border shadow-sm relative overflow-hidden group">
               <div className="relative z-10">
-                <p className="text-muted-foreground text-sm font-medium">Next Appointment</p>
+                <p className="text-muted-foreground text-sm font-medium">
+                  Next Appointment
+                </p>
                 <h3 className="text-2xl font-bold mt-2 leading-tight">
                   {loading ? (
                     <span className="animate-pulse">Loading...</span>
                   ) : currentStats.daysUntilNext !== null ? (
-                    currentStats.daysUntilNext === 0 ? "Today" :
-                    currentStats.daysUntilNext === 1 ? "Tomorrow" :
-                    `In ${currentStats.daysUntilNext} Days`
+                    currentStats.daysUntilNext === 0 ? (
+                      "Today"
+                    ) : currentStats.daysUntilNext === 1 ? (
+                      "Tomorrow"
+                    ) : (
+                      `In ${currentStats.daysUntilNext} Days`
+                    )
                   ) : (
                     "No Upcoming"
                   )}
                 </h3>
                 <p className="text-muted-foreground text-xs mt-1">
-                  {loading 
-                    ? "Checking schedule..." 
-                    : currentStats.daysUntilNext !== null 
-                      ? currentStats.recentAppointments[0]?.departmentName || "No details"
+                  {loading
+                    ? "Checking schedule..."
+                    : currentStats.daysUntilNext !== null
+                      ? currentStats.recentAppointments[0]?.departmentName ||
+                        "No details"
                       : "No details"}
                 </p>
               </div>
-              <CalendarCheck className="absolute -right-4 -bottom-4 w-32 h-32 opacity-5 group-hover:scale-110 transition-transform" />
+              <CalendarCheck className="text-green-600 absolute -right-4 -bottom-4 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
             </div>
 
             {/* Card 2: Total Appointments */}
@@ -128,7 +154,9 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
                   <Calendar className="w-6 h-6" />
                 </div>
               </div>
-              <p className="text-muted-foreground text-sm font-medium">Total Appointments</p>
+              <p className="text-muted-foreground text-sm font-medium">
+                Total Appointments
+              </p>
               <h3 className="text-3xl font-bold mt-1">
                 {loading ? (
                   <div className="animate-pulse bg-muted h-8 w-8 rounded"></div>
@@ -145,7 +173,9 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
                   <CheckCircle className="w-6 h-6" />
                 </div>
               </div>
-              <p className="text-muted-foreground text-sm font-medium">Completed</p>
+              <p className="text-muted-foreground text-sm font-medium">
+                Completed
+              </p>
               <h3 className="text-3xl font-bold mt-1">
                 {loading ? (
                   <div className="animate-pulse bg-muted h-8 w-8 rounded"></div>
@@ -159,10 +189,16 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
           {/* Upcoming Appointments List */}
           <Card className="rounded-xl overflow-hidden border shadow-sm">
             <CardHeader className="border-b bg-card/50 flex flex-row items-center justify-between py-4">
-              <CardTitle className="text-lg font-bold">Upcoming Appointments</CardTitle>
+              <CardTitle className="text-lg font-bold">
+                Upcoming Appointments
+              </CardTitle>
               {user.role === "client" && (
                 <Link href="/dashboard/my-appointments">
-                  <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 font-semibold hover:bg-transparent p-0 h-auto">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary hover:text-primary/80 font-semibold hover:bg-transparent p-0 h-auto"
+                  >
                     View All
                   </Button>
                 </Link>
@@ -182,7 +218,11 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
                 <div className="text-center py-8 text-muted-foreground">
                   <p className="text-sm mb-2">No upcoming appointments found</p>
                   {user.role === "client" && (
-                    <Button onClick={() => setIsQuickBookingOpen(true)} variant="outline" size="sm">
+                    <Button
+                      onClick={() => setIsQuickBookingOpen(true)}
+                      variant="outline"
+                      size="sm"
+                    >
                       Book Now
                     </Button>
                   )}
@@ -190,10 +230,16 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
               ) : (
                 <div className="divide-y">
                   {currentStats.recentAppointments.map((appointment) => (
-                    <div key={appointment.id} className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
+                    <div
+                      key={appointment.id}
+                      className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors"
+                    >
                       <div className="w-10 h-10 rounded-lg bg-muted flex flex-col items-center justify-center text-muted-foreground">
                         <span className="text-[10px] font-bold uppercase">
-                          {new Date(appointment.date).toLocaleDateString('en-US', { month: 'short' })}
+                          {new Date(appointment.date).toLocaleDateString(
+                            "en-US",
+                            { month: "short" }
+                          )}
                         </span>
                         <span className="text-base font-bold leading-none">
                           {new Date(appointment.date).getDate()}
@@ -202,8 +248,10 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-sm truncate">
                           {user.role === "client"
-                            ? appointment.doctorName || appointment.departmentName
-                            : appointment.clientName || `Client ${appointment.clientXNumber}`}
+                            ? appointment.doctorName ||
+                              appointment.departmentName
+                            : appointment.clientName ||
+                              `Client ${appointment.clientXNumber}`}
                         </h4>
                         <p className="text-xs text-muted-foreground">
                           {user.role !== "client" && appointment.doctorName && (
@@ -216,14 +264,18 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
                         <span
                           className="px-2 py-1 text-[10px] font-semibold rounded-full capitalize"
                           style={{
-                            backgroundColor: getStatusColor(appointment.status) + "20",
+                            backgroundColor:
+                              getStatusColor(appointment.status) + "20",
                             color: getStatusColor(appointment.status),
                           }}
                         >
                           {appointment.status}
                         </span>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {new Date(appointment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(appointment.date).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </p>
                       </div>
                     </div>
@@ -236,7 +288,6 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
 
         {/* Right Column (Sidebar) */}
         <div className="space-y-8">
-
           {/* Quick Actions */}
           <Card className="rounded-xl border shadow-sm">
             <CardHeader className="pb-2">
@@ -285,7 +336,8 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
               <h3 className="font-bold">Health Tip</h3>
             </div>
             <p className="text-sm text-muted-foreground italic">
-              "Regular check-ups are the best way to prevent long-term health issues. Don't forget to stay hydrated today!"
+              "Regular check-ups are the best way to prevent long-term health
+              issues. Don't forget to stay hydrated today!"
             </p>
           </div>
 
@@ -296,13 +348,15 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
               <p className="text-sm text-muted-foreground mb-4">
                 Contact our support desk for assistance with bookings.
               </p>
-              <a href="mailto:support@agahf.com" className="text-primary font-bold flex items-center gap-2 hover:underline">
+              <a
+                href="mailto:support@agahf.com"
+                className="text-primary font-bold flex items-center gap-2 hover:underline"
+              >
                 <Mail className="w-4 h-4" />
                 support@agahf.com
               </a>
             </CardContent>
           </Card>
-
         </div>
       </div>
 
@@ -314,6 +368,13 @@ export function DashboardClientTanstack({ user }: DashboardClientTanstackProps) 
           onTimeSlotSelect={handleTimeSlotSelect}
           userRole={user.role}
           currentUserId={user.id}
+          clientInfo={{
+            id: user.id,
+            name: user.name,
+            x_number: user.xNumber,
+            phone: user.phone,
+            category: user.category,
+          }}
         />
       )}
     </div>

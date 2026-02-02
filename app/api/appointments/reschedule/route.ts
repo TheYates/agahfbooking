@@ -125,10 +125,14 @@ export async function POST(request: Request) {
     const slotTimes = calculateSlotTimes(workingHours, newSlotNumber, slotDuration);
 
     // Determine status for new appointment
+    // Staff reschedules are always auto-confirmed (they're already acting as confirmation)
+    // Client reschedules follow the department's require_review setting
     let newStatus: "booked" | "pending_review" = "pending_review";
-    if (!department.require_review) {
+    if (isStaff) {
+      // Staff reschedules are always confirmed
       newStatus = "booked";
-    } else if (isStaff && department.auto_confirm_staff_bookings) {
+    } else if (!department.require_review) {
+      // Department doesn't require review
       newStatus = "booked";
     }
 
