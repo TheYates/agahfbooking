@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 interface Appointment {
     id: number;
     date: string;
     slotNumber: number;
+    slotStartTime?: string;
+    slotEndTime?: string;
     status: string;
     doctorName: string;
     departmentId: number;
@@ -76,7 +79,12 @@ function AppointmentRow({
                     </div>
 
                     <p className="text-xs text-muted-foreground truncate">
-                        {apt.doctorName ? `Dr. ${apt.doctorName} • ` : ''}Slot #{apt.slotNumber}
+                        {apt.doctorName ? `Dr. ${apt.doctorName} • ` : ''}
+                        {apt.slotStartTime && apt.slotEndTime ? (
+                          `${formatDatabaseTimeForDisplay(apt.slotStartTime)} - ${formatDatabaseTimeForDisplay(apt.slotEndTime)}`
+                        ) : (
+                          `Slot #${apt.slotNumber}`
+                        )}
                     </p>
                 </div>
 

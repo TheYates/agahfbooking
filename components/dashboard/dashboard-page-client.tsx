@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DashboardClientTanstack as DashboardClient } from "@/components/dashboard-client-tanstack";
 import { MobileDashboardClient } from "@/components/dashboard/mobile-dashboard-client";
 import { AdminDashboardClient } from "@/components/dashboard/admin-dashboard-client";
+import { ReviewerMobileDashboard } from "@/components/dashboard/reviewer-mobile-dashboard";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
 
@@ -31,26 +32,46 @@ export function DashboardPageClient({ user }: DashboardPageClientProps) {
     setRefreshKey((prev) => prev + 1);
   };
 
-  // If user is not a client (Admin, Receptionist, Doctor), show the Admin Dashboard
-  if (user.role !== "client") {
-    return <AdminDashboardClient user={user} />;
+  // 1. CLIENT VIEW
+  if (user.role === "client") {
+    return (
+      <div className="space-y-6">
+        {/* Desktop Dashboard */}
+        <div className="hidden md:block">
+          <DashboardClient user={user} />
+        </div>
+
+        {/* Mobile Dashboard */}
+        <div className="md:hidden">
+          <MobileDashboardClient
+            key={refreshKey}
+            user={user}
+            onBookingClick={handleBookingClick}
+          />
+        </div>
+      </div>
+    );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Desktop Dashboard - Using Supabase/API */}
-      <div className="hidden md:block">
-        <DashboardClient user={user} />
-      </div>
+  // 2. REVIEWER VIEW (Mobile First + Tablet Support)
+  // Reviewers get a native-app-like experience on Mobile AND Tablet (up to lg breakpoint)
+  if (user.role === "reviewer") {
+    return (
+      <div className="space-y-6">
+        {/* Desktop View (Large Screens only) */}
+        <div className="hidden lg:block">
+          <AdminDashboardClient user={user} />
+        </div>
 
-      {/* Mobile Dashboard - Using Supabase/API */}
-      <div className="md:hidden">
-        <MobileDashboardClient
-          key={refreshKey}
-          user={user}
-          onBookingClick={handleBookingClick}
-        />
+        {/* Mobile/Tablet View (< 1024px) */}
+        <div className="lg:hidden">
+          <ReviewerMobileDashboard user={user} />
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // 3. ADMIN/STAFF VIEW
+  // Default fallback for Admin, Receptionist, etc.
+  return <AdminDashboardClient user={user} />;
 }

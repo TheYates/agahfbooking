@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     let query = supabase
       .from("appointments")
       .select(
-        "id,client_id,department_id,appointment_date,slot_number,status,notes,created_at,departments(name,color),clients(name,x_number)",
+        "id,client_id,department_id,appointment_date,slot_number,slot_start_time,slot_end_time,status,notes,created_at,departments(name,color),clients(name,x_number)",
         { count: "exact" }
       )
       .eq("client_id", clientId)
@@ -57,6 +57,8 @@ export async function GET(request: Request) {
       clientXNumber: appointment.clients?.x_number,
       date: (appointment.appointment_date || "").toString().split("T")[0],
       slotNumber: appointment.slot_number,
+      slotStartTime: appointment.slot_start_time,
+      slotEndTime: appointment.slot_end_time,
       status: appointment.status,
       notes: appointment.notes,
       departmentId: appointment.department_id,

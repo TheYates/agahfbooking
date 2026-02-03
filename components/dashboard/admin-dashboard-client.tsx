@@ -15,9 +15,11 @@ import {
     AlertCircle,
     TrendingUp,
     ArrowUpRight,
-    ArrowDownRight
+    ArrowDownRight,
+    ClipboardCheck
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { User } from "@/lib/types";
 import { useUnifiedDashboardStats } from "@/hooks/use-hospital-queries";
 import { Bar, BarChart, CartesianGrid, XAxis, ResponsiveContainer } from "recharts";
@@ -33,10 +35,14 @@ interface AdminDashboardClientProps {
 }
 
 export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
+    const router = useRouter();
     const {
         data: stats,
         isLoading: loading,
     } = useUnifiedDashboardStats(user.role, user.id);
+
+    const isReviewer = user.role === "reviewer";
+    const dashboardTitle = isReviewer ? "Reviewer Dashboard" : "Admin Dashboard";
 
     const currentStats = stats || {
         upcomingAppointments: 0,
@@ -69,14 +75,14 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
 
     return (
         <div className="space-y-8 p-1">
-            {/* Admin Header with more visual punch */}
+            {/* Header with more visual punch */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b pb-6">
                 <div>
-                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">
-                        Admin Dashboard
+                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent capitalize">
+                        {dashboardTitle}
                     </h1>
                     <p className="text-muted-foreground mt-2 text-lg">
-                        Overview of hospital operations for {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+                        Overview of appointments and tasks for {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -129,22 +135,26 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="border-l-4 border-l-amber-500 shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Pending Actions
-                        </CardTitle>
-                        <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
-                            <AlertCircle className="h-4 w-4" />
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">4</div>
-                        <div className="flex items-center text-xs text-amber-600 mt-1">
-                            Requires attention
-                        </div>
-                    </CardContent>
-                </Card>
+                <Link href="/dashboard/reviews" className="block">
+                    <Card className="border-l-4 border-l-amber-500 shadow-sm hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Pending Reviews
+                            </CardTitle>
+                            <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                                <AlertCircle className="h-4 w-4" />
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">
+                                {loading ? "..." : "4"}
+                            </div>
+                            <div className="flex items-center text-xs text-amber-600 mt-1 font-medium">
+                                Requires attention <ArrowUpRight className="ml-1 h-3 w-3" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </Link>
 
                 <Card className="border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -198,21 +208,44 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                     <Card className="h-full shadow-sm flex flex-col">
                         <CardHeader>
                             <CardTitle>Quick Actions</CardTitle>
-                            <CardDescription>Common administrative tasks</CardDescription>
+                            <CardDescription>Common tasks for your role</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 flex-1">
-                            <Button variant="outline" className="w-full justify-between h-auto py-4 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 group transition-all">
-                                <div className="flex items-center">
-                                    <div className="p-2 rounded-full bg-blue-100 text-blue-600 mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                        <UserPlus className="h-5 w-5" />
+
+                            {/* Reviewer Specific Action */}
+                            {isReviewer && (
+                                <Button
+                                    variant="outline"
+                                    className="w-full justify-between h-auto py-4 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:border-amber-900 dark:hover:bg-amber-950/40 group transition-all"
+                                    onClick={() => router.push("/dashboard/reviews")}
+                                >
+                                    <div className="flex items-center">
+                                        <div className="p-2 rounded-full bg-amber-100 text-amber-600 mr-4 group-hover:scale-110 transition-transform">
+                                            <ClipboardCheck className="h-5 w-5" />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-semibold text-foreground">Review Appointments</div>
+                                            <div className="text-xs text-muted-foreground">Approve pending bookings</div>
+                                        </div>
                                     </div>
-                                    <div className="text-left">
-                                        <div className="font-semibold text-foreground">Register Patient</div>
-                                        <div className="text-xs text-muted-foreground">New patient admission</div>
+                                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                            )}
+
+                            {!isReviewer && (
+                                <Button variant="outline" className="w-full justify-between h-auto py-4 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 group transition-all">
+                                    <div className="flex items-center">
+                                        <div className="p-2 rounded-full bg-blue-100 text-blue-600 mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                            <UserPlus className="h-5 w-5" />
+                                        </div>
+                                        <div className="text-left">
+                                            <div className="font-semibold text-foreground">Register Patient</div>
+                                            <div className="text-xs text-muted-foreground">New patient admission</div>
+                                        </div>
                                     </div>
-                                </div>
-                                <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-                            </Button>
+                                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                            )}
 
                             <Button variant="outline" className="w-full justify-between h-auto py-4 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-950/30 group transition-all">
                                 <div className="flex items-center">
@@ -291,11 +324,12 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                                     <div className="col-span-2">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize 
                                     ${apt.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                                                apt.status === 'pending' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                                                    'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'}`}>
+                                                apt.status === 'pending_review' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                    apt.status === 'pending' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                        'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'}`}>
                                             {apt.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
-                                            {apt.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
-                                            {apt.status}
+                                            {(apt.status === 'pending' || apt.status === 'pending_review') && <Clock className="w-3 h-3 mr-1" />}
+                                            {apt.status === 'pending_review' ? 'Review' : apt.status}
                                         </span>
                                     </div>
                                     <div className="col-span-1 text-right">

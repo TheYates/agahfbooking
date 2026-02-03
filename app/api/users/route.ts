@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("users")
-      .select("id,name,phone,role,employee_id,is_active,created_at")
+      .select("id,name,phone,role,username,is_active,created_at")
       .eq("is_active", true)
       .order("name", { ascending: true });
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,employee_id.ilike.%${search}%`);
+      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,username.ilike.%${search}%`);
     }
 
     const { data: users, error } = await query;
@@ -44,12 +44,12 @@ export async function POST(request: NextRequest) {
     await requireAdminAuth();
 
     const userData = await request.json();
-    const { name, phone, role, employee_id, password } = userData;
+    const { name, phone, role, username, password } = userData;
 
-    // Validate required fields
-    if (!name || !phone || !role || !employee_id) {
+    // Validate required fields (phone is now optional)
+    if (!name || !role || !username) {
       return NextResponse.json(
-        { error: "Name, phone, role, and employee ID are required" },
+        { error: "Name, role, and username are required" },
         { status: 400 }
       );
     }
@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
       .from("users")
       .insert({
         name,
-        phone,
+        phone: phone || null,
         role,
-        employee_id,
+        username,
         password_hash: passwordHash,
         is_active: true,
       })
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     // Handle unique constraint violations
     if (error instanceof Error && error.message.includes("duplicate key")) {
       return NextResponse.json(
-        { error: "Employee ID already exists" },
+        { error: "Username already exists" },
         { status: 409 }
       );
     }

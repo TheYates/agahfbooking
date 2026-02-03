@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -31,21 +32,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Calendar,
-  Clock,
-  User,
-  Building,
-  Phone,
   CheckCircle,
   XCircle,
   Loader2,
   RefreshCw,
   AlertCircle,
+  CalendarDays,
+  Filter,
+  MoreHorizontal
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PendingReviewsViewProps {
   userId: number;
@@ -103,11 +109,19 @@ async function fetchDepartments() {
 
 export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps) {
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+
+  // Single Action State
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<PendingAppointment | null>(null);
   const [confirmNotes, setConfirmNotes] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+
+  // Batch Action State
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchConfirmDialogOpen, setBatchConfirmDialogOpen] = useState(false);
+  const [batchRejectDialogOpen, setBatchRejectDialogOpen] = useState(false);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -120,7 +134,7 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
   } = useQuery({
     queryKey: ["reviews", "pending", departmentFilter],
     queryFn: () => fetchPendingReviews(departmentFilter),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Fetch departments for filter
@@ -129,7 +143,37 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
     queryFn: fetchDepartments,
   });
 
-  // Confirm mutation
+  // Derived state
+  const allSelected = useMemo(() =>
+    appointments.length > 0 && selectedIds.size === appointments.length,
+    [selectedIds, appointments.length]
+  );
+
+  const isIndeterminate = useMemo(() =>
+    selectedIds.size > 0 && selectedIds.size < appointments.length,
+    [selectedIds.size, appointments.length]
+  );
+
+  // Handlers for Selection
+  const toggleSelection = (id: number) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(appointments.map(a => a.id)));
+    }
+  };
+
+  // Confirm Mutation
   const confirmMutation = useMutation({
     mutationFn: async ({ appointmentId, notes }: { appointmentId: number; notes?: string }) => {
       const response = await fetch("/api/appointments/review", {
@@ -138,25 +182,16 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
         body: JSON.stringify({ appointmentId, notes }),
       });
       const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to confirm appointment");
-      }
+      if (!data.success) throw new Error(data.error);
       return data;
     },
     onSuccess: () => {
-      toast.success("Appointment confirmed successfully!");
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      setConfirmDialogOpen(false);
-      setSelectedAppointment(null);
-      setConfirmNotes("");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to confirm appointment");
     },
   });
 
-  // Reject (request reschedule) mutation
+  // Reject/Reschedule Mutation
   const rejectMutation = useMutation({
     mutationFn: async ({ appointmentId, reason }: { appointmentId: number; reason: string }) => {
       const response = await fetch("/api/appointments/review", {
@@ -165,23 +200,15 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
         body: JSON.stringify({ appointmentId, reason }),
       });
       const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to request reschedule");
-      }
+      if (!data.success) throw new Error(data.error);
       return data;
     },
-    onSuccess: (data) => {
-      toast.success(`Reschedule request sent to ${data.client?.name || "client"}`);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reviews"] });
-      setRejectDialogOpen(false);
-      setSelectedAppointment(null);
-      setRejectReason("");
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to send reschedule request");
     },
   });
 
+  // Single Action Handlers
   const handleConfirmClick = (appointment: PendingAppointment) => {
     setSelectedAppointment(appointment);
     setConfirmNotes("");
@@ -194,23 +221,90 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
     setRejectDialogOpen(true);
   };
 
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     if (!selectedAppointment) return;
-    confirmMutation.mutate({
-      appointmentId: selectedAppointment.id,
-      notes: confirmNotes.trim() || undefined,
-    });
+    try {
+      await confirmMutation.mutateAsync({
+        appointmentId: selectedAppointment.id,
+        notes: confirmNotes.trim() || undefined,
+      });
+      toast.success("Appointment confirmed successfully!");
+      setConfirmDialogOpen(false);
+      setSelectedAppointment(null);
+    } catch (e) {
+      toast.error("Failed to confirm appointment");
+    }
   };
 
-  const handleRejectSubmit = () => {
+  const handleRejectSubmit = async () => {
     if (!selectedAppointment || !rejectReason.trim()) {
-      toast.error("Please provide a reason for the reschedule request");
+      toast.error("Please provide a reason to reschedule");
       return;
     }
-    rejectMutation.mutate({
-      appointmentId: selectedAppointment.id,
-      reason: rejectReason.trim(),
-    });
+    try {
+      await rejectMutation.mutateAsync({
+        appointmentId: selectedAppointment.id,
+        reason: rejectReason.trim(),
+      });
+      toast.success("Reschedule request sent!");
+      setRejectDialogOpen(false);
+      setSelectedAppointment(null);
+    } catch (e) {
+      toast.error("Failed to send reschedule request");
+    }
+  };
+
+  // Batch Action Handlers
+  const handleBatchConfirmSubmit = async () => {
+    setIsBatchProcessing(true);
+    let successCount = 0;
+    const ids = Array.from(selectedIds);
+
+    try {
+      await Promise.all(ids.map(id =>
+        confirmMutation.mutateAsync({
+          appointmentId: id,
+          notes: confirmNotes.trim() || undefined
+        })
+      ));
+      successCount = ids.length;
+      toast.success(`${successCount} appointments confirmed successfully!`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Some appointments failed to confirm");
+    } finally {
+      setIsBatchProcessing(false);
+      setBatchConfirmDialogOpen(false);
+      setConfirmNotes("");
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleBatchRejectSubmit = async () => {
+    if (!rejectReason.trim()) {
+      toast.error("Please provide a reason");
+      return;
+    }
+    setIsBatchProcessing(true);
+    const ids = Array.from(selectedIds);
+
+    try {
+      await Promise.all(ids.map(id =>
+        rejectMutation.mutateAsync({
+          appointmentId: id,
+          reason: rejectReason.trim()
+        })
+      ));
+      toast.success(`${ids.length} reschedule requests sent!`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Some requests failed to send");
+    } finally {
+      setIsBatchProcessing(false);
+      setBatchRejectDialogOpen(false);
+      setRejectReason("");
+      setSelectedIds(new Set());
+    }
   };
 
   const formatSlotTime = (appointment: PendingAppointment) => {
@@ -224,22 +318,9 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardContent>
-            <CardFooter>
-              <Skeleton className="h-9 w-full" />
-            </CardFooter>
-          </Card>
+      <div className="space-y-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-16 w-full rounded-lg" />
         ))}
       </div>
     );
@@ -247,33 +328,37 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Error Loading Reviews</h3>
-        <p className="text-muted-foreground mb-4">
+      <div className="flex flex-col items-center justify-center py-20 text-center bg-muted/20 rounded-xl border border-dashed">
+        <AlertCircle className="h-12 w-12 text-destructive/50 mb-4" />
+        <h3 className="text-xl font-semibold mb-2">Error Loading Reviews</h3>
+        <p className="text-muted-foreground mb-6 max-w-sm">
           {error instanceof Error ? error.message : "Failed to load pending reviews"}
         </p>
-        <Button onClick={() => refetch()}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Try Again
+        <Button onClick={() => refetch()} variant="outline">
+          <RefreshCw className="mr-2 h-4 w-4" /> Try Again
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-lg px-3 py-1">
-            {appointments.length} Pending
-          </Badge>
+    <div className="space-y-6 relative pb-24">
+      {/* Control Bar */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between pb-4 border-b">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10">
+            <CalendarDays className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Pending Reviews</h2>
+            <p className="text-sm text-muted-foreground">{appointments.length} appointments waiting</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-full sm:w-[200px] h-10 bg-background border-input/60 shadow-sm">
+              <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
               <SelectValue placeholder="All Departments" />
             </SelectTrigger>
             <SelectContent>
@@ -286,213 +371,320 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
             </SelectContent>
           </Select>
 
-          <Button variant="outline" size="icon" onClick={() => refetch()}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            className="h-10 w-10 shrink-0"
+            title="Refresh"
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Empty State */}
-      {appointments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-          <h3 className="text-xl font-semibold mb-2">All Caught Up!</h3>
-          <p className="text-muted-foreground max-w-md">
-            There are no appointments pending review. New appointments will appear here when clients book.
-          </p>
-        </div>
-      ) : (
-        /* Appointments Grid */
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {appointments.map((appointment) => (
-            <Card key={appointment.id} className="overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      {appointment.clients?.name || "Unknown Client"}
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-1 mt-1">
-                      <Phone className="h-3 w-3" />
-                      {appointment.clients?.phone}
-                    </CardDescription>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    style={{
-                      backgroundColor: `${appointment.departments?.color}20`,
-                      borderColor: appointment.departments?.color,
-                      color: appointment.departments?.color,
-                    }}
-                  >
-                    {appointment.departments?.name}
-                  </Badge>
-                </div>
-              </CardHeader>
+      {/* Main Table Content */}
+      <AnimatePresence mode="wait">
+        {appointments.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-xl bg-muted/5 p-8"
+          >
+            <div className="h-24 w-24 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mb-6">
+              <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="text-2xl font-bold mb-2">All Caught Up!</h3>
+            <p className="text-muted-foreground max-w-md text-lg leading-relaxed">
+              There are no appointments pending review at the moment.
+            </p>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="rounded-lg border shadow-sm bg-card overflow-hidden"
+          >
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="w-[40px] px-4">
+                    <Checkbox
+                      checked={allSelected || isIndeterminate}
+                      onCheckedChange={toggleAll}
+                      className={cn("data-[state=checked]:bg-primary data-[state=indeterminate]:bg-primary border-muted-foreground/30")}
+                    />
+                  </TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Appointment</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="w-[30%]">Notes</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {appointments.map((appointment) => {
+                  const isSelected = selectedIds.has(appointment.id);
+                  return (
+                    <TableRow
+                      key={appointment.id}
+                      className={cn(
+                        "transition-colors hover:bg-muted/30 cursor-pointer",
+                        isSelected && "bg-muted/20"
+                      )}
+                      onClick={() => toggleSelection(appointment.id)}
+                    >
+                      <TableCell className="px-4" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelection(appointment.id)}
+                          className={cn("border-muted-foreground/30", isSelected && "data-[state=checked]:bg-primary")}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span className="text-base">{appointment.clients?.name || "Unknown"}</span>
+                          <span className="text-xs text-muted-foreground">{appointment.clients?.phone}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col space-y-0.5">
+                          <span className="text-sm font-medium">
+                            {format(new Date(appointment.appointment_date), "MMM d, yyyy")}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatSlotTime(appointment)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="font-medium whitespace-nowrap"
+                          style={{
+                            backgroundColor: `${appointment.departments?.color}15`,
+                            color: appointment.departments?.color,
+                            borderColor: `${appointment.departments?.color}30`
+                          }}
+                        >
+                          {appointment.departments?.name}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-[200px] truncate text-sm text-muted-foreground" title={appointment.notes || ""}>
+                          {appointment.notes || <span className="text-muted-foreground/30 italic">No notes</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleRejectClick(appointment)}
+                          >
+                            <span className="sr-only">Reject</span>
+                            <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleConfirmClick(appointment)}
+                          >
+                            <span className="sr-only">Confirm</span>
+                            <CheckCircle className="h-4 w-4 text-primary transition-colors" />
+                          </Button>
 
-              <CardContent className="space-y-3 pb-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>
-                    {format(new Date(appointment.appointment_date), "EEEE, MMMM d, yyyy")}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>{formatSlotTime(appointment)}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Building className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    X-Number: {appointment.clients?.x_number}
-                  </span>
-                </div>
-                {appointment.notes && (
-                  <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
-                    {appointment.notes}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Requested {format(new Date(appointment.created_at), "MMM d 'at' h:mm a")}
-                </p>
-              </CardContent>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleConfirmClick(appointment)}>
+                                Confirm Appointment
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleRejectClick(appointment)} className="text-destructive focus:text-destructive">
+                                Reschedule Appointment
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              <CardFooter className="flex gap-2 pt-3 border-t">
+      {/* Floating Batch Action Bar */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl"
+          >
+            <div className="bg-foreground text-background rounded-full px-6 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-between gap-6 border border-white/10 ring-1 ring-black/5">
+              <div className="flex items-center gap-3 font-medium cursor-default">
+                <div className="bg-background/20 text-background px-2.5 py-0.5 rounded-full text-xs font-bold">
+                  {selectedIds.size}
+                </div>
+                <span className="text-sm sm:text-base">Selected</span>
                 <Button
-                  className="flex-1"
-                  onClick={() => handleConfirmClick(appointment)}
-                  disabled={confirmMutation.isPending || rejectMutation.isPending}
+                  variant="link"
+                  className="text-background/70 hover:text-background h-auto p-0 text-xs sm:text-sm ml-2"
+                  onClick={() => setSelectedIds(new Set())}
                 >
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Confirm
+                  Clear
                 </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => handleRejectClick(appointment)}
-                  disabled={confirmMutation.isPending || rejectMutation.isPending}
+                  variant="ghost"
+                  size="sm"
+                  className="text-background hover:bg-background/20 hover:text-white h-9 rounded-full px-4"
+                  onClick={() => {
+                    setRejectReason("");
+                    setBatchRejectDialogOpen(true);
+                  }}
                 >
-                  <XCircle className="mr-2 h-4 w-4" />
                   Reschedule
                 </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
+                <Button
+                  size="sm"
+                  className="bg-background text-foreground hover:bg-background/90 h-9 rounded-full px-5 font-semibold shadow-sm"
+                  onClick={() => {
+                    setConfirmNotes("");
+                    setBatchConfirmDialogOpen(true);
+                  }}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Confirm ({selectedIds.size})
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Confirm Dialog */}
+      {/* --- DIALOGS --- */}
+
+      {/* Single Confirm Dialog */}
       <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-              Confirm Appointment
-            </DialogTitle>
+            <DialogTitle>Confirm Appointment</DialogTitle>
             <DialogDescription>
-              Confirm this appointment for {selectedAppointment?.clients?.name}?
+              For {selectedAppointment?.clients?.name} on {selectedAppointment && format(new Date(selectedAppointment.appointment_date), "MMM d")}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
-              <p>
-                <strong>Department:</strong> {selectedAppointment?.departments?.name}
-              </p>
-              <p>
-                <strong>Date:</strong>{" "}
-                {selectedAppointment &&
-                  format(new Date(selectedAppointment.appointment_date), "EEEE, MMMM d, yyyy")}
-              </p>
-              <p>
-                <strong>Time:</strong>{" "}
-                {selectedAppointment && formatSlotTime(selectedAppointment)}
-              </p>
-            </div>
-
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="confirmNotes">Notes (Optional)</Label>
+              <Label>Internal Notes (Optional)</Label>
               <Textarea
-                id="confirmNotes"
-                placeholder="Add any notes about this confirmation..."
+                placeholder="Added to reviewer notes..."
                 value={confirmNotes}
-                onChange={(e) => setConfirmNotes(e.target.value)}
-                rows={3}
+                onChange={e => setConfirmNotes(e.target.value)}
               />
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmSubmit} disabled={confirmMutation.isPending}>
-              {confirmMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm Appointment
+            <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleConfirmSubmit}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single Reject Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Reschedule</DialogTitle>
+            <DialogDescription>
+              This will notify {selectedAppointment?.clients?.name} to pick a new time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Reason <span className="text-destructive">*</span></Label>
+              <Textarea
+                placeholder="Why is a reschedule needed?"
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleRejectSubmit}>Send Request</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* BATCH Confirm Dialog */}
+      <Dialog open={batchConfirmDialogOpen} onOpenChange={setBatchConfirmDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm {selectedIds.size} Appointments</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to confirm all selected appointments?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Bulk Notes (Applied to all)</Label>
+              <Textarea
+                placeholder="Optional notes for all..."
+                value={confirmNotes}
+                onChange={e => setConfirmNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchConfirmDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBatchConfirmSubmit} disabled={isBatchProcessing}>
+              {isBatchProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm All
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Reject/Reschedule Dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+      {/* BATCH Reject Dialog */}
+      <Dialog open={batchRejectDialogOpen} onOpenChange={setBatchRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-orange-500" />
-              Request Reschedule
-            </DialogTitle>
+            <DialogTitle>Reschedule {selectedIds.size} Appointments</DialogTitle>
             <DialogDescription>
-              Ask {selectedAppointment?.clients?.name} to reschedule their appointment.
+              Request all selected clients to reschedule. They will receive a notification with the reason below.
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
-              <p>
-                <strong>Department:</strong> {selectedAppointment?.departments?.name}
-              </p>
-              <p>
-                <strong>Date:</strong>{" "}
-                {selectedAppointment &&
-                  format(new Date(selectedAppointment.appointment_date), "EEEE, MMMM d, yyyy")}
-              </p>
-              <p>
-                <strong>Time:</strong>{" "}
-                {selectedAppointment && formatSlotTime(selectedAppointment)}
-              </p>
-            </div>
-
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="rejectReason">
-                Reason for Reschedule Request <span className="text-destructive">*</span>
-              </Label>
+              <Label>Reason <span className="text-destructive">*</span></Label>
               <Textarea
-                id="rejectReason"
-                placeholder="Explain why this appointment needs to be rescheduled..."
+                placeholder="Reason for bulk reschedule request..."
                 value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                rows={3}
-                required
+                onChange={e => setRejectReason(e.target.value)}
+                className="min-h-[100px]"
               />
-              <p className="text-xs text-muted-foreground">
-                This message will be sent to the client via notification.
-              </p>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleRejectSubmit}
-              disabled={rejectMutation.isPending || !rejectReason.trim()}
-            >
-              {rejectMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Send Reschedule Request
+            <Button variant="outline" onClick={() => setBatchRejectDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBatchRejectSubmit} disabled={isBatchProcessing || !rejectReason.trim()}>
+              {isBatchProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send Requests
             </Button>
           </DialogFooter>
         </DialogContent>

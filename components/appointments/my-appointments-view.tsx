@@ -39,7 +39,7 @@ import {
 } from "@/hooks/use-hospital-queries";
 
 import { MobileAppointmentsList } from "./mobile-appointments-list";
-import { RescheduleDialog } from "./reschedule-dialog";
+import { QuickBookingDialogTanstack } from "@/components/ui/quick-booking-dialog-tanstack";
 
 interface Appointment {
   id: number;
@@ -553,13 +553,26 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
       </div>
 
       {/* Reschedule Dialog */}
-      <RescheduleDialog
+      <QuickBookingDialogTanstack
         isOpen={rescheduleDialogOpen}
         onClose={() => {
           setRescheduleDialogOpen(false);
           setAppointmentToReschedule(null);
         }}
-        appointment={appointmentToReschedule}
+        mode="reschedule"
+        rescheduleAppointment={appointmentToReschedule ? {
+          id: appointmentToReschedule.id,
+          departmentId: appointmentToReschedule.departmentId,
+          departmentName: appointmentToReschedule.departmentName,
+          date: appointmentToReschedule.date,
+          slotNumber: appointmentToReschedule.slotNumber,
+        } : undefined}
+        userRole="client"
+        currentUserId={currentUserId}
+        onRescheduleSuccess={() => {
+          setRescheduleDialogOpen(false);
+          setAppointmentToReschedule(null);
+        }}
       />
     </div>
   );

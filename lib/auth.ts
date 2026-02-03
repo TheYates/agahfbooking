@@ -59,7 +59,7 @@ export async function staffLogin(username: string, password: string) {
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
-      .eq("employee_id", username)
+      .eq("username", username)
       .single();
 
     if (error || !user) {
@@ -71,7 +71,7 @@ export async function staffLogin(username: string, password: string) {
       throw new Error("User account is inactive");
     }
 
-    if (user.role !== "receptionist" && user.role !== "admin") {
+    if (user.role !== "receptionist" && user.role !== "admin" && user.role !== "reviewer") {
       throw new Error("Invalid username or password");
     }
 
@@ -96,7 +96,8 @@ export async function staffLogin(username: string, password: string) {
       name: user.name,
       phone: user.phone,
       role: user.role,
-      employee_id: user.employee_id || "",
+      username: user.username || "",
+      employee_id: user.username || "", // For backward compatibility
       loginTime: new Date().toISOString(),
     };
   } catch (error) {

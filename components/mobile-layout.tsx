@@ -61,7 +61,7 @@ export function MobileLayout({ children, user }: MobileLayoutProps) {
         </main>
 
         {/* Mobile Bottom Navigation */}
-        <MobileBottomNav onBookingClick={handleBookingClick} />
+        <MobileBottomNav onBookingClick={handleBookingClick} user={user} />
 
         {/* Mobile Booking Sheet */}
         <MobileBookingSheet

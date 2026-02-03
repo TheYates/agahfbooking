@@ -150,7 +150,7 @@ export default function ProfilePage() {
             <h1 className="text-3xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight">{userData.name}</h1>
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3">
               <Badge variant="outline" className="bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 px-3 py-1 text-[11px] font-bold uppercase tracking-widest shadow-sm">
-                {userData.x_number || userData.xNumber || userData.employee_id || "USER"}
+                {userData.x_number || userData.xNumber || userData.username || "USER"}
               </Badge>
               <Badge className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-none text-[11px] font-black uppercase tracking-widest px-3 py-1 hover:bg-zinc-800 dark:hover:bg-zinc-200">
                 {userData.category || (userData.role === "admin" ? "ADMINISTRATOR" : "STAFF")}
@@ -174,8 +174,8 @@ export default function ProfilePage() {
             />
             <ListItem
               icon={CreditCard}
-              label={userData.role === "client" ? "Patient X-Number" : "Employee ID"}
-              value={userData.x_number || userData.xNumber || userData.employee_id}
+              label={userData.role === "client" ? "Patient X-Number" : "Username"}
+              value={userData.x_number || userData.xNumber || userData.username}
             />
             <ListItem
               icon={Building2}
@@ -188,7 +188,7 @@ export default function ProfilePage() {
             <ListItem
               icon={Phone}
               label="Phone Number"
-              value={userData.phone}
+              value={userData.phone || "Not provided"}
             />
             <ListItem
               icon={Mail}

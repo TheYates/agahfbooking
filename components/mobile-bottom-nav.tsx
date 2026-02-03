@@ -1,20 +1,22 @@
 "use client";
 
-import { Home, Calendar, Plus, CalendarDays, User, List } from "lucide-react";
+import { Home, Calendar, Plus, CalendarDays, User, List, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import type { User as UserType } from "@/lib/types";
 
 interface MobileBottomNavProps {
   onBookingClick?: () => void;
+  user?: UserType;
 }
 
-export function MobileBottomNav({ onBookingClick }: MobileBottomNavProps) {
+export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) {
   const pathname = usePathname();
 
-  const navItems = [
+  const clientNavItems = [
     {
       title: "Home",
       href: "/dashboard",
@@ -47,6 +49,51 @@ export function MobileBottomNav({ onBookingClick }: MobileBottomNavProps) {
       isActive: pathname === "/dashboard/profile",
     },
   ];
+
+  const reviewerNavItems = [
+    {
+      title: "Home",
+      href: "/dashboard",
+      icon: Home,
+      isActive: pathname === "/dashboard",
+    },
+    {
+      title: "Reviews",
+      href: "/dashboard/reviews",
+      icon: ClipboardCheck,
+      isActive: pathname === "/dashboard/reviews",
+    },
+    {
+      title: "Calendar",
+      href: "/dashboard/calendar",
+      icon: CalendarDays,
+      isActive: pathname === "/dashboard/calendar",
+    },
+    {
+      title: "Appts",
+      href: "/dashboard/appointments",
+      icon: List,
+      isActive: pathname === "/dashboard/appointments",
+    },
+    {
+      title: "Profile", // Added Profile for consistency/logout access
+      href: "/dashboard/profile",
+      icon: User,
+      isActive: pathname === "/dashboard/profile",
+    },
+  ];
+
+  // Logic: 
+  // - Client: Standard Client Nav
+  // - Reviewer: Reviewer Nav
+  // - Admin/Receptionist: Could fallback to Reviewer-like or keep generic. 
+  //   For now, we prioritize Reviewer as requested. Admin generally uses sidebar on desktop but on mobile generic nav is okay?
+  //   Actually, Admin on mobile might need access to more too, but user asked for Reviewer.
+  //   Let's map Admin to reviewerNavItems for now as it's better than Client nav for them (no "Book" button needed).
+
+  const navItems = (user?.role === "reviewer" || user?.role === "admin" || user?.role === "receptionist")
+    ? reviewerNavItems
+    : clientNavItems;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none p-4 pb-6">

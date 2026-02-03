@@ -47,9 +47,9 @@ import { toast } from "sonner";
 interface User {
   id: number;
   name: string;
-  phone: string;
+  phone: string | null;
   role: "receptionist" | "admin" | "reviewer";
-  employee_id: string;
+  username: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -59,7 +59,7 @@ interface UserFormData {
   name: string;
   phone: string;
   role: "receptionist" | "admin" | "reviewer";
-  employee_id: string;
+  username: string;
   password: string;
 }
 
@@ -78,7 +78,7 @@ export default function UsersPage() {
     name: "",
     phone: "",
     role: "receptionist",
-    employee_id: "",
+    username: "",
     password: "",
   });
 
@@ -124,7 +124,7 @@ export default function UsersPage() {
       name: "",
       phone: "",
       role: "receptionist",
-      employee_id: "",
+      username: "",
       password: "",
     });
     setEditingUser(null);
@@ -134,7 +134,7 @@ export default function UsersPage() {
   // Handle add user
   const handleAddUser = async () => {
     try {
-      if (!formData.name || !formData.phone || !formData.employee_id) {
+      if (!formData.name || !formData.username) {
         toast.error("Please fill in all required fields");
         return;
       }
@@ -271,9 +271,9 @@ export default function UsersPage() {
     setEditingUser(user);
     setFormData({
       name: user.name,
-      phone: user.phone,
+      phone: user.phone || "",
       role: user.role,
-      employee_id: user.employee_id,
+      username: user.username,
       password: "", // Don't pre-fill password
     });
     setIsEditDialogOpen(true);
@@ -370,7 +370,7 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Employee ID</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
@@ -389,8 +389,8 @@ export default function UsersPage() {
                 users.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.employee_id}</TableCell>
-                    <TableCell>{user.phone}</TableCell>
+                    <TableCell>{user.username}</TableCell>
+                    <TableCell>{user.phone || "—"}</TableCell>
                     <TableCell>
                       <span className={getRoleColor(user.role)}>
                         {user.role}
@@ -470,25 +470,25 @@ export default function UsersPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="employee_id">Employee ID *</Label>
+              <Label htmlFor="username">Username *</Label>
               <Input
-                id="employee_id"
-                value={formData.employee_id}
+                id="username"
+                value={formData.username}
                 onChange={(e) =>
-                  setFormData({ ...formData, employee_id: e.target.value })
+                  setFormData({ ...formData, username: e.target.value })
                 }
-                placeholder="Enter unique employee ID"
+                placeholder="Enter unique username"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="phone">Phone *</Label>
+              <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
                 value={formData.phone}
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
-                placeholder="Enter phone number"
+                placeholder="Enter phone number (optional)"
               />
             </div>
             <div className="grid gap-2">
@@ -568,25 +568,25 @@ export default function UsersPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-employee_id">Employee ID *</Label>
+              <Label htmlFor="edit-username">Username *</Label>
               <Input
-                id="edit-employee_id"
-                value={formData.employee_id}
+                id="edit-username"
+                value={formData.username}
                 onChange={(e) =>
-                  setFormData({ ...formData, employee_id: e.target.value })
+                  setFormData({ ...formData, username: e.target.value })
                 }
-                placeholder="Enter unique employee ID"
+                placeholder="Enter unique username"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-phone">Phone *</Label>
+              <Label htmlFor="edit-phone">Phone</Label>
               <Input
                 id="edit-phone"
                 value={formData.phone}
                 onChange={(e) =>
                   setFormData({ ...formData, phone: e.target.value })
                 }
-                placeholder="Enter phone number"
+                placeholder="Enter phone number (optional)"
               />
             </div>
             <div className="grid gap-2">
@@ -669,7 +669,7 @@ export default function UsersPage() {
                       {deletingUser.name}
                     </h4>
                     <p className="text-sm text-red-600">
-                      Employee ID: {deletingUser.employee_id}
+                      Username: {deletingUser.username}
                     </p>
                     <p className="text-sm text-red-600">
                       Role: {deletingUser.role}
