@@ -31,6 +31,7 @@ import {
 import { AppointmentModal } from "@/components/calendar/appointment-modal";
 import { QuickBookingDialogTanstack as QuickBookingDialog } from "@/components/ui/quick-booking-dialog-tanstack";
 import { DataPagination } from "@/components/ui/data-pagination";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 // 🚀 Import TanStack Query hooks
 import {
@@ -50,6 +51,8 @@ interface Appointment {
   departmentName: string;
   date: string;
   slotNumber: number;
+  slotStartTime?: string;
+  slotEndTime?: string;
   status: string;
   statusColor: string;
   notes?: string;
@@ -63,6 +66,14 @@ export default function DesktopAppointmentsPage() {
   const [dateFilter, setDateFilter] = useState("all");
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
+  
+  // Helper to format slot time
+  const formatSlotTime = (appointment: Appointment) => {
+    if (appointment.slotStartTime && appointment.slotEndTime) {
+      return `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`;
+    }
+    return `Slot ${appointment.slotNumber}`;
+  };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuickBookingOpen, setIsQuickBookingOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,7 +151,7 @@ export default function DesktopAppointmentsPage() {
       ],
       ...appointments.map((apt) => [
         apt.date,
-        `Slot ${apt.slotNumber}`,
+        formatSlotTime(apt),
         apt.clientName,
         apt.clientXNumber,
         apt.doctorName,
@@ -344,7 +355,7 @@ export default function DesktopAppointmentsPage() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Slot {appointment.slotNumber}
+                        {formatSlotTime(appointment)}
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">

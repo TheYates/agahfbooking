@@ -47,46 +47,82 @@ export async function GET(request: Request) {
         // Derived date filtering.
         const today = new Date().toISOString().split("T")[0];
 
-        let query = supabase
-          .from("appointments")
-          .select(
-            "id,client_id,department_id,appointment_date,slot_number,status,notes,created_at,clients(name,x_number,phone,category),departments(name)",
-            { count: "exact" }
-          )
-          .order("appointment_date", { ascending: false })
-          .order("slot_number", { ascending: true });
+        let data, count;
 
-        if (status && status !== "all") {
-          query = query.eq("status", status);
-        }
-
-        if (dateFilter && dateFilter !== "all") {
-          switch (dateFilter) {
-            case "today":
-              query = query.gte("appointment_date", today).lte("appointment_date", today);
-              break;
-            case "upcoming":
-              query = query.gte("appointment_date", today);
-              break;
-            case "past":
-              query = query.lt("appointment_date", today);
-              break;
-          }
-        }
-
+        // If search is provided, use RPC function for better performance
         if (search) {
-          const escaped = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
-          // Search in related tables via embedded filters. PostgREST supports filtering referenced tables.
-          // We use OR across client name/x_number and department name.
-          query = query.or(
-            `clients.name.ilike.%${escaped}%,clients.x_number.ilike.%${escaped}%,departments.name.ilike.%${escaped}%`
-          );
+          // Determine date range based on dateFilter
+          let dateFrom = null;
+          let dateTo = null;
+          
+          if (dateFilter && dateFilter !== "all") {
+            switch (dateFilter) {
+              case "today":
+                dateFrom = today;
+                dateTo = today;
+                break;
+              case "upcoming":
+                dateFrom = today;
+                dateTo = null;
+                break;
+              case "past":
+                dateFrom = null;
+                dateTo = new Date(new Date(today).getTime() - 86400000).toISOString().split("T")[0];
+                break;
+            }
+          }
+
+          const { data: rpcData, error } = await supabase.rpc('search_appointments', {
+            search_term: search,
+            filter_status: status && status !== "all" ? status : null,
+            filter_date_from: dateFrom,
+            filter_date_to: dateTo,
+            result_limit: limit,
+            result_offset: offset,
+          });
+
+          if (error) throw new Error(error.message);
+
+          // RPC returns results with total_count in each row
+          data = rpcData || [];
+          count = data.length > 0 ? data[0].total_count : 0;
+        } else {
+          // No search - use regular query
+          let query = supabase
+            .from("appointments")
+            .select(
+              "id,client_id,department_id,appointment_date,slot_number,slot_start_time,slot_end_time,status,notes,created_at,clients(name,x_number,phone,category),departments(name)",
+              { count: "exact" }
+            )
+            .order("appointment_date", { ascending: false })
+            .order("slot_number", { ascending: true });
+
+          if (status && status !== "all") {
+            query = query.eq("status", status);
+          }
+
+          if (dateFilter && dateFilter !== "all") {
+            switch (dateFilter) {
+              case "today":
+                query = query.gte("appointment_date", today).lte("appointment_date", today);
+                break;
+              case "upcoming":
+                query = query.gte("appointment_date", today);
+                break;
+              case "past":
+                query = query.lt("appointment_date", today);
+                break;
+            }
+          }
+
+          query = query.range(offset, offset + limit - 1);
+
+          const result = await query;
+          if (result.error) throw new Error(result.error.message);
+          
+          data = result.data;
+          count = result.count;
         }
-
-        query = query.range(offset, offset + limit - 1);
-
-        const { data, error, count } = await query;
-        if (error) throw new Error(error.message);
 
         const statusColors = await MemoryCache.get(
           "appointment_status_colors",
@@ -94,23 +130,30 @@ export async function GET(request: Request) {
           "departments"
         );
 
-        const appointments = (data || []).map((row: any) => ({
-          id: row.id,
-          clientId: row.client_id,
-          clientName: row.clients?.name || "Unknown Client",
-          clientXNumber: row.clients?.x_number || "",
-          doctorId: row.department_id,
-          doctorName: row.departments?.name || "Unknown Department",
-          departmentId: row.department_id,
-          departmentName: row.departments?.name || "Unknown Department",
-          date: dateOnly(row.appointment_date),
-          slotNumber: row.slot_number,
-          status: row.status,
-          statusColor: statusColors[row.status] || "#6B7280",
-          notes: row.notes,
-          phone: row.clients?.phone || "",
-          category: row.clients?.category || "",
-        }));
+        const appointments = (data || []).map((row: any) => {
+          // Handle both RPC response (flat structure) and regular query (nested structure)
+          const isRpcResponse = 'client_name' in row;
+          
+          return {
+            id: row.id,
+            clientId: row.client_id,
+            clientName: isRpcResponse ? row.client_name : (row.clients?.name || "Unknown Client"),
+            clientXNumber: isRpcResponse ? row.client_x_number : (row.clients?.x_number || ""),
+            doctorId: row.department_id,
+            doctorName: isRpcResponse ? row.department_name : (row.departments?.name || "Unknown Department"),
+            departmentId: row.department_id,
+            departmentName: isRpcResponse ? row.department_name : (row.departments?.name || "Unknown Department"),
+            date: dateOnly(row.appointment_date),
+            slotNumber: row.slot_number,
+            slotStartTime: row.slot_start_time,
+            slotEndTime: row.slot_end_time,
+            status: row.status,
+            statusColor: statusColors[row.status] || "#6B7280",
+            notes: row.notes,
+            phone: isRpcResponse ? row.client_phone : (row.clients?.phone || ""),
+            category: isRpcResponse ? row.client_category : (row.clients?.category || ""),
+          };
+        });
 
         const totalCount = count || 0;
         const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);

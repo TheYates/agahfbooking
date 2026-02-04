@@ -712,13 +712,70 @@ export const useStaffDashboardStats = (enabled: boolean = true) => {
   })
 }
 
-// Unified Dashboard Stats Hook (handles both client and staff)
+// Reviewer Dashboard Stats Hook - shows pending review statistics
+async function fetchReviewerDashboardStats() {
+  const response = await fetch('/api/appointments/review?limit=1000')
+  const data = await response.json()
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch reviewer stats')
+  }
+  
+  const appointments = data.data || []
+  
+  // Calculate stats
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  const todayAppointments = appointments.filter((apt: any) => {
+    const aptDate = new Date(apt.appointment_date)
+    aptDate.setHours(0, 0, 0, 0)
+    return aptDate.getTime() === today.getTime()
+  })
+  
+  const upcomingAppointments = appointments.filter((apt: any) => {
+    const aptDate = new Date(apt.appointment_date)
+    return aptDate >= today
+  })
+  
+  return {
+    upcomingAppointments: upcomingAppointments.length,
+    totalAppointments: appointments.length,
+    completedAppointments: todayAppointments.length, // Using this field for "today's pending"
+    recentAppointments: appointments.slice(0, 5).map((apt: any) => ({
+      id: apt.id,
+      clientName: apt.clients?.name || 'Unknown',
+      departmentName: apt.departments?.name || 'Unknown',
+      date: apt.appointment_date,
+      slotNumber: apt.slot_number,
+      slotStartTime: apt.slot_start_time,
+      slotEndTime: apt.slot_end_time,
+      status: 'pending_review',
+    })),
+  }
+}
+
+export const useReviewerDashboardStats = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['reviewerDashboardStats'],
+    queryFn: fetchReviewerDashboardStats,
+    enabled,
+    staleTime: 30 * 1000, // 30 seconds - pending reviews should be fresh
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: 30 * 1000, // Refresh every 30 seconds
+    refetchIntervalInBackground: true,
+    refetchOnMount: false,
+  })
+}
+
+// Unified Dashboard Stats Hook (handles client, staff, and reviewer)
 export const useUnifiedDashboardStats = (
   userRole: 'client' | 'staff' | 'receptionist' | 'admin' | 'reviewer',
   userId?: number,
   enabled: boolean = true
 ) => {
   const isClient = userRole === 'client'
+  const isReviewer = userRole === 'reviewer'
 
   const clientStats = useDashboardStats(
     isClient ? userId : undefined,
@@ -726,10 +783,16 @@ export const useUnifiedDashboardStats = (
   )
 
   const staffStats = useStaffDashboardStats(
-    enabled && !isClient
+    enabled && !isClient && !isReviewer
   )
 
-  return isClient ? clientStats : staffStats
+  const reviewerStats = useReviewerDashboardStats(
+    enabled && isReviewer
+  )
+
+  if (isClient) return clientStats
+  if (isReviewer) return reviewerStats
+  return staffStats
 }
 
 // Paginated Appointments Hook with Realtime

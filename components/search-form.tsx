@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 interface SearchFormProps {
   className?: string;
@@ -170,7 +171,9 @@ export function SearchForm({ className }: SearchFormProps) {
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {new Date(appointment.date).toLocaleDateString()} • Slot{" "}
-                      {appointment.slotNumber} • {appointment.status}
+                      {appointment.slotStartTime && appointment.slotEndTime 
+                        ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                        : `Slot ${appointment.slotNumber}`} • {appointment.status}
                     </span>
                   </div>
                 </CommandItem>

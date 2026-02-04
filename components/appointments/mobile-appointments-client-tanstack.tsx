@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
 import { DataPaginationCompact } from "@/components/ui/data-pagination";
@@ -444,7 +445,11 @@ export function MobileAppointmentsClientTanstack({
 
                           <div className="flex items-center space-x-2">
                             <Clock className="h-4 w-4" />
-                            <span>Slot {appointment.slotNumber}</span>
+                            <span>
+                              {appointment.slotStartTime && appointment.slotEndTime 
+                                ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                                : `Slot ${appointment.slotNumber}`}
+                            </span>
                           </div>
 
                           {appointment.doctorName && (

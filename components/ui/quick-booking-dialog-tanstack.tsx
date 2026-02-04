@@ -836,58 +836,61 @@ export function QuickBookingDialogTanstack({
                               {/* Time Slots */}
                               {day.hasAvailability ? (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 px-2">
-                                  {day.slots.map((slot) => (
-                                    <button
-                                      key={`${day.date}-${slot.slotNumber}`}
-                                      onClick={() => {
-                                        if (
-                                          slot.available &&
-                                          !isPastDate(day.fullDate) &&
-                                          !slot.isNonWorkingDay
-                                        ) {
-                                          handleTimeSlotClick(
-                                            day.date,
-                                            slot.time,
-                                            slot.slotNumber || 0
-                                          );
-                                        } else if (
-                                          isOwnAppointment(slot as TimeSlot) &&
-                                          !isPastDate(day.fullDate) &&
-                                          !slot.isNonWorkingDay
-                                        ) {
-                                          handleCancelAppointment(day as DaySchedule, slot as TimeSlot);
+                                  {day.slots.map((slot) => {
+                                    const typedSlot = slot as TimeSlot;
+                                    return (
+                                      <button
+                                        key={`${day.date}-${typedSlot.slotNumber}`}
+                                        onClick={() => {
+                                          if (
+                                            typedSlot.available &&
+                                            !isPastDate(day.fullDate) &&
+                                            !typedSlot.isNonWorkingDay
+                                          ) {
+                                            handleTimeSlotClick(
+                                              day.date,
+                                              typedSlot.time,
+                                              typedSlot.slotNumber
+                                            );
+                                          } else if (
+                                            isOwnAppointment(typedSlot) &&
+                                            !isPastDate(day.fullDate) &&
+                                            !typedSlot.isNonWorkingDay
+                                          ) {
+                                            handleCancelAppointment(day as DaySchedule, typedSlot);
+                                          }
+                                        }}
+                                        disabled={
+                                          isPastDate(day.fullDate) ||
+                                          typedSlot.isNonWorkingDay ||
+                                          bookMutation.isPending ||
+                                          cancelMutation.isPending
                                         }
-                                      }}
-                                      disabled={
-                                        isPastDate(day.fullDate) ||
-                                        slot.isNonWorkingDay ||
-                                        bookMutation.isPending ||
-                                        cancelMutation.isPending
-                                      }
-                                      aria-label={`${slot.available ? "Book" : "Occupied"
-                                        } time slot ${slot.time} on ${day.dayName
-                                        }, ${day.date}`}
-                                      className={cn(
-                                        "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
-                                        getSlotStyling(slot as TimeSlot, day.fullDate)
-                                      )}
-                                    >
-                                      <div className="text-center relative">
-                                        <div className="font-medium">
-                                          {slot.time}
+                                        aria-label={`${typedSlot.available ? "Book" : "Occupied"
+                                          } time slot ${typedSlot.time} on ${day.dayName
+                                          }, ${day.date}`}
+                                        className={cn(
+                                          "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
+                                          getSlotStyling(typedSlot, day.fullDate)
+                                        )}
+                                      >
+                                        <div className="text-center relative">
+                                          <div className="font-medium">
+                                            {typedSlot.time}
+                                          </div>
+                                          <div className="text-xs">
+                                            {getSlotText(typedSlot)}
+                                          </div>
+                                          {isOwnAppointment(typedSlot) &&
+                                            !isPastDate(day.fullDate) && (
+                                              <div className="absolute -top-1 -right-1 text-red-500 opacity-80 font-bold">
+                                                ×
+                                              </div>
+                                            )}
                                         </div>
-                                        <div className="text-xs">
-                                          {getSlotText(slot as TimeSlot)}
-                                        </div>
-                                        {isOwnAppointment(slot as TimeSlot) &&
-                                          !isPastDate(day.fullDate) && (
-                                            <div className="absolute -top-1 -right-1 text-red-500 opacity-80 font-bold">
-                                              ×
-                                            </div>
-                                          )}
-                                      </div>
-                                    </button>
-                                  ))}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <div className="text-center py-4 text-muted-foreground text-sm"> 

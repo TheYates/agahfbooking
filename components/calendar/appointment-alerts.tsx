@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Clock, User, Bell } from "lucide-react";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 interface Appointment {
   id: number | string;
@@ -15,6 +16,8 @@ interface Appointment {
   departmentName: string;
   date: string;
   slotNumber: number;
+  slotStartTime?: string;
+  slotEndTime?: string;
   status: string;
   statusColor: string;
   notes?: string;
@@ -95,6 +98,13 @@ export function AppointmentAlerts({
     return () => clearInterval(interval);
   }, [userRole, currentUserId, enabled, hasShownTodayAlert, hasShownTomorrowAlert]);
 
+  const formatSlotTime = (apt: Appointment) => {
+    if (apt.slotStartTime && apt.slotEndTime) {
+      return `${formatDatabaseTimeForDisplay(apt.slotStartTime)} - ${formatDatabaseTimeForDisplay(apt.slotEndTime)}`;
+    }
+    return `Slot ${apt.slotNumber}`;
+  };
+
   const showTodayAppointmentAlert = (appointments: Appointment[]) => {
     if (appointments.length === 1) {
       const apt = appointments[0];
@@ -109,7 +119,7 @@ export function AppointmentAlerts({
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              <span>Slot {apt.slotNumber} - {apt.departmentName}</span>
+              <span>{formatSlotTime(apt)} - {apt.departmentName}</span>
             </div>
             {apt.notes && (
               <div className="text-sm text-muted-foreground">
@@ -154,7 +164,7 @@ export function AppointmentAlerts({
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              <span>Slot {apt.slotNumber} - {apt.departmentName}</span>
+              <span>{formatSlotTime(apt)} - {apt.departmentName}</span>
             </div>
             {apt.notes && (
               <div className="text-sm text-muted-foreground">

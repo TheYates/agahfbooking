@@ -39,7 +39,33 @@ export default async function DashboardLayout({
     );
   }
 
-  // Staff layout with header + sidebar
+  // Staff/Reviewer layout
+  // Reviewers specific layout handling
+  if (user.role === "reviewer") {
+    return (
+      <>
+        {/* Desktop Layout (Sidebar) */}
+        <div className="hidden lg:flex min-h-screen w-full">
+          <SidebarProvider defaultOpen={true}>
+            <AppSidebar user={user} />
+            <SidebarInset className="flex flex-col">
+              <SiteHeader />
+              <main className="flex-1 p-6">{children}</main>
+            </SidebarInset>
+          </SidebarProvider>
+        </div>
+
+        {/* Mobile Layout (Bottom Nav) */}
+        <div className="lg:hidden">
+          <MobileLayout user={user}>{children}</MobileLayout>
+        </div>
+
+        <Toaster />
+      </>
+    );
+  }
+
+  // Default Staff layout (Admin/Receptionist) - Sidebar always
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex min-h-screen w-full">

@@ -31,18 +31,27 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
   Plus,
   Search,
   Edit,
   Trash2,
   UserCheck,
   UserX,
-  Shield,
-  Users,
   Eye,
   EyeOff,
+  MoreHorizontal
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface User {
   id: number;
@@ -299,78 +308,46 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header & Actions */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">
-            Manage staff accounts, roles, and permissions
+          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
+          <p className="text-muted-foreground text-sm">
+            Manage staff access and permissions.
           </p>
         </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add User
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter((u) => u.is_active).length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Administrators
-            </CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter((u) => u.role === "admin").length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search users..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-8"
-          />
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:w-[250px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-9 h-10 w-full"
+            />
+          </div>
+          <Button onClick={() => setIsAddDialogOpen(true)} className="shrink-0 h-10">
+            <Plus className="mr-2 h-4 w-4" />
+            Add User
+          </Button>
         </div>
       </div>
 
       {/* Users Table */}
-      <Card>
+      <Card className="overflow-hidden border-none shadow-md">
+        <CardHeader className="bg-muted/30 py-4 border-b">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">All Users</CardTitle>
+            <Badge variant="outline" className="text-xs font-normal">
+              {users.length} records
+            </Badge>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/10">
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Username</TableHead>
+                <TableHead className="w-[300px]">User</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
@@ -381,64 +358,83 @@ export default function UsersPage() {
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    No users found
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    No users found matching your search.
                   </TableCell>
                 </TableRow>
               ) : (
                 users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.username}</TableCell>
-                    <TableCell>{user.phone || "—"}</TableCell>
+                  <TableRow key={user.id} className="group hover:bg-muted/5">
                     <TableCell>
-                      <span className={getRoleColor(user.role)}>
-                        {user.role}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9 border">
+                          <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
+                            {user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm leading-none pt-0.5">{user.name}</span>
+                          <span className="text-xs text-muted-foreground text-ellipsis">{user.username}</span>
+                        </div>
+                      </div>
                     </TableCell>
+                    <TableCell className="text-sm">{user.phone || <span className="text-muted-foreground/50 text-xs italic">N/A</span>}</TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(user.is_active)}>
-                        {user.is_active ? "Active" : "Inactive"}
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "capitalize font-medium border-0",
+                          user.role === 'admin' ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" :
+                            user.role === 'reviewer' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
+                              "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        )}
+                      >
+                        {user.role}
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className={cn("h-2 w-2 rounded-full", user.is_active ? "bg-green-500" : "bg-red-500")} />
+                        <span className="text-sm text-muted-foreground">{user.is_active ? "Active" : "Inactive"}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
                       {new Date(user.created_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "long",
+                        month: "short",
                         day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
+                        year: "numeric"
                       })}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditDialog(user)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleToggleActive(user)}
-                        >
-                          {user.is_active ? (
-                            <UserX className="h-4 w-4" />
-                          ) : (
-                            <UserCheck className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openDeleteDialog(user)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[160px]">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleActive(user)}>
+                            {user.is_active ? (
+                              <>
+                                <UserX className="mr-2 h-4 w-4" /> Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <UserCheck className="mr-2 h-4 w-4" /> Activate
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={() => openDeleteDialog(user)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))

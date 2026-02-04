@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -439,7 +440,11 @@ export function MobileCalendarClientTanstack({
                         <div className="space-y-1 text-sm text-muted-foreground">
                           <div className="flex items-center space-x-2">
                             <Clock className="h-4 w-4" />
-                            <span>Slot {appointment.slotNumber}</span>
+                            <span>
+                              {appointment.slotStartTime && appointment.slotEndTime 
+                                ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                                : `Slot ${appointment.slotNumber}`}
+                            </span>
                           </div>
 
                           {appointment.doctorName && (

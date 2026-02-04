@@ -313,6 +313,9 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
       const end = formatDatabaseTimeForDisplay(appointment.slot_end_time);
       return `${start} - ${end}`;
     }
+    if (appointment.slot_start_time && appointment.slot_end_time) {
+      return `${formatDatabaseTimeForDisplay(appointment.slot_start_time)} - ${formatDatabaseTimeForDisplay(appointment.slot_end_time)}`;
+    }
     return `Slot ${appointment.slot_number}`;
   };
 

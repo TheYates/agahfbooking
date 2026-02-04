@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, User, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { formatDatabaseTimeForDisplay } from '@/lib/slot-time-utils';
 
 interface CalendarWithGraphQLProps {
   userRole: 'CLIENT' | 'RECEPTIONIST' | 'ADMIN';
@@ -261,7 +262,9 @@ export function CalendarWithGraphQL({
                         {appointment.status}
                       </Badge>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Slot {appointment.slotNumber}
+                        {appointment.slotStartTime && appointment.slotEndTime 
+                          ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                          : `Slot ${appointment.slotNumber}`}
                       </p>
                     </div>
                   </div>

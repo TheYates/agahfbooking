@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 interface Appointment {
   id: number;
@@ -36,6 +37,8 @@ interface Appointment {
   departmentName: string;
   date: string;
   slotNumber: number;
+  slotStartTime?: string;
+  slotEndTime?: string;
   status: string;
   statusColor: string;
   notes?: string;
@@ -300,7 +303,9 @@ export function AppointmentModal({
             </div>
           </DialogTitle>
           <DialogDescription>
-            {appointmentDate} - Slot {appointment.slotNumber}
+            {appointmentDate} - {appointment.slotStartTime && appointment.slotEndTime 
+              ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+              : `Slot ${appointment.slotNumber}`}
           </DialogDescription>
         </DialogHeader>
 

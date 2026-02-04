@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 import { QuickBookingDialogTanstack } from "@/components/ui/quick-booking-dialog-tanstack";
 import type { User } from "@/lib/types";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 // Import TanStack Query hook
 import { useUnifiedDashboardStats } from "@/hooks/use-hospital-queries";
@@ -257,7 +258,9 @@ export function DashboardClientTanstack({
                           {user.role !== "client" && appointment.doctorName && (
                             <span>{appointment.doctorName} • </span>
                           )}
-                          Slot {appointment.slotNumber}
+                          {appointment.slotStartTime && appointment.slotEndTime 
+                            ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                            : `Slot ${appointment.slotNumber}`}
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">

@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth-server";
 import { MobileAppointmentsWrapper } from "@/components/appointments/mobile-appointments-wrapper";
+import { ReviewerMobileAppointments } from "@/components/appointments/reviewer-mobile-appointments";
 
 // Desktop appointments component (Supabase/API driven)
 import DesktopAppointments from "./desktop-appointments";
@@ -18,6 +19,8 @@ export default async function AppointmentsPage() {
       <div className="md:hidden">
         {user.role === "client" ? (
           <MobileAppointmentsWrapper user={user} />
+        ) : user.role === "reviewer" ? (
+          <ReviewerMobileAppointments user={user} />
         ) : (
           <DesktopAppointments />
         )}
