@@ -103,6 +103,8 @@ export interface DesktopAppointment {
   departmentName: string
   date: string
   slotNumber: number
+  slotStartTime?: string
+  slotEndTime?: string
   status: string
   statusColor: string
   notes?: string
