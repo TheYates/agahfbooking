@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { hubtelSMS } from "@/lib/hubtel-sms";
 
 export async function POST(request: NextRequest) {
   let requestBody: { xNumber?: string } = {};
@@ -73,11 +74,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to generate OTP" }, { status: 500 });
     }
 
-    // In production, send SMS here
-    // For now, just log it (check OTP_MODE env var)
+    // Send OTP via SMS
     const otpMode = process.env.OTP_MODE || "mock";
     
-    if (otpMode === "mock") {
+    if (otpMode === "production") {
+      // Send real SMS via Hubtel
+      try {
+        const smsResult = await hubtelSMS.sendOTP(client.phone, otp, "AGAHF Hospital");
+        
+        if (smsResult.status !== 'success') {
+          console.error("SMS sending failed:", smsResult.message);
+          // Continue anyway - OTP is stored in DB and can be used
+          // But log the failure for monitoring
+        } else {
+          console.log(`✅ OTP SMS sent successfully to ${client.phone}`);
+        }
+      } catch (smsError) {
+        console.error("Error sending SMS:", smsError);
+        // Continue - OTP is still valid in database
+      }
+    } else {
+      // Mock mode - log to console
       console.log(`\n🔐 OTP for ${xNumber} (${client.name}): ${otp}`);
       console.log(`   Phone: ${client.phone}`);
       console.log(`   Expires: ${expiresAt.toLocaleTimeString()}\n`);
