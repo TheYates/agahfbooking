@@ -744,6 +744,8 @@ async function fetchReviewerDashboardStats() {
     upcomingAppointments: upcomingAppointments.length,
     totalAppointments: appointments.length,
     completedAppointments: todayAppointments.length, // Using this field for "today's pending"
+    availableSlots: 0,
+    daysUntilNext: null,
     recentAppointments: appointments.slice(0, 5).map((apt: any) => ({
       id: apt.id,
       clientName: apt.clients?.name || 'Unknown',

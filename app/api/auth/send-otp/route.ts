@@ -77,20 +77,36 @@ export async function POST(request: NextRequest) {
     // Send OTP via SMS
     const otpMode = process.env.OTP_MODE || "mock";
     
-    if (otpMode === "production") {
+    if (otpMode === "production" || otpMode === "hubtel") {
       // Send real SMS via Hubtel
       try {
         const smsResult = await hubtelSMS.sendOTP(client.phone, otp, "AGAHF Hospital");
         
         if (smsResult.status !== 'success') {
-          console.error("SMS sending failed:", smsResult.message);
+          console.error("Hubtel SMS sending failed:", smsResult.message);
           // Continue anyway - OTP is stored in DB and can be used
           // But log the failure for monitoring
         } else {
-          console.log(`✅ OTP SMS sent successfully to ${client.phone}`);
+          console.log(`✅ OTP SMS sent successfully via Hubtel to ${client.phone}`);
         }
       } catch (smsError) {
-        console.error("Error sending SMS:", smsError);
+        console.error("Error sending SMS via Hubtel:", smsError);
+        // Continue - OTP is still valid in database
+      }
+    } else if (otpMode === "arkesel") {
+      // Send real SMS via Arkesel
+      try {
+        const { arkeselSMS } = await import("@/lib/arkesel-sms");
+        const smsResult = await arkeselSMS.sendOTP(client.phone, otp, "AGAHF Hospital");
+        
+        if (smsResult.status !== 'success') {
+          console.error("Arkesel SMS sending failed:", smsResult.message);
+          // Continue anyway - OTP is stored in DB and can be used
+        } else {
+          console.log(`✅ OTP SMS sent successfully via Arkesel to ${client.phone}`);
+        }
+      } catch (smsError) {
+        console.error("Error sending SMS via Arkesel:", smsError);
         // Continue - OTP is still valid in database
       }
     } else {

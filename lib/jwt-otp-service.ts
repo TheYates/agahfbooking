@@ -13,7 +13,7 @@ export interface OTPTokenData {
   otp: string;
   expiresAt: number;
   nonce: string; // Prevents replay attacks
-  mode: "hubtel" | "mock";
+  mode: "hubtel" | "mock" | "arkesel";
   generatedAt: number;
 }
 
@@ -21,14 +21,14 @@ export interface OTPVerificationResult {
   isValid: boolean;
   error?: string;
   xNumber?: string;
-  mode?: "hubtel" | "mock";
+  mode?: "hubtel" | "mock" | "arkesel";
 }
 
 export interface OTPGenerationResult {
   otp: string;
   token: string;
   expiresAt: number;
-  mode: "hubtel" | "mock";
+  mode: "hubtel" | "mock" | "arkesel";
 }
 
 class JWTOTPService {
@@ -50,7 +50,7 @@ class JWTOTPService {
    */
   generateOTP(
     xNumber: string,
-    mode: "hubtel" | "mock" = "mock"
+    mode: "hubtel" | "mock" | "arkesel" = "mock"
   ): OTPGenerationResult {
     // Generate random OTP for both modes (no more static OTP)
     const otp = this.generateRandomOTP();
@@ -267,7 +267,7 @@ class JWTOTPService {
    */
   createTestToken(
     xNumber: string = "X12345/67",
-    mode: "hubtel" | "mock" = "mock"
+    mode: "hubtel" | "mock" | "arkesel" = "mock"
   ): OTPGenerationResult {
     if (process.env.NODE_ENV !== "development") {
       throw new Error("Test tokens can only be created in development mode");

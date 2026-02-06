@@ -230,7 +230,7 @@ export function DashboardClientTanstack({
                 </div>
               ) : (
                 <div className="divide-y">
-                  {currentStats.recentAppointments.map((appointment) => (
+                  {currentStats.recentAppointments.map((appointment: any) => (
                     <div
                       key={appointment.id}
                       className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors"
@@ -375,8 +375,8 @@ export function DashboardClientTanstack({
             id: user.id,
             name: user.name,
             x_number: user.xNumber,
-            phone: user.phone,
-            category: user.category,
+            phone: user.phone ?? undefined,
+            category: user.category ?? undefined,
           }}
         />
       )}

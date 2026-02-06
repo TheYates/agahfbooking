@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { arkeselSMS } from "@/lib/arkesel-sms";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,31 +57,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Client account is inactive" }, { status: 403 });
     }
 
-    // Verify OTP from database
-    const { data: otpRecord, error: otpErr } = await supabase
-      .from("otp_codes")
-      .select("*")
-      .eq("x_number", xNumber)
-      .eq("otp_code", otp)
-      .eq("is_used", false)
-      .gte("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+    // Check OTP mode - use Arkesel verification if in arkesel mode
+    const otpMode = process.env.OTP_MODE || "mock";
+    let otpValid = false;
 
-    if (otpErr || !otpRecord) {
-      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
-      return NextResponse.json(
-        { error: "Invalid or expired OTP" },
-        { status: 400 }
+    if (otpMode === "arkesel") {
+      // Verify OTP via Arkesel's API
+      console.log(`[Arkesel] Verifying OTP for ${(client as any).phone}`);
+      const verifyResult = await arkeselSMS.verifyOTPViaArkeselAPI(
+        (client as any).phone,
+        otp
       );
-    }
+      
+      if (verifyResult.isValid) {
+        console.log(`✅ OTP verified successfully via Arkesel for ${xNumber}`);
+        otpValid = true;
+      } else {
+        console.log(`❌ OTP verification failed via Arkesel: ${verifyResult.message}`);
+        rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+        return NextResponse.json(
+          { error: verifyResult.message || "Invalid or expired OTP" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Verify OTP from database (for hubtel/mock modes)
+      const { data: otpRecord, error: otpErr } = await supabase
+        .from("otp_codes")
+        .select("*")
+        .eq("x_number", xNumber)
+        .eq("otp_code", otp)
+        .eq("is_used", false)
+        .gte("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
 
-    // Mark OTP as used
-    await supabase
-      .from("otp_codes")
-      .update({ is_used: true })
-      .eq("id", otpRecord.id);
+      if (otpErr || !otpRecord) {
+        rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+        return NextResponse.json(
+          { error: "Invalid or expired OTP" },
+          { status: 400 }
+        );
+      }
+
+      // Mark OTP as used
+      await supabase
+        .from("otp_codes")
+        .update({ is_used: true })
+        .eq("id", otpRecord.id);
+      
+      otpValid = true;
+    }
 
     const userData = {
       id: (client as any).id as number,

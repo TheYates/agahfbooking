@@ -94,18 +94,20 @@ export async function GET(request: Request) {
 
         const availableSlots = 50;
 
-        // Recent appointments
+        // Upcoming appointments (soonest first)
         const recentAppointments = await MemoryCache.get(
           `recent_appointments_${clientId}`,
           async () => {
             const recentRes = await supabase
               .from("appointments")
               .select(
-                "id,appointment_date,slot_number,status,departments(name,color),doctors(name)"
+                "id,appointment_date,slot_number,slot_start_time,slot_end_time,status,departments(name,color),doctors(name)"
               )
               .eq("client_id", clientId)
-              .order("appointment_date", { ascending: false })
-              .order("slot_number", { ascending: false })
+              .gte("appointment_date", today.toISOString().split('T')[0])
+              .not("status", "in", "(cancelled,completed,no_show)")
+              .order("appointment_date", { ascending: true })
+              .order("slot_number", { ascending: true })
               .limit(5);
 
             if (recentRes.error) throw new Error(recentRes.error.message);
@@ -114,6 +116,8 @@ export async function GET(request: Request) {
               id: row.id,
               date: (row.appointment_date || "").toString().split("T")[0],
               slotNumber: row.slot_number,
+              slotStartTime: row.slot_start_time ?? null,
+              slotEndTime: row.slot_end_time ?? null,
               status: row.status,
               doctorName: row.doctors?.name ?? null,
               departmentName: row.departments?.name ?? "",

@@ -85,11 +85,11 @@ export async function POST(request: NextRequest) {
     const { mode, testConnection } = await request.json();
 
     // Validate mode if provided
-    if (mode && mode !== "hubtel" && mode !== "mock") {
+    if (mode && mode !== "hubtel" && mode !== "mock" && mode !== "arkesel") {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid OTP mode. Must be 'hubtel' or 'mock'",
+          error: "Invalid OTP mode. Must be 'hubtel', 'mock', or 'arkesel'",
         },
         { status: 400 }
       );
@@ -108,6 +108,17 @@ export async function POST(request: NextRequest) {
             success: false,
             error:
               "Cannot switch to Hubtel mode. Please check Hubtel configuration (HUBTEL_CLIENT_ID and HUBTEL_CLIENT_SECRET).",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (mode === "arkesel" && !currentStatus.canSwitchToArkesel) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Cannot switch to Arkesel mode. Please check Arkesel configuration (ARKESEL_API_KEY).",
           },
           { status: 400 }
         );
