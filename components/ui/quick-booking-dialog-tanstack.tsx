@@ -129,7 +129,11 @@ function ClientSelector({
   const [open, setOpen] = useState(false);
 
   // Use TanStack Query for client data
-  const { data: clients = [], isLoading, error } = useClients(
+  const {
+    data: clients = [],
+    isLoading,
+    error,
+  } = useClients(
     searchTerm,
     userRole,
     currentUserId,
@@ -253,8 +257,18 @@ const generateWeekRange = (weekOffset: number = 0): string => {
   }
 
   const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
   ];
 
   const startMonth = months[startDate.getMonth()];
@@ -283,7 +297,8 @@ export function QuickBookingDialogTanstack({
   onRescheduleSuccess,
 }: QuickBookingDialogProps) {
   // Local state (much simpler now!)
-  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
+  const [selectedDepartment, setSelectedDepartment] =
+    useState<Department | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [showConfirmationView, setShowConfirmationView] = useState(false);
@@ -310,15 +325,12 @@ export function QuickBookingDialogTanstack({
   const {
     data: fetchedDepartments = [],
     isLoading: departmentsLoading,
-    error: departmentsError
+    error: departmentsError,
   } = useDepartments();
 
   // Skip client fetch if clientInfo is provided (for logged-in clients)
   const shouldFetchClients = !clientInfo && isOpen;
-  const {
-    data: fetchedClients = [],
-    isLoading: clientsLoading
-  } = useClients(
+  const { data: fetchedClients = [], isLoading: clientsLoading } = useClients(
     clientSearchTerm,
     userRole,
     currentUserId,
@@ -331,7 +343,7 @@ export function QuickBookingDialogTanstack({
   const {
     data: weekSchedule = [],
     isLoading: scheduleLoading,
-    error: scheduleError
+    error: scheduleError,
   } = useSchedule(
     selectedDepartment?.id,
     currentWeekOffset,
@@ -344,9 +356,12 @@ export function QuickBookingDialogTanstack({
 
   // Use fetched departments if no departments prop provided
   // Ensure it's always an array to prevent .map errors
-  const availableDepartments = Array.isArray(departments) && departments.length > 0
-    ? departments
-    : (Array.isArray(fetchedDepartments) ? fetchedDepartments : []);
+  const availableDepartments =
+    Array.isArray(departments) && departments.length > 0
+      ? departments
+      : Array.isArray(fetchedDepartments)
+        ? fetchedDepartments
+        : [];
 
   // Prefetch client data when dialog opens for faster initial load
   // Skip if clientInfo is already provided (instant for logged-in clients)
@@ -383,7 +398,11 @@ export function QuickBookingDialogTanstack({
     if (clientInfo && !selectedClient) {
       // Instant selection for logged-in clients
       setSelectedClient(clientInfo as Client);
-    } else if (userRole === "client" && clients.length === 1 && !selectedClient) {
+    } else if (
+      userRole === "client" &&
+      clients.length === 1 &&
+      !selectedClient
+    ) {
       // Fallback: auto-select when fetched
       setSelectedClient(clients[0]);
     }
@@ -393,11 +412,13 @@ export function QuickBookingDialogTanstack({
   useEffect(() => {
     if (mode === "reschedule" && rescheduleAppointment && isOpen) {
       // Find and select the department
-      const dept = availableDepartments.find(d => d.id === rescheduleAppointment.departmentId);
+      const dept = availableDepartments.find(
+        (d) => d.id === rescheduleAppointment.departmentId
+      );
       if (dept) {
         setSelectedDepartment(dept);
       }
-      
+
       // Set client from rescheduleAppointment
       if (clientInfo) {
         setSelectedClient(clientInfo as Client);
@@ -415,7 +436,11 @@ export function QuickBookingDialogTanstack({
     }
   };
 
-  const handleTimeSlotClick = (day: string, time: string, slotNumber: number) => {
+  const handleTimeSlotClick = (
+    day: string,
+    time: string,
+    slotNumber: number
+  ) => {
     if (selectedDepartment && selectedClient) {
       const dayInfo = weekSchedule.find((d) => d.date === day);
       setSelectedTimeSlot({
@@ -468,8 +493,18 @@ export function QuickBookingDialogTanstack({
     const dateStr = selectedTimeSlot.day; // e.g., "Jan 15"
     const [month, day] = dateStr.split(" ");
     const monthIndex = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ].indexOf(month);
     const appointmentDate = new Date(currentYear, monthIndex, parseInt(day));
 
@@ -489,7 +524,7 @@ export function QuickBookingDialogTanstack({
         });
 
         const data = await response.json();
-        
+
         if (!response.ok || !data.success) {
           throw new Error(data.error || "Failed to reschedule appointment");
         }
@@ -497,7 +532,9 @@ export function QuickBookingDialogTanstack({
         // Invalidate relevant queries
         queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.schedule.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStats.forStaff() });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.dashboardStats.forStaff(),
+        });
 
         toast.success("Appointment rescheduled successfully!");
         onRescheduleSuccess?.();
@@ -522,7 +559,8 @@ export function QuickBookingDialogTanstack({
   };
 
   const handleWeekNavigation = (direction: "prev" | "next") => {
-    const newOffset = direction === "prev" ? currentWeekOffset - 1 : currentWeekOffset + 1;
+    const newOffset =
+      direction === "prev" ? currentWeekOffset - 1 : currentWeekOffset + 1;
     setCurrentWeekOffset(newOffset);
     onWeekChange?.(direction);
   };
@@ -683,10 +721,17 @@ export function QuickBookingDialogTanstack({
             {/* Department Selector */}
             <div className="relative z-50">
               <label className="block text-sm font-medium text-foreground mb-2">
-                Choose Department
+                {mode === "reschedule" ? "Department" : "Choose Department"}
               </label>
               {departmentsLoading ? (
                 <div className="w-full h-10 bg-muted animate-pulse rounded-md" />
+              ) : mode === "reschedule" && rescheduleAppointment ? (
+                // Read-only display for reschedule mode - cannot change department
+                <div className="w-full p-3 rounded-md border bg-muted/30 text-foreground">
+                  <span className="font-medium">
+                    {rescheduleAppointment.departmentName}
+                  </span>
+                </div>
               ) : (
                 <Combobox
                   options={availableDepartments.map((dept) => ({
@@ -739,7 +784,9 @@ export function QuickBookingDialogTanstack({
                     </div>
                   ) : scheduleError ? (
                     <div className="text-center py-8">
-                      <p className="text-red-500 mb-2">Error loading schedule</p>
+                      <p className="text-red-500 mb-2">
+                        Error loading schedule
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         Please try again or contact support
                       </p>
@@ -759,9 +806,7 @@ export function QuickBookingDialogTanstack({
                       >
                         <div className="flex items-center justify-between">
                           <motion.button
-                            whileHover={
-                              shouldAnimate ? { scale: 1.05 } : {}
-                            }
+                            whileHover={shouldAnimate ? { scale: 1.05 } : {}}
                             whileTap={shouldAnimate ? { scale: 0.95 } : {}}
                             onClick={() => handleWeekNavigation("prev")}
                             aria-label="Previous week"
@@ -775,9 +820,7 @@ export function QuickBookingDialogTanstack({
                           </h3>
 
                           <motion.button
-                            whileHover={
-                              shouldAnimate ? { scale: 1.05 } : {}
-                            }
+                            whileHover={shouldAnimate ? { scale: 1.05 } : {}}
                             whileTap={shouldAnimate ? { scale: 0.95 } : {}}
                             onClick={() => handleWeekNavigation("next")}
                             aria-label="Next week"
@@ -801,16 +844,21 @@ export function QuickBookingDialogTanstack({
                         {process.env.NODE_ENV === "development" && (
                           <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
                             TanStack Status: {weekSchedule.length} days •
-                            Loading: {scheduleLoading ? 'Yes' : 'No'} •
-                            Error: {scheduleError ? 'Yes' : 'No'} •
-                            Slots: {weekSchedule.reduce((acc, day) => acc + day.slots.length, 0)} •
-                            Animations: {shouldAnimate ? 'On' : 'Off'}
+                            Loading: {scheduleLoading ? "Yes" : "No"} • Error:{" "}
+                            {scheduleError ? "Yes" : "No"} • Slots:{" "}
+                            {weekSchedule.reduce(
+                              (acc, day) => acc + day.slots.length,
+                              0
+                            )}{" "}
+                            • Animations: {shouldAnimate ? "On" : "Off"}
                           </div>
                         )}
 
                         {weekSchedule.length === 0 ? (
                           <div className="text-center py-8">
-                            <p className="text-muted-foreground">No schedule data available</p>
+                            <p className="text-muted-foreground">
+                              No schedule data available
+                            </p>
                           </div>
                         ) : (
                           weekSchedule.map((day) => (
@@ -857,7 +905,10 @@ export function QuickBookingDialogTanstack({
                                             !isPastDate(day.fullDate) &&
                                             !typedSlot.isNonWorkingDay
                                           ) {
-                                            handleCancelAppointment(day as DaySchedule, typedSlot);
+                                            handleCancelAppointment(
+                                              day as DaySchedule,
+                                              typedSlot
+                                            );
                                           }
                                         }}
                                         disabled={
@@ -866,12 +917,19 @@ export function QuickBookingDialogTanstack({
                                           bookMutation.isPending ||
                                           cancelMutation.isPending
                                         }
-                                        aria-label={`${typedSlot.available ? "Book" : "Occupied"
-                                          } time slot ${typedSlot.time} on ${day.dayName
-                                          }, ${day.date}`}
+                                        aria-label={`${
+                                          typedSlot.available
+                                            ? "Book"
+                                            : "Occupied"
+                                        } time slot ${typedSlot.time} on ${
+                                          day.dayName
+                                        }, ${day.date}`}
                                         className={cn(
                                           "px-2 py-2 text-xs sm:text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[80px] sm:min-w-[100px]",
-                                          getSlotStyling(typedSlot, day.fullDate)
+                                          getSlotStyling(
+                                            typedSlot,
+                                            day.fullDate
+                                          )
                                         )}
                                       >
                                         <div className="text-center relative">
@@ -893,7 +951,7 @@ export function QuickBookingDialogTanstack({
                                   })}
                                 </div>
                               ) : (
-                                <div className="text-center py-4 text-muted-foreground text-sm"> 
+                                <div className="text-center py-4 text-muted-foreground text-sm">
                                   No available slots for this day
                                 </div>
                               )}
@@ -951,7 +1009,9 @@ export function QuickBookingDialogTanstack({
                       Back
                     </Button>
                     <h3 className="text-lg font-semibold text-foreground">
-                      {mode === "reschedule" ? "Confirm Reschedule" : "Confirm Booking"}
+                      {mode === "reschedule"
+                        ? "Confirm Reschedule"
+                        : "Confirm Booking"}
                     </h3>
                     <div></div>
                   </div>
@@ -977,7 +1037,9 @@ export function QuickBookingDialogTanstack({
                         </span>
                       </div>
                       <div className="flex justify-between items-center py-2">
-                        <span className="text-muted-foreground">Department:</span>
+                        <span className="text-muted-foreground">
+                          Department:
+                        </span>
                         <span className="text-foreground font-medium">
                           {selectedDepartment?.name}
                         </span>
@@ -991,13 +1053,17 @@ export function QuickBookingDialogTanstack({
                     disabled={bookMutation.isPending || isRescheduling}
                     className="w-full"
                   >
-                    {(bookMutation.isPending || isRescheduling) ? (
+                    {bookMutation.isPending || isRescheduling ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        {mode === "reschedule" ? "Rescheduling..." : "Booking..."}
+                        {mode === "reschedule"
+                          ? "Rescheduling..."
+                          : "Booking..."}
                       </>
+                    ) : mode === "reschedule" ? (
+                      "CONFIRM RESCHEDULE"
                     ) : (
-                      mode === "reschedule" ? "CONFIRM RESCHEDULE" : "CONFIRM BOOKING"
+                      "CONFIRM BOOKING"
                     )}
                   </Button>
                 </div>
@@ -1059,7 +1125,7 @@ export function QuickBookingDialogTanstack({
                   Cancelling...
                 </>
               ) : (
-                'Cancel Appointment'
+                "Cancel Appointment"
               )}
             </Button>
           </DialogFooter>

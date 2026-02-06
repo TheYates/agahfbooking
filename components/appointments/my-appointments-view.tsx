@@ -45,6 +45,8 @@ interface Appointment {
   id: number;
   date: string;
   slotNumber: number;
+  slotStartTime?: string;
+  slotEndTime?: string;
   status: string;
   doctorName: string;
   departmentId: number;
@@ -378,8 +380,10 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                                 )}
                               </p>
                               <p className="text-xs text-muted-foreground truncate">
-                                {appointment.departmentName} • Slot #
-                                {appointment.slotNumber}
+                                {appointment.departmentName} •{" "}
+                                {appointment.slotStartTime && appointment.slotEndTime
+                                  ? `${appointment.slotStartTime.slice(0, 5)} - ${appointment.slotEndTime.slice(0, 5)}`
+                                  : `Slot #${appointment.slotNumber}`}
                               </p>
                             </div>
                           </div>
