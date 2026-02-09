@@ -16,7 +16,25 @@ interface MobileBottomNavProps {
 export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) {
   const pathname = usePathname();
 
-  const clientNavItems = [
+  type BaseNavItem = {
+    title: string;
+    href: string;
+    icon: typeof Home;
+    isActive?: boolean;
+  };
+
+  type AddNavItem = BaseNavItem & {
+    isAdd: true;
+    onClick?: () => void;
+  };
+
+  type StandardNavItem = BaseNavItem & {
+    isAdd?: false;
+  };
+
+  type NavItem = AddNavItem | StandardNavItem;
+
+  const clientNavItems: NavItem[] = [
     {
       title: "Home",
       href: "/dashboard",
@@ -50,7 +68,7 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
     },
   ];
 
-  const reviewerNavItems = [
+  const reviewerNavItems: NavItem[] = [
     {
       title: "Home",
       href: "/dashboard",
@@ -91,9 +109,12 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
   //   Actually, Admin on mobile might need access to more too, but user asked for Reviewer.
   //   Let's map Admin to reviewerNavItems for now as it's better than Client nav for them (no "Book" button needed).
 
-  const navItems = (user?.role === "reviewer" || user?.role === "admin" || user?.role === "receptionist")
-    ? reviewerNavItems
-    : clientNavItems;
+  const navItems: NavItem[] =
+    user?.role === "reviewer" ||
+    user?.role === "admin" ||
+    user?.role === "receptionist"
+      ? reviewerNavItems
+      : clientNavItems;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none p-4 pb-6">

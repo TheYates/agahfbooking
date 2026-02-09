@@ -19,6 +19,27 @@ export function middleware(request: NextRequest) {
   // Check for session token
   const sessionToken = request.cookies.get("session_token");
 
+  // If accessing admin routes without session, redirect to staff login
+  if (pathname.startsWith("/admin")) {
+    if (!sessionToken) {
+      return NextResponse.redirect(new URL("/staff-login", request.url));
+    }
+
+    try {
+      const userData = JSON.parse(sessionToken.value);
+
+      if (!userData?.role || userData.role !== "admin") {
+        const response = NextResponse.redirect(new URL("/staff-login", request.url));
+        response.cookies.delete("session_token");
+        return response;
+      }
+    } catch (error) {
+      const response = NextResponse.redirect(new URL("/staff-login", request.url));
+      response.cookies.delete("session_token");
+      return response;
+    }
+  }
+
   // If accessing dashboard without session, redirect to login
   if (pathname.startsWith("/dashboard")) {
     if (!sessionToken) {

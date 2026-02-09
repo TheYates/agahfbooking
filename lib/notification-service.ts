@@ -74,6 +74,43 @@ async function logNotification(
 }
 
 /**
+ * Create in-app notification for user
+ */
+async function createInAppNotification(
+  userId: number,
+  title: string,
+  message: string,
+  type: "info" | "success" | "warning" | "error",
+  eventType: NotificationEventType,
+  appointmentId?: number | null,
+  actionUrl?: string
+): Promise<void> {
+  try {
+    console.log('[createInAppNotification] Creating notification for userId:', userId);
+    const supabase = await createServerSupabaseClient();
+
+    const { data, error } = await supabase.from("in_app_notifications").insert({
+      user_id: userId,
+      title,
+      message,
+      type,
+      event_type: eventType,
+      related_appointment_id: appointmentId ?? null,
+      action_url: actionUrl ?? null,
+    }).select();
+
+    if (error) {
+      console.error('[createInAppNotification] Database error:', error);
+      throw error;
+    }
+
+    console.log('[createInAppNotification] Successfully created notification:', data);
+  } catch (error) {
+    console.error("Failed to create in-app notification:", error);
+  }
+}
+
+/**
  * Format date for display
  */
 function formatDate(dateStr: string): string {
@@ -118,6 +155,17 @@ export async function sendBookingConfirmation(
   const departmentName = appointment.departments.name;
   const date = formatDate(appointment.appointment_date);
   const time = getSlotTimeDisplay(appointment);
+
+  // Create in-app notification
+  await createInAppNotification(
+    clientId,
+    "Appointment Confirmed! 🎉",
+    `Your ${departmentName} appointment is confirmed for ${date} at ${time}.`,
+    "success",
+    "booking_confirmation",
+    appointment.id,
+    "/dashboard/my-appointments"
+  );
 
   // Send SMS
   try {
@@ -212,6 +260,17 @@ export async function sendRescheduleRequestNotification(
 
   const smsMessage = `AGAHF Hospital: Please reschedule your ${departmentName} appointment on ${date}. Reason: ${reason}. Log in to the booking system to select a new time.`;
 
+  // Create in-app notification
+  await createInAppNotification(
+    clientId,
+    "Reschedule Request",
+    `Your ${departmentName} appointment for ${date} needs to be rescheduled. Reason: ${reason}`,
+    "warning",
+    "reschedule_request",
+    appointment.id,
+    "/dashboard/my-appointments"
+  );
+
   // Send SMS
   try {
     const smsResult = await hubtelSMS.sendSMS({
@@ -291,6 +350,17 @@ export async function sendRescheduleCompletedNotification(
   const newTime = getSlotTimeDisplay(newAppointment);
 
   const smsMessage = `AGAHF Hospital: Your ${departmentName} appointment has been rescheduled from ${oldDate} to ${newDate} at ${newTime}. Please arrive 15 minutes early.`;
+
+  // Create in-app notification
+  await createInAppNotification(
+    clientId,
+    "Appointment Rescheduled",
+    `Your ${departmentName} appointment has been rescheduled to ${newDate} at ${newTime}.`,
+    "info",
+    "rescheduled",
+    newAppointment.id,
+    "/dashboard/my-appointments"
+  );
 
   // Send SMS
   try {

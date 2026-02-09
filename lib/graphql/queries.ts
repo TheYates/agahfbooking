@@ -32,11 +32,6 @@ export const GET_CALENDAR_DATA = gql`
           name
           color
         }
-        doctorId
-        doctor {
-          id
-          name
-        }
         appointmentDate
         slotNumber
         status
@@ -51,16 +46,6 @@ export const GET_CALENDAR_DATA = gql`
         slotsPerDay
         workingDays
         workingHours
-        isActive
-      }
-      doctors {
-        id
-        name
-        departmentId
-        department {
-          id
-          name
-        }
         isActive
       }
       stats @include(if: $includeStats) {
@@ -175,11 +160,6 @@ export const GET_APPOINTMENTS = gql`
             name
             color
           }
-          doctorId
-          doctor {
-            id
-            name
-          }
           appointmentDate
           slotNumber
           status
@@ -224,24 +204,6 @@ export const GET_DEPARTMENTS = gql`
   }
 `;
 
-// Doctors query
-export const GET_DOCTORS = gql`
-  query GetDoctors($departmentId: ID, $includeInactive: Boolean = false) {
-    doctors(departmentId: $departmentId, includeInactive: $includeInactive) {
-      id
-      name
-      departmentId
-      department {
-        id
-        name
-        color
-      }
-      isActive
-      createdAt
-    }
-  }
-`;
-
 // Create appointment mutation
 export const CREATE_APPOINTMENT = gql`
   mutation CreateAppointment($input: CreateAppointmentInput!) {
@@ -258,11 +220,6 @@ export const CREATE_APPOINTMENT = gql`
         id
         name
         color
-      }
-      doctorId
-      doctor {
-        id
-        name
       }
       appointmentDate
       slotNumber
@@ -305,7 +262,6 @@ export default {
   GET_APPOINTMENTS,
   GET_AVAILABLE_SLOTS,
   GET_DEPARTMENTS,
-  GET_DOCTORS,
   CREATE_APPOINTMENT,
   UPDATE_APPOINTMENT,
   BULK_UPDATE_APPOINTMENTS,

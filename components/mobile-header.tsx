@@ -10,10 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, Bell } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "@/lib/types";
 import { motion } from "framer-motion";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface MobileHeaderProps {
   user: User;
@@ -88,10 +89,8 @@ export function MobileHeader({ user }: MobileHeaderProps) {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
-          {/* Notification Button (Mock) */}
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-full">
-            <Bell className="h-5 w-5" />
-          </Button>
+          {/* Notification Bell */}
+          <NotificationBell />
 
           {/* User Menu */}
           <DropdownMenu>

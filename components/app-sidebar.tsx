@@ -78,6 +78,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    { title: "Login Audit", url: "/admin/login-audit", icon: ClipboardCheck },
+    { title: "Feedback", url: "/admin/feedback", icon: MessageSquare },
   ];
 
   const getMenuItems = () => {

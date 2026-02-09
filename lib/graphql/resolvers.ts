@@ -89,7 +89,6 @@ export const resolvers = {
       return {
         appointments,
         departments,
-        doctors,
         stats,
       };
     },
@@ -115,11 +114,10 @@ export const resolvers = {
           recent_appointments AS (
             SELECT
               a.id, a.appointment_date, a.slot_number, a.status,
-              d.name as doctor_name, dept.name as department_name, dept.color as department_color,
+              dept.name as department_name, dept.color as department_color,
               ROW_NUMBER() OVER (ORDER BY a.appointment_date DESC, a.slot_number DESC) as rn
             FROM appointments a
             JOIN departments dept ON a.department_id = dept.id
-            LEFT JOIN doctors d ON a.doctor_id = d.id
             WHERE a.client_id = $1
           )
           SELECT 
@@ -127,7 +125,7 @@ export const resolvers = {
             COALESCE(json_agg(
               json_build_object(
                 'id', ra.id, 'date', ra.appointment_date, 'slotNumber', ra.slot_number,
-                'status', ra.status, 'doctorName', ra.doctor_name,
+                'status', ra.status,
                 'departmentName', ra.department_name, 'departmentColor', ra.department_color
               ) ORDER BY ra.appointment_date DESC, ra.slot_number DESC
             ) FILTER (WHERE ra.rn <= 5), '[]'::json) as recent_appointments
@@ -244,11 +242,6 @@ export const resolvers = {
         isActive: dept.is_active !== false, // Default to true if null
       }));
     },
-    doctors: (_: any, args: { departmentId?: string }) =>
-      args.departmentId
-        ? DoctorService.getByDepartment(parseInt(args.departmentId))
-        : DoctorService.getAll(),
-
     appointments: async (_: any, args: any) => {
       const { filter = {}, limit = 50, offset = 0 } = args;
 
@@ -292,12 +285,10 @@ export const resolvers = {
 
       const appointmentsQuery = `
         SELECT a.*, c.name as client_name, c.x_number, 
-               dept.name as department_name, dept.color as department_color,
-               d.name as doctor_name
+               dept.name as department_name, dept.color as department_color
         FROM appointments a
         LEFT JOIN clients c ON a.client_id = c.id
         LEFT JOIN departments dept ON a.department_id = dept.id
-        LEFT JOIN doctors d ON a.doctor_id = d.id
         WHERE ${whereConditions.join(" AND ")}
         ORDER BY a.appointment_date DESC, a.slot_number ASC
         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
@@ -324,7 +315,6 @@ export const resolvers = {
             id: row.id,
             clientId: row.client_id,
             departmentId: row.department_id,
-            doctorId: row.doctor_id,
             appointmentDate: row.appointment_date,
             slotNumber: row.slot_number,
             status: row.status.toUpperCase(),
@@ -369,9 +359,6 @@ export const resolvers = {
       const appointment = await AppointmentService.create({
         client_id: parseInt(args.input.clientId),
         department_id: parseInt(args.input.departmentId),
-        doctor_id: args.input.doctorId
-          ? parseInt(args.input.doctorId)
-          : undefined,
         appointment_date: args.input.appointmentDate,
         slot_number: args.input.slotNumber,
         notes: args.input.notes,

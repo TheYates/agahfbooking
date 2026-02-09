@@ -16,7 +16,6 @@ interface Appointment {
     slotStartTime?: string;
     slotEndTime?: string;
     status: string;
-    doctorName: string;
     departmentId: number;
     departmentName: string;
     departmentColor: string;

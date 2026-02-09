@@ -6,6 +6,10 @@ import {
   invalidateAvailableSlotsCache,
   invalidateAppointmentsListCache,
 } from "@/lib/appointments-cache";
+import {
+  sendBookingConfirmation,
+  fetchAppointmentForNotification,
+} from "@/lib/notification-service";
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
@@ -191,12 +195,30 @@ export async function POST(request: Request) {
     await invalidateAppointmentsListCache();
 
     const responseTime = Date.now() - requestStart;
-
-    return NextResponse.json({
+    
+    const response = NextResponse.json({
       success: true,
       data: created,
       meta: { responseTime: `${responseTime}ms` },
     });
+
+    // Send notification in background (status is always "booked" in this endpoint)
+    console.log('🔔 Appointment created via calendar, ID:', created.id, 'Client:', client_id);
+    fetchAppointmentForNotification(created.id)
+      .then(appointmentForNotification => {
+        console.log('📬 Fetched appointment for notification:', appointmentForNotification?.id);
+        if (appointmentForNotification) {
+          return sendBookingConfirmation(appointmentForNotification);
+        }
+      })
+      .then(() => {
+        console.log('✅ Calendar booking notification sent successfully');
+      })
+      .catch(notificationError => {
+        console.error("❌ Failed to send calendar booking notification:", notificationError);
+      });
+
+    return response;
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Appointment creation error (${responseTime}ms):`, error);

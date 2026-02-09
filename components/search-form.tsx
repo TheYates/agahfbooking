@@ -8,7 +8,6 @@ import {
   Building2,
   FileText,
   User,
-  Stethoscope,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -36,7 +35,6 @@ interface SearchResults {
     status: string;
     clientName: string;
     clientXNumber: string;
-    doctorName: string;
     departmentName: string;
     departmentColor: string;
   }>;
@@ -46,13 +44,6 @@ interface SearchResults {
     xNumber: string;
     phone: string;
     category: string;
-  }>;
-  doctors: Array<{
-    id: number;
-    name: string;
-    specialization: string;
-    departmentName: string;
-    departmentColor: string;
   }>;
   departments: Array<{
     id: number;
@@ -68,7 +59,6 @@ export function SearchForm({ className }: SearchFormProps) {
   const [searchResults, setSearchResults] = React.useState<SearchResults>({
     appointments: [],
     clients: [],
-    doctors: [],
     departments: [],
   });
   const [isSearching, setIsSearching] = React.useState(false);
@@ -91,7 +81,6 @@ export function SearchForm({ className }: SearchFormProps) {
       setSearchResults({
         appointments: [],
         clients: [],
-        doctors: [],
         departments: [],
       });
       return;
@@ -141,7 +130,7 @@ export function SearchForm({ className }: SearchFormProps) {
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput
-          placeholder="Search appointments, clients, doctors..."
+          placeholder="Search appointments, clients, departments..."
           value={searchQuery}
           onValueChange={setSearchQuery}
         />
@@ -195,27 +184,6 @@ export function SearchForm({ className }: SearchFormProps) {
                     <span className="font-medium">{client.name}</span>
                     <span className="text-xs text-muted-foreground">
                       {client.xNumber} • {client.phone} • {client.category}
-                    </span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-
-          {searchResults.doctors.length > 0 && (
-            <CommandGroup heading="Doctors">
-              {searchResults.doctors.map((doctor) => (
-                <CommandItem
-                  key={`doctor-${doctor.id}`}
-                  onSelect={() =>
-                    runCommand(() => router.push("/dashboard/departments"))
-                  }
-                >
-                  <Stethoscope className="mr-2 h-4 w-4" />
-                  <div className="flex flex-col">
-                    <span className="font-medium">Dr. {doctor.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {doctor.specialization} • {doctor.departmentName}
                     </span>
                   </div>
                 </CommandItem>

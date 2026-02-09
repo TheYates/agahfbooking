@@ -23,6 +23,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface ClientHeaderNavProps {
   user: User;
@@ -125,6 +126,9 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
 
         {/* User Menu */}
         <div className="flex items-center space-x-3">
+          {/* Notification Bell */}
+          <NotificationBell />
+
           {/* Mobile Menu */}
           <div className="md:hidden">
             <DropdownMenu>

@@ -52,29 +52,12 @@ export const typeDefs = gql`
     ): AppointmentConnection!
   }
 
-  type Doctor {
-    id: ID!
-    name: String!
-    departmentId: ID!
-    department: Department!
-    isActive: Boolean!
-    createdAt: Date!
-    appointments(
-      dateFrom: Date
-      dateTo: Date
-      limit: Int = 50
-      offset: Int = 0
-    ): AppointmentConnection!
-  }
-
   type Appointment {
     id: ID!
     clientId: ID!
     client: Client!
     departmentId: ID!
     department: Department!
-    doctorId: ID
-    doctor: Doctor
     appointmentDate: Date!
     slotNumber: Int!
     status: AppointmentStatus!
@@ -115,7 +98,6 @@ export const typeDefs = gql`
   type CalendarData {
     appointments: [Appointment!]!
     departments: [Department!]!
-    doctors: [Doctor!]!
     stats: DashboardStats
   }
 
@@ -145,7 +127,6 @@ export const typeDefs = gql`
   input AppointmentFilter {
     status: AppointmentStatus
     departmentId: ID
-    doctorId: ID
     clientId: ID
     dateFrom: Date
     dateTo: Date
@@ -154,7 +135,6 @@ export const typeDefs = gql`
   input CreateAppointmentInput {
     clientId: ID!
     departmentId: ID!
-    doctorId: ID
     appointmentDate: Date!
     slotNumber: Int!
     notes: String
@@ -182,10 +162,6 @@ export const typeDefs = gql`
     department(id: ID!): Department
     departments(includeInactive: Boolean = false): [Department!]!
     departmentsWithAvailability(date: Date!): [Department!]!
-
-    # Doctor queries
-    doctor(id: ID!): Doctor
-    doctors(departmentId: ID, includeInactive: Boolean = false): [Doctor!]!
 
     # Appointment queries
     appointment(id: ID!): Appointment
@@ -216,7 +192,6 @@ export const typeDefs = gql`
 
   type BookingData {
     department: Department!
-    doctors: [Doctor!]!
     availableDates: [Date!]!
     workingHours: JSON!
   }

@@ -400,24 +400,6 @@ const fetchCalendarAppointments = async (
   }
 }
 
-const fetchDoctors = async (): Promise<Doctor[]> => {
-  const response = await fetch('/api/doctors')
-  if (!response.ok) throw new Error('Failed to fetch doctors')
-
-  const data = await response.json()
-  if (!data.success) throw new Error(data.error || 'Failed to fetch doctors')
-
-  // Transform the data to match the expected interface
-  const transformedDoctors = data.data.map((doctor: any) => ({
-    id: doctor.id,
-    name: doctor.name,
-    specialization: doctor.department_name || 'General',
-    departmentId: doctor.department_id,
-  }))
-
-  return transformedDoctors
-}
-
 // Helper function for status colors (moved from component)
 const getStatusColor = (status: string): string => {
   const statusColors: { [key: string]: string } = {
@@ -849,17 +831,6 @@ export const useAppointmentsList = (
   })
 }
 
-// Doctors Hook
-export const useDoctors = (enabled: boolean = true) => {
-  return useQuery({
-    queryKey: queryKeys.doctors,
-    queryFn: fetchDoctors,
-    enabled,
-    staleTime: 10 * 60 * 1000, // 10 minutes - doctors don't change frequently
-    gcTime: 30 * 60 * 1000, // 30 minutes
-  })
-}
-
 // Calendar Appointments Hook (with real-time updates)
 export const useCalendarAppointments = (
   userRole: string,
@@ -1003,9 +974,6 @@ export const useCalendarData = (
   // Fetch departments (cached)
   const departmentsQuery = useDepartments()
 
-  // Fetch doctors (cached)
-  const doctorsQuery = useDoctors(enabled)
-
   // Fetch appointments (real-time)
   const appointmentsQuery = useCalendarAppointments(
     userRole,
@@ -1017,16 +985,14 @@ export const useCalendarData = (
 
   return {
     departments: departmentsQuery.data || [],
-    doctors: doctorsQuery.data || [],
     appointments: appointmentsQuery.data || [],
-    isLoading: departmentsQuery.isLoading || doctorsQuery.isLoading || appointmentsQuery.isLoading,
-    error: departmentsQuery.error || doctorsQuery.error || appointmentsQuery.error,
-    isRefetching: departmentsQuery.isRefetching || doctorsQuery.isRefetching || appointmentsQuery.isRefetching,
+    isLoading: departmentsQuery.isLoading || appointmentsQuery.isLoading,
+    error: departmentsQuery.error || appointmentsQuery.error,
+    isRefetching: departmentsQuery.isRefetching || appointmentsQuery.isRefetching,
     // Refetch function to manually refresh all calendar data
     refetch: async () => {
       await Promise.all([
         departmentsQuery.refetch(),
-        doctorsQuery.refetch(),
         appointmentsQuery.refetch(),
       ])
     }
@@ -2077,6 +2043,9 @@ interface DepartmentDetailed {
   working_hours: { start: string; end: string }
   color: string
   is_active: boolean
+  slot_duration_minutes?: number
+  require_review?: boolean
+  auto_confirm_staff_bookings?: boolean
 }
 
 interface DepartmentFormData {
@@ -2086,6 +2055,9 @@ interface DepartmentFormData {
   working_days: string[]
   working_hours: { start: string; end: string }
   color: string
+  slot_duration_minutes?: number
+  require_review?: boolean
+  auto_confirm_staff_bookings?: boolean
 }
 
 interface DoctorDetailed {
@@ -2122,23 +2094,11 @@ export const useAllDepartments = () => {
   })
 }
 
-// Fetch All Doctors
-const fetchAllDoctors = async (): Promise<DoctorDetailed[]> => {
-  const response = await fetch('/api/doctors')
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to fetch doctors')
-  }
-
-  const data = await response.json()
-  return data.success ? data.data : []
-}
-
-// useAllDoctors Hook
+// useAllDoctors Hook (DEPRECATED - doctors removed)
 export const useAllDoctors = () => {
   return useQuery({
     queryKey: ['doctors', 'all'],
-    queryFn: fetchAllDoctors,
+    queryFn: async () => [],
     staleTime: 60 * 1000, // 1 minute
     gcTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -2297,124 +2257,6 @@ export const useDeleteDepartment = () => {
       toast.success('Department Deleted! ✅', {
         description: 'The department has been successfully deleted.',
         duration: 4000,
-      })
-    },
-  })
-}
-
-// Add Doctor Mutation
-const addDoctor = async (doctorData: DoctorFormData) => {
-  const response = await fetch('/api/doctors', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(doctorData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to add doctor')
-  }
-
-  const data = await response.json()
-  if (!data.success) throw new Error(data.error || 'Failed to add doctor')
-  return data
-}
-
-export const useAddDoctor = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: addDoctor,
-    onSuccess: () => {
-      // Invalidate doctors queries
-      queryClient.invalidateQueries({ queryKey: ['doctors'] })
-
-      toast.success('Doctor Added! ✅', {
-        description: 'The doctor has been successfully added.',
-        duration: 4000,
-      })
-    },
-    onError: (err: Error) => {
-      toast.error('Add Failed', {
-        description: err.message || 'Failed to add doctor. Please try again.',
-      })
-    },
-  })
-}
-
-// Update Doctor Mutation
-const updateDoctor = async ({ id, data }: { id: number; data: DoctorFormData }) => {
-  const response = await fetch(`/api/doctors/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update doctor')
-  }
-
-  const responseData = await response.json()
-  if (!responseData.success) throw new Error(responseData.error || 'Failed to update doctor')
-  return responseData
-}
-
-export const useUpdateDoctor = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: updateDoctor,
-    onSuccess: () => {
-      // Invalidate doctors queries
-      queryClient.invalidateQueries({ queryKey: ['doctors'] })
-
-      toast.success('Doctor Updated! ✅', {
-        description: 'The doctor has been successfully updated.',
-        duration: 4000,
-      })
-    },
-    onError: (err: Error) => {
-      toast.error('Update Failed', {
-        description: err.message || 'Failed to update doctor. Please try again.',
-      })
-    },
-  })
-}
-
-// Delete Doctor Mutation
-const deleteDoctor = async (id: number) => {
-  const response = await fetch(`/api/doctors/${id}`, {
-    method: 'DELETE',
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete doctor')
-  }
-
-  const data = await response.json()
-  if (!data.success) throw new Error(data.error || 'Failed to delete doctor')
-  return data
-}
-
-export const useDeleteDoctor = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: deleteDoctor,
-    onSuccess: () => {
-      // Invalidate doctors queries
-      queryClient.invalidateQueries({ queryKey: ['doctors'] })
-
-      toast.success('Doctor Deleted! ✅', {
-        description: 'The doctor has been successfully deleted.',
-        duration: 4000,
-      })
-    },
-    onError: (err: Error) => {
-      toast.error('Delete Failed', {
-        description: err.message || 'Failed to delete doctor. Please try again.',
       })
     },
   })

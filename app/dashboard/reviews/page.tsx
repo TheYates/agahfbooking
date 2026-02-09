@@ -6,7 +6,14 @@ export default async function ReviewsPage() {
   const user = await requireReviewerAuth();
 
   return (
-    <div className="h-full">
+    <div className="h-full space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Reviews</h1>
+        <p className="text-muted-foreground">
+          Approve or reject appointment requests awaiting review.
+        </p>
+      </div>
+
       {/* Desktop - Table View */}
       <div className="hidden md:block">
         <PendingReviewsView userId={user.id} userRole={user.role} />

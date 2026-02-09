@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getSlotTimeInfo, type WorkingHours } from "@/lib/slot-time-utils";
+import { getSlotTimeInfo, parseTimeString, type WorkingHours } from "@/lib/slot-time-utils";
+import { MemoryCache } from "@/lib/memory-cache";
 
 const dayNamesLong = [
   "Sunday",
@@ -67,6 +68,37 @@ export async function GET(request: Request) {
 
     // Parse start date or use today
     const start = startDateRaw ? new Date(startDateRaw) : new Date();
+    const startDate = start.toISOString().split("T")[0];
+
+    // Create cache key for this week's schedule
+    const cacheKey = `week_schedule_${departmentId}_${startDate}`;
+
+    const scheduleData = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        return await generateScheduleForWeek(departmentId, start);
+      },
+      'weekSchedule' // 30 second cache
+    );
+
+    return NextResponse.json(
+      scheduleData,
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Error fetching schedule:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch schedule" },
+      { status: 500 }
+    );
+  }
+}
+
+async function generateScheduleForWeek(departmentId: number, start: Date) {
     const schedule: any[] = [];
 
     // Determine how many days to generate based on week type
@@ -109,6 +141,17 @@ export async function GET(request: Request) {
     const workingDays = ((dept as any).working_days || []) as string[];
     const workingHours = (dept as any).working_hours as WorkingHours | null;
     const slotDuration = (dept as any).slot_duration_minutes || 30;
+
+    // Calculate actual number of slots that fit within working hours
+    const maxSlotsWithinHours = workingHours 
+      ? Math.floor(
+          ((parseTimeString(workingHours.end).hours * 60 + parseTimeString(workingHours.end).minutes) - 
+           (parseTimeString(workingHours.start).hours * 60 + parseTimeString(workingHours.start).minutes)) / 
+          slotDuration
+        )
+      : slotsPerDay;
+    
+    const actualSlotsPerDay = Math.min(slotsPerDay, maxSlotsWithinHours);
 
     // Fetch all appointments for the week in one query
     const { data: appts, error: apptsErr } = await supabase
@@ -161,7 +204,7 @@ export async function GET(request: Request) {
 
       const slots: any[] = [];
       if (isWorkingDay) {
-        for (let slotNum = 1; slotNum <= slotsPerDay; slotNum++) {
+        for (let slotNum = 1; slotNum <= actualSlotsPerDay; slotNum++) {
           const isBooked = bookedSlots.has(slotNum);
           const slotData = isBooked ? bookedSlots.get(slotNum) : null;
 
@@ -183,7 +226,7 @@ export async function GET(request: Request) {
           });
         }
       } else {
-        for (let slotNum = 1; slotNum <= slotsPerDay; slotNum++) {
+        for (let slotNum = 1; slotNum <= actualSlotsPerDay; slotNum++) {
           // Calculate slot time info even for non-working days
           const slotTimeInfo = workingHours
             ? getSlotTimeInfo(workingHours, slotNum, slotDuration)
@@ -215,22 +258,8 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: schedule,
-      },
-      {
-        headers: {
-          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
-        },
-      }
-    );
-  } catch (error) {
-    console.error("Error fetching schedule:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch schedule" },
-      { status: 500 }
-    );
-  }
+    return {
+      success: true,
+      data: schedule,
+    };
 }

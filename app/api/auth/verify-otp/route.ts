@@ -4,6 +4,7 @@ import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { arkeselSMS } from "@/lib/arkesel-sms";
+import { logLoginAttempt } from "@/lib/login-audit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,14 @@ export async function POST(request: NextRequest) {
 
     if (!xNumber || !otp) {
       rateLimiter.recordAttempt(clientInfo.ip, false, undefined, clientInfo.userAgent);
+      await logLoginAttempt({
+        userType: "client",
+        identifier: xNumber || null,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: "xNumber and otp are required",
+      });
       return NextResponse.json(
         { error: "xNumber and otp are required" },
         { status: 400 }
@@ -26,6 +35,15 @@ export async function POST(request: NextRequest) {
     );
 
     if (!rateLimitResult.allowed) {
+      await logLoginAttempt({
+        userType: "client",
+        identifier: xNumber,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: rateLimitResult.reason || "Too many attempts. Please try again later.",
+      });
+
       return NextResponse.json(
         {
           error:
@@ -50,10 +68,27 @@ export async function POST(request: NextRequest) {
 
     if (clientErr || !client) {
       rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      await logLoginAttempt({
+        userType: "client",
+        identifier: xNumber,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: "Client not found",
+      });
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
     if (!(client as any).is_active) {
+      await logLoginAttempt({
+        userType: "client",
+        userId: (client as any).id,
+        identifier: (client as any).x_number,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: "Client account is inactive",
+      });
       return NextResponse.json({ error: "Client account is inactive" }, { status: 403 });
     }
 
@@ -75,6 +110,14 @@ export async function POST(request: NextRequest) {
       } else {
         console.log(`❌ OTP verification failed via Arkesel: ${verifyResult.message}`);
         rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+        await logLoginAttempt({
+          userType: "client",
+          identifier: xNumber,
+          ipAddress: clientInfo.ip,
+          userAgent: clientInfo.userAgent,
+          success: false,
+          errorMessage: verifyResult.message || "Invalid or expired OTP",
+        });
         return NextResponse.json(
           { error: verifyResult.message || "Invalid or expired OTP" },
           { status: 400 }
@@ -95,6 +138,14 @@ export async function POST(request: NextRequest) {
 
       if (otpErr || !otpRecord) {
         rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+        await logLoginAttempt({
+          userType: "client",
+          identifier: xNumber,
+          ipAddress: clientInfo.ip,
+          userAgent: clientInfo.userAgent,
+          success: false,
+          errorMessage: "Invalid or expired OTP",
+        });
         return NextResponse.json(
           { error: "Invalid or expired OTP" },
           { status: 400 }
@@ -122,6 +173,15 @@ export async function POST(request: NextRequest) {
 
     rateLimiter.recordAttempt(clientInfo.ip, true, xNumber, clientInfo.userAgent);
 
+    await logLoginAttempt({
+      userType: "client",
+      userId: (client as any).id,
+      identifier: (client as any).x_number,
+      ipAddress: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
+      success: true,
+    });
+
     const cookieStore = await cookies();
     cookieStore.set("session_token", JSON.stringify(userData), {
       httpOnly: true,
@@ -137,6 +197,15 @@ export async function POST(request: NextRequest) {
       redirectUrl: "/dashboard",
     });
   } catch (error) {
+    const clientInfo = getClientInfo(request);
+    await logLoginAttempt({
+      userType: "client",
+      ipAddress: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : "Internal server error",
+    });
+
     console.error("Verify OTP error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },

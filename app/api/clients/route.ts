@@ -1,32 +1,44 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { MemoryCache } from "@/lib/memory-cache";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
-    const supabase = await createServerSupabaseClient();
+    // Create cache key based on search parameter
+    const cacheKey = `clients_list_${search || 'all'}`;
 
-    let query = supabase
-      .from("clients")
-      .select("id,x_number,name,phone,category,is_active,created_at")
-      .eq("is_active", true)
-      .order("name", { ascending: true });
+    const clients = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        const supabase = await createServerSupabaseClient();
 
-    if (search) {
-      const escaped = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
-      query = query.or(
-        `name.ilike.%${escaped}%,x_number.ilike.%${escaped}%,phone.ilike.%${escaped}%`
-      );
-    }
+        let query = supabase
+          .from("clients")
+          .select("id,x_number,name,phone,category,is_active,created_at")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
 
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+        if (search) {
+          const escaped = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+          query = query.or(
+            `name.ilike.%${escaped}%,x_number.ilike.%${escaped}%,phone.ilike.%${escaped}%`
+          );
+        }
+
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
+
+        return data || [];
+      },
+      'clientsList' // 30 second cache
+    );
 
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data: clients,
     });
   } catch (error) {
     console.error("Error fetching clients:", error);

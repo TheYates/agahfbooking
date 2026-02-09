@@ -172,20 +172,36 @@ export async function POST(request: Request) {
     await invalidateAvailableSlotsCache(Number(departmentId), date);
     await invalidateAppointmentsListCache();
 
+    // Return success immediately (run notifications/reminders in background)
+    const response = NextResponse.json({
+      success: true,
+      data: created,
+      message: "Appointment booked successfully",
+    });
+
     // Send notification if appointment was auto-confirmed (status is "booked")
+    console.log('🔔 Booking status:', initialStatus, 'Created appointment ID:', created.id);
     if (initialStatus === "booked") {
-      try {
-        const appointmentForNotification = await fetchAppointmentForNotification(created.id);
-        if (appointmentForNotification) {
-          await sendBookingConfirmation(appointmentForNotification);
-        }
-      } catch (notificationError) {
-        console.error("Failed to send booking notification:", notificationError);
-        // Don't fail the booking if notification fails
-      }
+      console.log('📧 Sending booking confirmation notification...');
+      // Run in background (don't await)
+      fetchAppointmentForNotification(created.id)
+        .then(appointmentForNotification => {
+          console.log('📬 Fetched appointment for notification:', appointmentForNotification?.id);
+          if (appointmentForNotification) {
+            return sendBookingConfirmation(appointmentForNotification);
+          }
+        })
+        .then(() => {
+          console.log('✅ Booking confirmation sent successfully');
+        })
+        .catch(notificationError => {
+          console.error("❌ Failed to send booking notification:", notificationError);
+        });
+    } else {
+      console.log('⏭️ Skipping notification (status is not "booked")');
     }
 
-    // Schedule push reminders based on user preferences
+    // Schedule push reminders based on user preferences (run in background)
     try {
       const userPreferences = await getUserReminderPreferences(finalClientId);
       
@@ -223,11 +239,7 @@ export async function POST(request: Request) {
       // Don't fail the booking if reminder scheduling fails
     }
 
-    return NextResponse.json({
-      success: true,
-      data: created,
-      message: "Appointment booked successfully",
-    });
+    return response;
   } catch (error) {
     console.error("Error booking appointment:", error);
     return NextResponse.json(

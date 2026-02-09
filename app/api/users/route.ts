@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import bcrypt from "bcryptjs";
+import { MemoryCache } from "@/lib/memory-cache";
 
 // GET /api/users - Get all users with optional search
 export async function GET(request: NextRequest) {
@@ -12,22 +13,33 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
-    const supabase = await createServerSupabaseClient();
+    // Create cache key based on search parameter
+    const cacheKey = `users_list_${search || 'all'}`;
 
-    let query = supabase
-      .from("users")
-      .select("id,name,phone,role,username,is_active,created_at")
-      .eq("is_active", true)
-      .order("name", { ascending: true });
+    const users = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        const supabase = await createServerSupabaseClient();
 
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,username.ilike.%${search}%`);
-    }
+        let query = supabase
+          .from("users")
+          .select("id,name,phone,role,username,is_active,created_at")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
 
-    const { data: users, error } = await query;
-    if (error) throw new Error(error.message);
+        if (search) {
+          query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,username.ilike.%${search}%`);
+        }
 
-    return NextResponse.json({ users: users || [] });
+        const { data: users, error } = await query;
+        if (error) throw new Error(error.message);
+
+        return users || [];
+      },
+      'usersList' // 30 second cache
+    );
+
+    return NextResponse.json({ users });
   } catch (error) {
     console.error("Get users error:", error);
     return NextResponse.json(

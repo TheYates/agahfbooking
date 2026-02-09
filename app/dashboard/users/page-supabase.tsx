@@ -48,7 +48,7 @@ import {
   UserX,
   Eye,
   EyeOff,
-  MoreHorizontal
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -168,7 +168,7 @@ export default function UsersPage() {
     } catch (error) {
       console.error("Error creating user:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to create user"
+        error instanceof Error ? error.message : "Failed to create user",
       );
     }
   };
@@ -198,7 +198,7 @@ export default function UsersPage() {
     } catch (error) {
       console.error("Error updating user:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to update user"
+        error instanceof Error ? error.message : "Failed to update user",
       );
     }
   };
@@ -216,13 +216,13 @@ export default function UsersPage() {
       }
 
       toast.success(
-        `User ${user.is_active ? "deactivated" : "activated"} successfully`
+        `User ${user.is_active ? "deactivated" : "activated"} successfully`,
       );
       fetchUsers();
     } catch (error) {
       console.error("Error toggling user status:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to toggle user status"
+        error instanceof Error ? error.message : "Failed to toggle user status",
       );
     }
   };
@@ -254,7 +254,7 @@ export default function UsersPage() {
     } catch (error) {
       console.error("Error deleting user:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to delete user"
+        error instanceof Error ? error.message : "Failed to delete user",
       );
     }
   };
@@ -302,8 +302,8 @@ export default function UsersPage() {
       {/* Header & Actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between space-y-2 md:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-3xl font-bold">Users</h1>
+          <p className="text-muted-foreground">
             Manage staff access and permissions.
           </p>
         </div>
@@ -317,7 +317,10 @@ export default function UsersPage() {
               className="pl-9 h-10 w-full"
             />
           </div>
-          <Button onClick={() => setIsAddDialogOpen(true)} className="shrink-0 h-10">
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            className="shrink-0 h-10"
+          >
             <Plus className="mr-2 h-4 w-4" />
             Add User
           </Button>
@@ -349,7 +352,10 @@ export default function UsersPage() {
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-12 text-muted-foreground"
+                  >
                     No users found matching your search.
                   </TableCell>
                 </TableRow>
@@ -360,24 +366,41 @@ export default function UsersPage() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border">
                           <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
-                            {user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                            {user.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="font-medium text-sm leading-none pt-0.5">{user.name}</span>
-                          <span className="text-xs text-muted-foreground text-ellipsis">{user.username}</span>
+                          <span className="font-medium text-sm leading-none pt-0.5">
+                            {user.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground text-ellipsis">
+                            {user.username}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{user.phone || <span className="text-muted-foreground/50 text-xs italic">N/A</span>}</TableCell>
+                    <TableCell className="text-sm">
+                      {user.phone || (
+                        <span className="text-muted-foreground/50 text-xs italic">
+                          N/A
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"
                         className={cn(
                           "capitalize font-medium border-0",
-                          user.role === 'admin' ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" :
-                            user.role === 'reviewer' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
-                              "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          user.role === "admin"
+                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                            : user.role === "reviewer"
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
                         )}
                       >
                         {user.role}
@@ -385,31 +408,45 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className={cn("h-2 w-2 rounded-full", user.is_active ? "bg-green-500" : "bg-red-500")} />
-                        <span className="text-sm text-muted-foreground">{user.is_active ? "Active" : "Inactive"}</span>
+                        <div
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            user.is_active ? "bg-green-500" : "bg-red-500",
+                          )}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {user.is_active ? "Active" : "Inactive"}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {new Date(user.created_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
-                        year: "numeric"
+                        year: "numeric",
                       })}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                          >
                             <span className="sr-only">Open menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-[160px]">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                          <DropdownMenuItem
+                            onClick={() => openEditDialog(user)}
+                          >
                             <Edit className="mr-2 h-4 w-4" /> Edit
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleActive(user)}>
+                          <DropdownMenuItem
+                            onClick={() => handleToggleActive(user)}
+                          >
                             {user.is_active ? (
                               <>
                                 <UserX className="mr-2 h-4 w-4" /> Deactivate
@@ -421,7 +458,10 @@ export default function UsersPage() {
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={() => openDeleteDialog(user)}>
+                          <DropdownMenuItem
+                            className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                            onClick={() => openDeleteDialog(user)}
+                          >
                             <Trash2 className="mr-2 h-4 w-4" /> Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>

@@ -94,6 +94,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // Auto-calculate slots_per_day from working_hours and slot_duration_minutes
+    const workingHours = body.working_hours ?? { start: "09:00", end: "17:00" };
+    const slotDuration = body.slot_duration_minutes ?? 30;
+    
+    const startParts = workingHours.start.split(":");
+    const endParts = workingHours.end.split(":");
+    const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || "0");
+    const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1] || "0");
+    const totalMinutes = endMinutes - startMinutes;
+    const calculatedSlots = Math.floor(totalMinutes / slotDuration);
+
     const supabase = await createServerSupabaseClient();
 
     const { data: department, error } = await supabase
@@ -101,12 +112,12 @@ export async function POST(request: Request) {
       .insert({
         name,
         description: body.description ?? null,
-        slots_per_day: body.slots_per_day ?? 10,
+        slots_per_day: calculatedSlots,
         working_days: body.working_days ?? ["monday", "tuesday", "wednesday", "thursday", "friday"],
-        working_hours: body.working_hours ?? { start: "09:00", end: "17:00" },
+        working_hours: workingHours,
         color: body.color ?? "#3B82F6",
         is_active: true,
-        slot_duration_minutes: body.slot_duration_minutes ?? 30,
+        slot_duration_minutes: slotDuration,
         require_review: body.require_review ?? true,
         auto_confirm_staff_bookings: body.auto_confirm_staff_bookings ?? false,
       })

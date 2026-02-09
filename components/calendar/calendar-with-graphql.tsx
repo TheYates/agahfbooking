@@ -42,15 +42,14 @@ export function CalendarWithGraphQL({
   const [updateAppointment, { loading: updating }] = useUpdateAppointment();
 
   // Memoized data processing
-  const { appointments, departments, doctors, stats } = useMemo(() => {
+  const { appointments, departments, stats } = useMemo(() => {
     if (!data?.calendarData) {
-      return { appointments: [], departments: [], doctors: [], stats: null };
+      return { appointments: [], departments: [], stats: null };
     }
 
     return {
       appointments: data.calendarData.appointments || [],
       departments: data.calendarData.departments || [],
-      doctors: data.calendarData.doctors || [],
       stats: data.calendarData.stats,
     };
   }, [data]);
@@ -269,7 +268,6 @@ export function CalendarWithGraphQL({
                         <p className="font-medium">{appointment.client.name}</p>
                         <p className="text-sm text-muted-foreground">
                           {appointment.department.name}
-                          {appointment.doctor && ` • ${appointment.doctor.name}`}
                         </p>
                       </div>
                     </div>

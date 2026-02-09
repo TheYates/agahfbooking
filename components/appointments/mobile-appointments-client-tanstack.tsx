@@ -44,7 +44,7 @@ interface Appointment {
   date: string;
   slotNumber: number;
   status: string;
-  doctorName: string;
+  
   departmentName: string;
   departmentColor: string;
   notes?: string;

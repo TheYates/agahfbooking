@@ -68,7 +68,6 @@ export async function PUT(
     const updatePayload: any = {};
     if (body.name !== undefined) updatePayload.name = body.name;
     if (body.description !== undefined) updatePayload.description = body.description;
-    if (body.slots_per_day !== undefined) updatePayload.slots_per_day = body.slots_per_day;
     if (body.working_days !== undefined) updatePayload.working_days = body.working_days;
     if (body.working_hours !== undefined) updatePayload.working_hours = body.working_hours;
     if (body.color !== undefined) updatePayload.color = body.color;
@@ -76,6 +75,28 @@ export async function PUT(
     if (body.slot_duration_minutes !== undefined) updatePayload.slot_duration_minutes = body.slot_duration_minutes;
     if (body.require_review !== undefined) updatePayload.require_review = body.require_review;
     if (body.auto_confirm_staff_bookings !== undefined) updatePayload.auto_confirm_staff_bookings = body.auto_confirm_staff_bookings;
+
+    // Auto-calculate slots_per_day if working_hours or slot_duration_minutes changed
+    if (body.working_hours !== undefined || body.slot_duration_minutes !== undefined) {
+      // Fetch current department to get missing values
+      const { data: currentDept } = await supabase
+        .from("departments")
+        .select("working_hours,slot_duration_minutes")
+        .eq("id", id)
+        .single();
+
+      const workingHours = body.working_hours ?? currentDept?.working_hours ?? { start: "09:00", end: "17:00" };
+      const slotDuration = body.slot_duration_minutes ?? currentDept?.slot_duration_minutes ?? 30;
+
+      const startParts = workingHours.start.split(":");
+      const endParts = workingHours.end.split(":");
+      const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || "0");
+      const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1] || "0");
+      const totalMinutes = endMinutes - startMinutes;
+      const calculatedSlots = Math.floor(totalMinutes / slotDuration);
+
+      updatePayload.slots_per_day = calculatedSlots;
+    }
 
     const { data: department, error } = await supabase
       .from("departments")

@@ -188,7 +188,7 @@ export function DashboardClientTanstack({
           </div>
 
           {/* Upcoming Appointments List */}
-          <Card className="rounded-xl overflow-hidden border shadow-sm">
+          <Card className="rounded-xl overflow-hidden border shadow-sm min-h-[480px] flex flex-col">
             <CardHeader className="border-b bg-card/50 flex flex-row items-center justify-between py-4">
               <CardTitle className="text-lg font-bold">
                 Upcoming Appointments
@@ -205,7 +205,7 @@ export function DashboardClientTanstack({
                 </Link>
               )}
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1 flex flex-col">
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>

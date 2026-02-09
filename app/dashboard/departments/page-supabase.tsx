@@ -48,6 +48,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAllDepartments, useAllDoctors } from "@/hooks/use-hospital-queries";
 
@@ -147,12 +155,11 @@ export default function DepartmentsPageSupabase() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(
-    null
+    null,
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(
-    null
-  );
+  const [deletingDepartment, setDeletingDepartment] =
+    useState<Department | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [formData, setFormData] = useState<DepartmentCreateInput>({
@@ -166,6 +173,22 @@ export default function DepartmentsPageSupabase() {
     require_review: true,
     auto_confirm_staff_bookings: false,
   });
+
+  // Auto-calculate slots_per_day based on working hours and slot duration
+  const calculatedSlotsPerDay = useMemo(() => {
+    const { start, end } = formData.working_hours;
+    const duration = formData.slot_duration_minutes;
+
+    const startParts = start.split(":");
+    const endParts = end.split(":");
+    const startMinutes =
+      parseInt(startParts[0]) * 60 + parseInt(startParts[1] || "0");
+    const endMinutes =
+      parseInt(endParts[0]) * 60 + parseInt(endParts[1] || "0");
+    const totalMinutes = endMinutes - startMinutes;
+
+    return Math.floor(totalMinutes / duration);
+  }, [formData.working_hours, formData.slot_duration_minutes]);
 
   const departmentsQuery = useAllDepartments();
   const doctorsQuery = useAllDoctors();
@@ -229,7 +252,10 @@ export default function DepartmentsPageSupabase() {
       toast.error("Department name is required");
       return;
     }
-    createMutation.mutate(formData);
+    createMutation.mutate({
+      ...formData,
+      slots_per_day: calculatedSlotsPerDay,
+    });
   };
 
   const handleEditDepartment = async () => {
@@ -239,7 +265,13 @@ export default function DepartmentsPageSupabase() {
       return;
     }
 
-    updateMutation.mutate({ id: editingDepartment.id, input: formData });
+    updateMutation.mutate({
+      id: editingDepartment.id,
+      input: {
+        ...formData,
+        slots_per_day: calculatedSlotsPerDay,
+      },
+    });
   };
 
   const handleDeleteDepartment = async () => {
@@ -265,7 +297,8 @@ export default function DepartmentsPageSupabase() {
       color: department.color,
       slot_duration_minutes: department.slot_duration_minutes ?? 30,
       require_review: department.require_review ?? true,
-      auto_confirm_staff_bookings: department.auto_confirm_staff_bookings ?? false,
+      auto_confirm_staff_bookings:
+        department.auto_confirm_staff_bookings ?? false,
     });
     setIsEditDialogOpen(true);
   };
@@ -303,7 +336,7 @@ export default function DepartmentsPageSupabase() {
     const [hours, minutes] = time.split(":");
     const h = parseInt(hours, 10);
     const suffix = h >= 12 ? "PM" : "AM";
-    const h12 = (h % 12) || 12;
+    const h12 = h % 12 || 12;
     return `${h12}:${minutes} ${suffix}`;
   };
 
@@ -356,7 +389,7 @@ export default function DepartmentsPageSupabase() {
                   <TableHead>Status</TableHead>
                   <TableHead>Schedule</TableHead>
                   <TableHead>Capacity</TableHead>
-                  <TableHead>Staff</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -371,110 +404,142 @@ export default function DepartmentsPageSupabase() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredDepartments?.map((dept, index) => (
-                    <TableRow key={dept.id}>
-                      <TableCell className="font-medium text-muted-foreground">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-4 h-4 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: dept.color }}
-                          />
-                          <div>
-                            <div className="font-medium">{dept.name}</div>
-                            {dept.description && (
-                              <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                {dept.description}
+                  filteredDepartments?.map((dept, index) => {
+                    // Calculate slots for display
+                    const startParts = dept.working_hours.start.split(":");
+                    const endParts = dept.working_hours.end.split(":");
+                    const startMinutes =
+                      parseInt(startParts[0]) * 60 +
+                      parseInt(startParts[1] || "0");
+                    const endMinutes =
+                      parseInt(endParts[0]) * 60 + parseInt(endParts[1] || "0");
+                    const totalMinutes = endMinutes - startMinutes;
+                    const calculatedSlots = Math.floor(
+                      totalMinutes / (dept.slot_duration_minutes || 30),
+                    );
+
+                    return (
+                      <TableRow
+                        key={dept.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => openEditDialog(dept)}
+                      >
+                        <TableCell className="font-medium text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-4 h-4 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: dept.color }}
+                            />
+                            <div>
+                              <div className="font-medium">{dept.name}</div>
+                              {dept.description && (
+                                <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                  {dept.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={dept.is_active ? "default" : "secondary"}
+                            className={
+                              dept.is_active
+                                ? "bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-100/80 border-gray-200"
+                            }
+                          >
+                            {dept.is_active ? (
+                              <div className="flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> Active
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <XCircle className="h-3 w-3" /> Inactive
                               </div>
                             )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>
+                              {formatTime(dept.working_hours.start)} -{" "}
+                              {formatTime(dept.working_hours.end)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {dept.working_days.length} days / week
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={dept.is_active ? "default" : "secondary"}
-                          className={
-                            dept.is_active
-                              ? "bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-100/80 border-gray-200"
-                          }
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium">
+                              {calculatedSlots}
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              slots/day
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium">
+                              {dept.slot_duration_minutes || 30}
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              mins
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className="text-right"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {dept.is_active ? (
-                            <div className="flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3" /> Active
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <XCircle className="h-3 w-3" /> Inactive
-                            </div>
-                          )}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>
-                            {formatTime(dept.working_hours.start)} -{" "}
-                            {formatTime(dept.working_hours.end)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {dept.working_days.length} days / week
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <span className="font-medium">{dept.slots_per_day}</span>
-                          <span className="text-muted-foreground text-xs">
-                            slots/day
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <span className="font-medium">{getDoctorCount(dept.id)}</span>
-                          <span className="text-muted-foreground text-xs">doctors</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => openEditDialog(dept)}>
-                              <Edit className="mr-2 h-4 w-4" /> Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleToggleActive(dept)}>
-                              {dept.is_active ? (
-                                <>
-                                  <XCircle className="mr-2 h-4 w-4 text-yellow-600" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-600 focus:text-red-600"
-                              onClick={() => openDeleteDialog(dept)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem
+                                onClick={() => openEditDialog(dept)}
+                              >
+                                <Edit className="mr-2 h-4 w-4" /> Edit Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleToggleActive(dept)}
+                              >
+                                {dept.is_active ? (
+                                  <>
+                                    <XCircle className="mr-2 h-4 w-4 text-yellow-600" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+                                    Activate
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onClick={() => openDeleteDialog(dept)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -484,53 +549,62 @@ export default function DepartmentsPageSupabase() {
 
       {/* Add Department Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add New Department</DialogTitle>
             <DialogDescription>
-              Create a new department with working schedule and configuration
+              Configure the new department's schedule and details
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="name">Department Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Cardiology"
-              />
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-span-3">
+                <Label htmlFor="name" className="text-xs">
+                  Name *
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="e.g., Cardiology"
+                  className="h-8 mt-1"
+                />
+              </div>
+              <div className="col-span-1">
+                <Label className="text-xs">Color</Label>
+                <Select
+                  value={formData.color}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, color: value })
+                  }
+                >
+                  <SelectTrigger className="h-8 mt-1 w-full">
+                    <SelectValue placeholder="Select color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENT_COLORS.map((color) => (
+                      <SelectItem key={color} value={color}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full border"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="font-mono text-xs">{color}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Brief description of the department"
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label htmlFor="slots">Slots per Day *</Label>
-              <Input
-                id="slots"
-                type="number"
-                min="1"
-                value={formData.slots_per_day}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    slots_per_day: parseInt(e.target.value) || 20,
-                  })
-                }
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label htmlFor="start-time">Start Time *</Label>
+                <Label htmlFor="start-time" className="text-xs">
+                  Start Time
+                </Label>
                 <Input
                   id="start-time"
                   type="time"
@@ -544,10 +618,13 @@ export default function DepartmentsPageSupabase() {
                       },
                     })
                   }
+                  className="h-8 mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="end-time">End Time *</Label>
+                <Label htmlFor="end-time" className="text-xs">
+                  End Time
+                </Label>
                 <Input
                   id="end-time"
                   type="time"
@@ -561,103 +638,135 @@ export default function DepartmentsPageSupabase() {
                       },
                     })
                   }
+                  className="h-8 mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="slot-duration" className="text-xs">
+                  Duration (min)
+                </Label>
+                <Input
+                  id="slot-duration"
+                  type="number"
+                  min="5"
+                  max="120"
+                  value={formData.slot_duration_minutes}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      slot_duration_minutes: parseInt(e.target.value) || 30,
+                    })
+                  }
+                  className="h-8 mt-1"
                 />
               </div>
             </div>
+
+            {/* Compact Calculated Info */}
+            <div className="flex items-center justify-between bg-muted/40 p-2 rounded text-xs border">
+              <div className="flex gap-2">
+                <span>
+                  Capacity:{" "}
+                  <span className="font-semibold">{calculatedSlotsPerDay}</span>{" "}
+                  slots/day
+                </span>
+              </div>
+              <span className="text-muted-foreground">
+                {formData.working_days.length} days/week
+              </span>
+            </div>
+
             <div>
-              <Label>Working Days *</Label>
-              <div className="grid grid-cols-4 gap-2 mt-2">
+              <Label className="text-xs mb-1.5 block">Working Days</Label>
+              <div className="flex justify-between gap-1">
                 {DAYS_OF_WEEK.map((day) => (
                   <label
                     key={day.id}
-                    className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-accent"
+                    className={`flex items-center justify-center w-8 h-8 rounded-md border cursor-pointer transition-colors text-[10px] font-medium uppercase ${
+                      formData.working_days.includes(day.id)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "hover:bg-muted"
+                    }`}
                   >
                     <input
                       type="checkbox"
                       checked={formData.working_days.includes(day.id)}
                       onChange={() => handleWorkingDayToggle(day.id)}
-                      className="rounded"
+                      className="hidden"
                     />
-                    <span className="text-sm">{day.label}</span>
+                    {day.label.slice(0, 1)}
                   </label>
                 ))}
               </div>
             </div>
+
             <div>
-              <Label>Department Color</Label>
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {DEPARTMENT_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`w-8 h-8 rounded-full border-2 transition-transform ${
-                      formData.color === color
-                        ? "border-black scale-110"
-                        : "border-transparent hover:scale-105"
-                    }`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setFormData({ ...formData, color })}
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="slot-duration">Slot Duration (minutes) *</Label>
-              <Input
-                id="slot-duration"
-                type="number"
-                min="5"
-                max="120"
-                value={formData.slot_duration_minutes}
+              <Label htmlFor="description" className="text-xs">
+                Description
+              </Label>
+              <Textarea
+                id="description"
+                value={formData.description || ""}
                 onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    slot_duration_minutes: parseInt(e.target.value) || 30,
-                  })
+                  setFormData({ ...formData, description: e.target.value })
                 }
+                placeholder="Brief description"
+                rows={2}
+                className="min-h-[50px] mt-1 text-sm resize-none"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Duration of each appointment slot (5-120 minutes)
-              </p>
             </div>
-            <div className="space-y-4 border rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="require-review">Require Review</Label>
-                  <p className="text-xs text-muted-foreground">
-                    New bookings need reviewer approval before confirmation
-                  </p>
-                </div>
+
+            <div className="flex items-center gap-4 pt-1">
+              <div className="flex items-center space-x-2">
                 <Switch
                   id="require-review"
                   checked={formData.require_review}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, require_review: checked })
                   }
+                  className="scale-75 origin-left"
                 />
+                <Label
+                  htmlFor="require-review"
+                  className="text-xs cursor-pointer"
+                >
+                  Require Review
+                </Label>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="auto-confirm-staff">Auto-confirm Staff Bookings</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Bookings made by staff skip review process
-                  </p>
-                </div>
+              <div className="flex items-center space-x-2">
                 <Switch
                   id="auto-confirm-staff"
                   checked={formData.auto_confirm_staff_bookings}
                   onCheckedChange={(checked) =>
-                    setFormData({ ...formData, auto_confirm_staff_bookings: checked })
+                    setFormData({
+                      ...formData,
+                      auto_confirm_staff_bookings: checked,
+                    })
                   }
+                  className="scale-75 origin-left"
                 />
+                <Label
+                  htmlFor="auto-confirm-staff"
+                  className="text-xs cursor-pointer"
+                >
+                  Auto-confirm Staff
+                </Label>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleAddDepartment} disabled={createMutation.isPending}>
+            <Button
+              size="sm"
+              onClick={handleAddDepartment}
+              disabled={createMutation.isPending}
+            >
               Create Department
             </Button>
           </DialogFooter>
@@ -673,48 +782,56 @@ export default function DepartmentsPageSupabase() {
               Update department details and configuration
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2">
-              <Label htmlFor="edit-name">Department Name *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="mt-1"
-              />
-            </div>
-            <div className="col-span-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                rows={2}
-                className="mt-1 min-h-[60px]"
-              />
-            </div>
-            <div className="col-span-2">
-              <Label htmlFor="edit-slots">Slots per Day *</Label>
-              <Input
-                id="edit-slots"
-                type="number"
-                min="1"
-                value={formData.slots_per_day}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    slots_per_day: parseInt(e.target.value) || 20,
-                  })
-                }
-                className="mt-1"
-              />
-            </div>
-            <div className="col-span-2">
-              <Label>Working Hours *</Label>
-              <div className="flex items-center gap-2 mt-1">
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-span-3">
+                <Label htmlFor="edit-name" className="text-xs">
+                  Name *
+                </Label>
                 <Input
+                  id="edit-name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="h-8 mt-1"
+                />
+              </div>
+              <div className="col-span-1">
+                <Label className="text-xs">Color</Label>
+                <Select
+                  value={formData.color}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, color: value })
+                  }
+                >
+                  <SelectTrigger className="h-8 mt-1 w-full">
+                    <SelectValue placeholder="Select color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENT_COLORS.map((color) => (
+                      <SelectItem key={color} value={color}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full border"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="font-mono text-xs">{color}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="edit-start" className="text-xs">
+                  Start Time
+                </Label>
+                <Input
+                  id="edit-start"
                   type="time"
                   value={formData.working_hours.start}
                   onChange={(e) =>
@@ -726,10 +843,15 @@ export default function DepartmentsPageSupabase() {
                       },
                     })
                   }
-                  className="flex-1"
+                  className="h-8 mt-1"
                 />
-                <span className="text-muted-foreground">-</span>
+              </div>
+              <div>
+                <Label htmlFor="edit-end" className="text-xs">
+                  End Time
+                </Label>
                 <Input
+                  id="edit-end"
                   type="time"
                   value={formData.working_hours.end}
                   onChange={(e) =>
@@ -741,17 +863,51 @@ export default function DepartmentsPageSupabase() {
                       },
                     })
                   }
-                  className="flex-1"
+                  className="h-8 mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-duration" className="text-xs">
+                  Duration (min)
+                </Label>
+                <Input
+                  id="edit-duration"
+                  type="number"
+                  min="5"
+                  max="120"
+                  value={formData.slot_duration_minutes}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      slot_duration_minutes: parseInt(e.target.value) || 30,
+                    })
+                  }
+                  className="h-8 mt-1"
                 />
               </div>
             </div>
-            <div className="col-span-2">
-              <Label>Working Days *</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
+
+            {/* Compact Calculated Info */}
+            <div className="flex items-center justify-between bg-muted/40 p-2 rounded text-xs border">
+              <div className="flex gap-2">
+                <span>
+                  Capacity:{" "}
+                  <span className="font-semibold">{calculatedSlotsPerDay}</span>{" "}
+                  slots/day
+                </span>
+              </div>
+              <span className="text-muted-foreground">
+                {formData.working_days.length} days/week
+              </span>
+            </div>
+
+            <div>
+              <Label className="text-xs mb-1.5 block">Working Days</Label>
+              <div className="flex justify-between gap-1">
                 {DAYS_OF_WEEK.map((day) => (
                   <label
                     key={day.id}
-                    className={`flex items-center justify-center w-8 h-8 rounded-full border cursor-pointer transition-colors text-xs font-medium ${
+                    className={`flex items-center justify-center w-8 h-8 rounded-md border cursor-pointer transition-colors text-[10px] font-medium uppercase ${
                       formData.working_days.includes(day.id)
                         ? "bg-primary text-primary-foreground border-primary"
                         : "hover:bg-muted"
@@ -763,84 +919,78 @@ export default function DepartmentsPageSupabase() {
                       onChange={() => handleWorkingDayToggle(day.id)}
                       className="hidden"
                     />
-                    {day.label.charAt(0)}
+                    {day.label.slice(0, 1)}
                   </label>
                 ))}
               </div>
             </div>
-            <div className="col-span-2">
-              <Label>Color</Label>
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {DEPARTMENT_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`w-6 h-6 rounded-full border-2 transition-transform ${
-                      formData.color === color
-                        ? "border-black scale-110"
-                        : "border-transparent hover:scale-105"
-                    }`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setFormData({ ...formData, color })}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="col-span-2">
-              <Label htmlFor="edit-slot-duration">Slot Duration (minutes) *</Label>
-              <Input
-                id="edit-slot-duration"
-                type="number"
-                min="5"
-                max="120"
-                value={formData.slot_duration_minutes}
+
+            <div>
+              <Label htmlFor="edit-description" className="text-xs">
+                Description
+              </Label>
+              <Textarea
+                id="edit-description"
+                value={formData.description || ""}
                 onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    slot_duration_minutes: parseInt(e.target.value) || 30,
-                  })
+                  setFormData({ ...formData, description: e.target.value })
                 }
-                className="mt-1"
+                rows={2}
+                className="min-h-[50px] mt-1 text-sm resize-none"
               />
             </div>
-            <div className="col-span-2 space-y-4 border rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="edit-require-review">Require Review</Label>
-                  <p className="text-xs text-muted-foreground">
-                    New bookings need reviewer approval
-                  </p>
-                </div>
+
+            <div className="flex items-center gap-4 pt-1">
+              <div className="flex items-center space-x-2">
                 <Switch
                   id="edit-require-review"
                   checked={formData.require_review}
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, require_review: checked })
                   }
+                  className="scale-75 origin-left"
                 />
+                <Label
+                  htmlFor="edit-require-review"
+                  className="text-xs cursor-pointer"
+                >
+                  Require Review
+                </Label>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="edit-auto-confirm-staff">Auto-confirm Staff Bookings</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Staff bookings skip review
-                  </p>
-                </div>
+              <div className="flex items-center space-x-2">
                 <Switch
                   id="edit-auto-confirm-staff"
                   checked={formData.auto_confirm_staff_bookings}
                   onCheckedChange={(checked) =>
-                    setFormData({ ...formData, auto_confirm_staff_bookings: checked })
+                    setFormData({
+                      ...formData,
+                      auto_confirm_staff_bookings: checked,
+                    })
                   }
+                  className="scale-75 origin-left"
                 />
+                <Label
+                  htmlFor="edit-auto-confirm-staff"
+                  className="text-xs cursor-pointer"
+                >
+                  Auto-confirm Staff
+                </Label>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleEditDepartment} disabled={updateMutation.isPending}>
+            <Button
+              size="sm"
+              onClick={handleEditDepartment}
+              disabled={updateMutation.isPending}
+            >
               Update Department
             </Button>
           </DialogFooter>
@@ -859,7 +1009,10 @@ export default function DepartmentsPageSupabase() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button

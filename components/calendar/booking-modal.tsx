@@ -253,36 +253,36 @@ export function BookingModal({
         duration: 5000,
       });
 
-      // Schedule local reminders for the new appointment
-      try {
-        const slotInfo = department.working_hours
-          ? getSlotTimeInfo(
-              department.working_hours,
-              selectedSlot,
-              department.slot_duration_minutes || 30
-            )
-          : null;
+      // Schedule local reminders for the new appointment (run async, don't block)
+      const slotInfo = department.working_hours
+        ? getSlotTimeInfo(
+            department.working_hours,
+            selectedSlot,
+            department.slot_duration_minutes || 30
+          )
+        : null;
 
-        const appointmentDateTime = `${selectedDate.toISOString().split("T")[0]}T${slotInfo?.startTime || "00:00:00"}`;
-        const reminderSchedules = buildReminderSchedule(appointmentDateTime);
-
-        const localReminders = reminderSchedules.map(({ scheduledAt, offsetMinutes }) => ({
-          appointmentId: data.data.id,
-          title: "Appointment Reminder",
-          body: `Your appointment at ${department.name} is in ${offsetMinutes / 60} hour${offsetMinutes === 60 ? "" : "s"}`,
-          scheduledAt,
-        }));
-
-        await scheduleMultipleLocalReminders(localReminders);
-      } catch (reminderErr) {
-        console.error("Failed to schedule local reminders:", reminderErr);
-        // Don't fail the booking flow if reminder scheduling fails
-      }
+      const appointmentDateTime = `${selectedDate.toISOString().split("T")[0]}T${slotInfo?.startTime || "00:00:00"}`;
+      
+      // Run reminder scheduling in background
+      buildReminderSchedule(appointmentDateTime)
+        .then(reminderSchedules => {
+          const localReminders = reminderSchedules.map(({ scheduledAt, offsetMinutes }) => ({
+            appointmentId: data.data.id,
+            title: "Appointment Reminder",
+            body: `Your appointment at ${department.name} is in ${offsetMinutes / 60} hour${offsetMinutes === 60 ? "" : "s"}`,
+            scheduledAt,
+          }));
+          return scheduleMultipleLocalReminders(localReminders);
+        })
+        .catch(reminderErr => {
+          console.error("Failed to schedule local reminders:", reminderErr);
+        });
 
       // Call the callback to refresh appointments list
       onAppointmentBooked();
 
-      // Close modal
+      // Close modal immediately
       onClose();
     } catch (err) {
       const errorMessage =
