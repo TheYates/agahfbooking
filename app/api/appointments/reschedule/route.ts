@@ -10,6 +10,8 @@ import {
   sendRescheduleCompletedNotification,
   fetchAppointmentForNotification,
 } from "@/lib/notification-service";
+import { buildReminderSchedule } from "@/lib/reminder-utils";
+import { getUserReminderPreferences, getOffsetMinutesFromPreferences } from "@/lib/reminder-preferences-service";
 
 export async function POST(request: Request) {
   try {
@@ -212,6 +214,39 @@ export async function POST(request: Request) {
     } catch (notificationError) {
       console.error("Failed to send reschedule notification:", notificationError);
       // Don't fail the reschedule if notification fails
+    }
+
+    // Delete old reminders and create new ones for the rescheduled appointment
+    try {
+      await supabase
+        .from("push_reminders")
+        .delete()
+        .eq("appointment_id", originalAppointment.id);
+
+      const userPreferences = await getUserReminderPreferences(originalAppointment.client_id);
+      
+      if (userPreferences.enabled) {
+        const offsetMinutes = getOffsetMinutesFromPreferences(userPreferences);
+        
+        // Extract just the date part if newDate contains time
+        const dateOnly = newDate.split('T')[0];
+        const appointmentDateTime = `${dateOnly}T${slotTimes.startTime || "00:00:00"}`;
+        const reminderSchedules = buildReminderSchedule(appointmentDateTime, offsetMinutes);
+
+        for (const { scheduledAt, offsetMinutes } of reminderSchedules) {
+          await supabase.from("push_reminders").insert({
+            appointment_id: newAppointment.id,
+            user_id: originalAppointment.client_id,
+            title: "Appointment Reminder",
+            body: `Your appointment is in ${offsetMinutes / 60} hour${offsetMinutes === 60 ? "" : "s"}`,
+            scheduled_time: scheduledAt.toISOString(),
+            status: "scheduled",
+          });
+        }
+      }
+    } catch (reminderError) {
+      console.error("Failed to update reminders:", reminderError);
+      // Don't fail the reschedule if reminder update fails
     }
 
     return NextResponse.json({

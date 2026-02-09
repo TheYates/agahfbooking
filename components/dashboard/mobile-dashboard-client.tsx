@@ -13,6 +13,7 @@ import {
   Baby,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types";
 import {
@@ -329,8 +330,22 @@ export function MobileDashboardClient({
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="flex flex-col gap-4 px-1">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-6 rounded-3xl border bg-card space-y-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-12 w-12 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-48" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-9 flex-1 rounded-xl" />
+                  <Skeleton className="h-9 flex-1 rounded-xl" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="text-center py-8 text-destructive">

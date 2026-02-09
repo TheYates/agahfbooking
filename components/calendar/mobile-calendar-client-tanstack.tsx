@@ -22,13 +22,27 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription as DialogDescriptionText,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 // 🚀 Import TanStack Query hooks
 import {
   useCalendarData,
 } from "@/hooks/use-hospital-queries";
+import { useAppointmentReminders } from "@/hooks/use-appointment-reminders";
 
 interface MobileCalendarClientTanstackProps {
   user: User;
@@ -46,6 +60,11 @@ export function MobileCalendarClientTanstack({
   const [view, setView] = useState<"month" | "week">("month");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [filter, setFilter] = useState<"all" | "my" | "department">("all");
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  const [confirmNotes, setConfirmNotes] = useState("");
+  const [rescheduleReason, setRescheduleReason] = useState("");
 
   // Get booking function from context
   let openBooking: ((departmentId?: number) => void) | undefined;
@@ -63,7 +82,63 @@ export function MobileCalendarClientTanstack({
     isLoading: loading,
     error,
     isRefetching,
+    refetch,
   } = useCalendarData(userRole, currentUserId || user.id, view, currentDate);
+
+  const queryClient = useQueryClient();
+
+  // Schedule local reminders for upcoming appointments
+  useAppointmentReminders(appointments, user.id);
+
+  const confirmMutation = useMutation({
+    mutationFn: async ({ appointmentId, notes }: { appointmentId: number; notes?: string }) => {
+      const response = await fetch("/api/appointments/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, notes }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to confirm appointment");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
+      refetch();
+      setConfirmDialogOpen(false);
+      setSelectedAppointment(null);
+      setConfirmNotes("");
+      toast.success("Appointment confirmed successfully!");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to confirm appointment");
+    },
+  });
+
+  const rescheduleMutation = useMutation({
+    mutationFn: async ({ appointmentId, reason }: { appointmentId: number; reason: string }) => {
+      const response = await fetch("/api/appointments/review", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, reason }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Failed to request reschedule");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar"] });
+      refetch();
+      setRescheduleDialogOpen(false);
+      setSelectedAppointment(null);
+      setRescheduleReason("");
+      toast.success("Reschedule request sent");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to request reschedule");
+    },
+  });
 
   // Calendar navigation
   const navigateMonth = (direction: "prev" | "next") => {
@@ -467,6 +542,34 @@ export function MobileCalendarClientTanstack({
                             {appointment.notes}
                           </p>
                         )}
+
+                        {userRole === "reviewer" && appointment.status === "pending_review" && (
+                          <div className="mt-4 flex flex-col gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setConfirmNotes("");
+                                setConfirmDialogOpen(true);
+                              }}
+                              disabled={confirmMutation.isPending || rescheduleMutation.isPending}
+                            >
+                              Confirm Appointment
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setRescheduleReason("");
+                                setRescheduleDialogOpen(true);
+                              }}
+                              disabled={confirmMutation.isPending || rescheduleMutation.isPending}
+                            >
+                              Request Reschedule
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -569,8 +672,24 @@ export function MobileCalendarClientTanstack({
 
       {/* Loading State */}
       {loading && appointments.length === 0 ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="space-y-4">
+          {/* Calendar skeleton */}
+          <div className="bg-card rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between mb-4">
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-8 w-24" />
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full rounded-lg" />
+              ))}
+            </div>
+          </div>
+          {/* Selected date skeleton */}
+          <div className="bg-card rounded-xl p-4 space-y-3">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-20 w-full rounded-lg" />
+          </div>
         </div>
       ) : (
         <>
@@ -581,6 +700,91 @@ export function MobileCalendarClientTanstack({
           {renderSelectedDateAppointments()}
         </>
       )}
+
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <DialogContent className="w-[90vw] rounded-2xl top-[40%]">
+          <DialogHeader>
+            <DialogTitle>Confirm Appointment</DialogTitle>
+            <DialogDescriptionText>
+              Are you sure you want to confirm this appointment?
+            </DialogDescriptionText>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="mb-2 block">Notes (Optional)</Label>
+            <Textarea
+              value={confirmNotes}
+              onChange={(e) => setConfirmNotes(e.target.value)}
+              placeholder="Add reviewer notes..."
+            />
+          </div>
+          <DialogFooter className="flex-row gap-2">
+            <Button
+              className="flex-1"
+              variant="outline"
+              onClick={() => setConfirmDialogOpen(false)}
+              disabled={confirmMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() =>
+                selectedAppointment &&
+                confirmMutation.mutate({
+                  appointmentId: selectedAppointment.id,
+                  notes: confirmNotes.trim() || undefined,
+                })
+              }
+              disabled={!selectedAppointment || confirmMutation.isPending}
+            >
+              {confirmMutation.isPending ? "Confirming..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent className="w-[90vw] rounded-2xl top-[40%]">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Request Reschedule</DialogTitle>
+            <DialogDescriptionText>
+              Send a request to reschedule this appointment.
+            </DialogDescriptionText>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="mb-2 block">Reason *</Label>
+            <Textarea
+              value={rescheduleReason}
+              onChange={(e) => setRescheduleReason(e.target.value)}
+              placeholder="Why is a reschedule needed?"
+            />
+          </div>
+          <DialogFooter className="flex-row gap-2">
+            <Button
+              className="flex-1"
+              variant="outline"
+              onClick={() => setRescheduleDialogOpen(false)}
+              disabled={rescheduleMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              variant="destructive"
+              onClick={() =>
+                selectedAppointment &&
+                rescheduleMutation.mutate({
+                  appointmentId: selectedAppointment.id,
+                  reason: rescheduleReason.trim(),
+                })
+              }
+              disabled={!selectedAppointment || !rescheduleReason.trim() || rescheduleMutation.isPending}
+            >
+              {rescheduleMutation.isPending ? "Sending..." : "Send Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

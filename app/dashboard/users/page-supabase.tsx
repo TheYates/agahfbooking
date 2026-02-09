@@ -231,19 +231,10 @@ export default function UsersPage() {
   const handleDeleteUser = async () => {
     if (!deletingUser) return;
 
-    console.log(
-      `DEBUG: deleteWithAppointments state: ${deleteWithAppointments}`
-    );
-    console.log(`DEBUG: deletingUser:`, deletingUser);
-
     try {
       const url = deleteWithAppointments
         ? `/api/users/${deletingUser.id}?cascade=true`
         : `/api/users/${deletingUser.id}`;
-
-      console.log(
-        `Deleting user with URL: ${url}, deleteWithAppointments: ${deleteWithAppointments}`
-      );
 
       const response = await fetch(url, {
         method: "DELETE",
@@ -680,7 +671,6 @@ export default function UsersPage() {
                     id="delete-appointments"
                     checked={deleteWithAppointments}
                     onCheckedChange={(checked) => {
-                      console.log(`DEBUG: Checkbox changed to: ${checked}`);
                       setDeleteWithAppointments(checked as boolean);
                     }}
                   />

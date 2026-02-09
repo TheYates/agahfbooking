@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     Users,
     Calendar,
@@ -300,7 +301,29 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                 </CardHeader>
                 <CardContent>
                     {loading ? (
-                        <div className="p-8 text-center text-muted-foreground">Loading schedule...</div>
+                        <div className="space-y-3 p-4">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="grid grid-cols-12 gap-4 items-center p-4 border-b">
+                                    <div className="col-span-2">
+                                        <Skeleton className="h-4 w-16" />
+                                    </div>
+                                    <div className="col-span-4 space-y-2">
+                                        <Skeleton className="h-4 w-32" />
+                                        <Skeleton className="h-3 w-24" />
+                                    </div>
+                                    <div className="col-span-3 space-y-2">
+                                        <Skeleton className="h-4 w-28" />
+                                        <Skeleton className="h-3 w-20" />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <Skeleton className="h-6 w-20 rounded-full" />
+                                    </div>
+                                    <div className="col-span-1 text-right">
+                                        <Skeleton className="h-8 w-8 rounded" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     ) : currentStats.recentAppointments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
                             <Calendar className="h-12 w-12 mb-4 opacity-20" />

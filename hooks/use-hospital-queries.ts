@@ -110,6 +110,9 @@ export interface DesktopAppointment {
   notes?: string
   phone: string
   category: string
+  bookedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
 }
 
 interface PaginatedDesktopAppointments {
@@ -692,8 +695,8 @@ export const useDashboardStats = (clientId: number | undefined, enabled: boolean
   useSupabaseRealtime({
     table: 'appointments',
     filter: clientId ? `client_id=eq.${clientId}` : undefined,
-    queryKey: queryKeys.dashboardStats.byClient(clientId!),
-    enabled: enabled && !!clientId,
+    queryKey: queryKeys.dashboardStats.byClient(clientId!) as unknown as any[],
+    enabled: !!clientId,
     debug: true,
   })
 
@@ -718,28 +721,28 @@ export const useStaffDashboardStats = (enabled: boolean = true) => {
 async function fetchReviewerDashboardStats() {
   const response = await fetch('/api/appointments/review?limit=1000')
   const data = await response.json()
-  
+
   if (!data.success) {
     throw new Error(data.error || 'Failed to fetch reviewer stats')
   }
-  
+
   const appointments = data.data || []
-  
+
   // Calculate stats
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
+
   const todayAppointments = appointments.filter((apt: any) => {
     const aptDate = new Date(apt.appointment_date)
     aptDate.setHours(0, 0, 0, 0)
     return aptDate.getTime() === today.getTime()
   })
-  
+
   const upcomingAppointments = appointments.filter((apt: any) => {
     const aptDate = new Date(apt.appointment_date)
     return aptDate >= today
   })
-  
+
   return {
     upcomingAppointments: upcomingAppointments.length,
     totalAppointments: appointments.length,
@@ -819,7 +822,7 @@ export const useClientAppointmentsPaginated = (
   useSupabaseRealtime({
     table: 'appointments',
     filter: clientId ? `client_id=eq.${clientId}` : undefined,
-    queryKey: queryKeys.appointments.byClientPaginated(clientId!, page, limit),
+    queryKey: queryKeys.appointments.byClientPaginated(clientId!, page, limit) as unknown as any[],
     enabled: enabled && !!clientId,
     debug: true,
   })
@@ -873,14 +876,16 @@ export const useCalendarAppointments = (
     queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
     queryFn: () => fetchCalendarAppointments(userRole, userId, startDate, endDate),
     enabled: enabled && isValidUserId,
-    staleTime: 30 * 1000, // 30 seconds - calendar data changes frequently
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - keep data fresh but reduce refetches
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer for navigation
+    refetchOnWindowFocus: true, // Auto-refresh when user returns to tab
+    refetchOnMount: false, // Don't refetch if cache is still valid
   })
 
   // 🔥 Realtime: Subscribe to appointment changes using reusable hook
   useSupabaseRealtime({
     table: 'appointments',
-    queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
+    queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate) as unknown as any[],
     enabled: enabled && isValidUserId,
     debug: true,
   })
@@ -915,6 +920,8 @@ export const useCalendarData = (
   currentDate: Date,
   enabled: boolean = true
 ) => {
+  const queryClient = useQueryClient()
+
   // Calculate date range based on view
   const { startDate, endDate } = useMemo(() => {
     if (view === 'month') {
@@ -939,6 +946,59 @@ export const useCalendarData = (
       return { startDate: dateStr, endDate: dateStr }
     }
   }, [view, currentDate])
+
+  // Prefetch adjacent months/weeks for instant navigation
+  useEffect(() => {
+    if (!enabled || !userId || view === 'day') return
+
+    const prefetchAdjacentPeriods = async () => {
+      if (view === 'month') {
+        // Prefetch previous month
+        const prevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+        const prevMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0)
+
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.calendar.appointments(
+            userRole,
+            userId,
+            prevMonth.toISOString().split('T')[0],
+            prevMonthEnd.toISOString().split('T')[0]
+          ),
+          queryFn: () => fetchCalendarAppointments(
+            userRole,
+            userId,
+            prevMonth.toISOString().split('T')[0],
+            prevMonthEnd.toISOString().split('T')[0]
+          ),
+          staleTime: 5 * 60 * 1000,
+        })
+
+        // Prefetch next month
+        const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+        const nextMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0)
+
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.calendar.appointments(
+            userRole,
+            userId,
+            nextMonth.toISOString().split('T')[0],
+            nextMonthEnd.toISOString().split('T')[0]
+          ),
+          queryFn: () => fetchCalendarAppointments(
+            userRole,
+            userId,
+            nextMonth.toISOString().split('T')[0],
+            nextMonthEnd.toISOString().split('T')[0]
+          ),
+          staleTime: 5 * 60 * 1000,
+        })
+      }
+    }
+
+    // Prefetch after a small delay to not block initial render
+    const timer = setTimeout(prefetchAdjacentPeriods, 500)
+    return () => clearTimeout(timer)
+  }, [view, currentDate, userRole, userId, enabled, queryClient])
 
   // Fetch departments (cached)
   const departmentsQuery = useDepartments()
@@ -1320,8 +1380,11 @@ interface AppointmentDetailed {
   status: string
   statusColor: string
   notes?: string
-  phone: string
   category: string
+  phone: string
+  bookedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
 }
 
 interface AppointmentsListQueryParams {

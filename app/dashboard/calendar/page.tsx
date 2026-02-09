@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 
-// Calendar now uses Supabase/API backend
-import { CalendarView } from "@/components/calendar/calendar-view";
+// Calendar now uses TanStack Query with optimized caching
+import { CalendarViewTanstack as CalendarView } from "@/components/calendar/calendar-view-tanstack";
 import { MobileCalendarClientTanstack as MobileCalendarClient } from "@/components/calendar/mobile-calendar-client-tanstack";
 
 export default async function CalendarPage() {
@@ -9,7 +9,7 @@ export default async function CalendarPage() {
 
   return (
     <>
-      {/* Desktop View - Convex Optimized */}
+      {/* Desktop View - TanStack Optimized */}
       <div className="hidden md:block space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Calendar</h1>

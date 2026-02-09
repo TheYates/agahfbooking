@@ -35,9 +35,8 @@ export async function GET(request: Request) {
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
     const offset = (page - 1) * limit;
 
-    const cacheKey = `appointments_list_${search || "all"}_${status || "all"}_${
-      dateFilter || "all"
-    }_${page}_${limit}`;
+    const cacheKey = `appointments_list_${search || "all"}_${status || "all"}_${dateFilter || "all"
+      }_${page}_${limit}`;
 
     const appointmentsData = await MemoryCache.get(
       cacheKey,
@@ -54,7 +53,7 @@ export async function GET(request: Request) {
           // Determine date range based on dateFilter
           let dateFrom = null;
           let dateTo = null;
-          
+
           if (dateFilter && dateFilter !== "all") {
             switch (dateFilter) {
               case "today":
@@ -91,7 +90,7 @@ export async function GET(request: Request) {
           let query = supabase
             .from("appointments")
             .select(
-              "id,client_id,department_id,appointment_date,slot_number,slot_start_time,slot_end_time,status,notes,created_at,clients(name,x_number,phone,category),departments(name)",
+              "id,client_id,department_id,appointment_date,slot_number,slot_start_time,slot_end_time,status,notes,created_at,reviewed_by,reviewed_at,clients(name,x_number,phone,category),departments(name),reviewer:users!reviewed_by(name)",
               { count: "exact" }
             )
             .order("appointment_date", { ascending: false })
@@ -118,8 +117,11 @@ export async function GET(request: Request) {
           query = query.range(offset, offset + limit - 1);
 
           const result = await query;
-          if (result.error) throw new Error(result.error.message);
-          
+          if (result.error) {
+            console.error("❌ Supabase query error:", result.error);
+            throw new Error(result.error.message || JSON.stringify(result.error));
+          }
+
           data = result.data;
           count = result.count;
         }
@@ -133,7 +135,7 @@ export async function GET(request: Request) {
         const appointments = (data || []).map((row: any) => {
           // Handle both RPC response (flat structure) and regular query (nested structure)
           const isRpcResponse = 'client_name' in row;
-          
+
           return {
             id: row.id,
             clientId: row.client_id,
@@ -152,6 +154,9 @@ export async function GET(request: Request) {
             notes: row.notes,
             phone: isRpcResponse ? row.client_phone : (row.clients?.phone || ""),
             category: isRpcResponse ? row.client_category : (row.clients?.category || ""),
+            bookedAt: row.created_at,
+            reviewedBy: isRpcResponse ? null : (row.reviewer?.name || null),
+            reviewedAt: row.reviewed_at,
           };
         });
 

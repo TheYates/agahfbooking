@@ -13,19 +13,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Settings, Shield } from "lucide-react";
+import { Calendar, Settings, Shield, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 import { CalendarConfigurationTab } from "@/components/settings/calendar-configuration-tab";
 import { AntiAbuseManagementTab } from "@/components/settings/anti-abuse-management-tab";
+import { ReminderPreferencesTab } from "@/components/settings/reminder-preferences-tab";
 import {
   useSystemSettings,
   useUpdateSystemSettings,
 } from "@/hooks/use-hospital-queries";
+import { useSessionUser } from "@/hooks/use-session-user";
 
 export default function SettingsPageSupabase() {
   const { data: systemSettings, isLoading } = useSystemSettings(true);
   const updateSystemSettings = useUpdateSystemSettings();
+  const { user } = useSessionUser();
 
   const [form, setForm] = useState({
     maxAdvanceBookingDays: 14,
@@ -72,6 +75,10 @@ export default function SettingsPageSupabase() {
           <TabsTrigger value="calendar" className="gap-2">
             <Calendar className="h-4 w-4" />
             Calendar
+          </TabsTrigger>
+          <TabsTrigger value="reminders" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Reminders
           </TabsTrigger>
           <TabsTrigger value="antiabuse" className="gap-2">
             <Shield className="h-4 w-4" />
@@ -209,6 +216,10 @@ export default function SettingsPageSupabase() {
 
         <TabsContent value="calendar">
           <CalendarConfigurationTab />
+        </TabsContent>
+
+        <TabsContent value="reminders">
+          {user && <ReminderPreferencesTab userId={user.id} />}
         </TabsContent>
 
         <TabsContent value="antiabuse">

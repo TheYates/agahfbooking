@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Calendar,
   Clock,
@@ -359,9 +360,19 @@ export function MobileAppointmentsClientTanstack({
           </CardHeader>
           <CardContent>
             {appointmentsLoading && currentPage === 1 ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <p className="ml-3 text-muted-foreground">Loading appointments...</p>
+              <div className="space-y-3 py-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="p-4 rounded-lg border bg-card space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-6 w-20" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : appointmentsError ? (
               <div className="text-center py-8 text-destructive">
@@ -393,8 +404,12 @@ export function MobileAppointmentsClientTanstack({
               <div className="space-y-3">
                 {/* Show loading indicator for page changes */}
                 {isFetching && (
-                  <div className="text-center py-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto"></div>
+                  <div className="p-4 rounded-lg border bg-card space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-6 w-20" />
+                    </div>
+                    <Skeleton className="h-4 w-48" />
                   </div>
                 )}
 

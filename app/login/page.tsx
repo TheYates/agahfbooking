@@ -168,16 +168,16 @@ export default function LoginPage() {
               >
                 {/* Header / Logo */}
                 <div className="flex flex-col items-center text-center mt-8 md:mt-0 space-y-2">
-                  <div className="mb-4 md:mb-6 rounded-2xl bg-primary/10 p-3">
+                  <div className="mb-2 md:mb-6 p-3">
                     <img
                       src="/agahflogo.svg"
                       alt="AGAHF Logo"
-                      className="h-12 w-12 md:h-10 md:w-10 object-contain dark:hidden"
+                      className="h-32 w-32 md:h-10 md:w-10 object-contain dark:hidden"
                     />
                     <img
                       src="/agahflogo white.svg"
                       alt="AGAHF Logo"
-                      className="h-12 w-12 md:h-10 md:w-10 object-contain hidden dark:block"
+                      className="h-32 w-32 md:h-10 md:w-10 object-contain hidden dark:block"
                     />
                   </div>
                   <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
@@ -309,7 +309,7 @@ export default function LoginPage() {
                   <div className="text-center">
                      <p className="text-xs text-muted-foreground">
                         Protected by secure OTP verification. <br/>
-                        <a href="#" className="hover:underline text-primary/80">Privacy Policy</a> &bull; <a href="#" className="hover:underline text-primary/80">Help Center</a>
+                        <a href="#" className="hover:underline text-green-600/80">Privacy Policy</a> &bull; <a href="#" className="hover:underline text-green-600/80">Help Center</a>
                      </p>
                   </div>
                 </div>

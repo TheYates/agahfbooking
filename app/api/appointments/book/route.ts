@@ -10,6 +10,8 @@ import {
   sendBookingConfirmation,
   fetchAppointmentForNotification,
 } from "@/lib/notification-service";
+import { buildReminderSchedule } from "@/lib/reminder-utils";
+import { getUserReminderPreferences, getOffsetMinutesFromPreferences } from "@/lib/reminder-preferences-service";
 
 export async function POST(request: Request) {
   try {
@@ -181,6 +183,44 @@ export async function POST(request: Request) {
         console.error("Failed to send booking notification:", notificationError);
         // Don't fail the booking if notification fails
       }
+    }
+
+    // Schedule push reminders based on user preferences
+    try {
+      const userPreferences = await getUserReminderPreferences(finalClientId);
+      
+      if (!userPreferences.enabled) {
+        console.log("⏭️ Reminders disabled for user", finalClientId);
+      } else {
+        const offsetMinutes = getOffsetMinutesFromPreferences(userPreferences);
+        
+        // Extract just the date part if date contains time
+        const dateOnly = date.split('T')[0];
+        const appointmentDateTime = `${dateOnly}T${slotStartTime || "00:00:00"}`;
+        console.log("📅 Scheduling reminders for:", appointmentDateTime);
+        const reminderSchedules = buildReminderSchedule(appointmentDateTime, offsetMinutes);
+        console.log("⏰ Reminder schedules:", reminderSchedules);
+
+      for (const { scheduledAt, offsetMinutes } of reminderSchedules) {
+        const { data: reminderData, error: reminderError } = await supabase.from("push_reminders").insert({
+          appointment_id: created.id,
+          user_id: finalClientId,
+          title: "Appointment Reminder",
+          body: `Your appointment is in ${offsetMinutes / 60} hour${offsetMinutes === 60 ? "" : "s"}`,
+          scheduled_time: scheduledAt.toISOString(),
+          status: "scheduled",
+        });
+        
+        if (reminderError) {
+          console.error("❌ Reminder insert error:", reminderError);
+        } else {
+          console.log("✅ Reminder created:", reminderData);
+        }
+      }
+      }
+    } catch (reminderError) {
+      console.error("Failed to schedule reminders:", reminderError);
+      // Don't fail the booking if reminder scheduling fails
     }
 
     return NextResponse.json({

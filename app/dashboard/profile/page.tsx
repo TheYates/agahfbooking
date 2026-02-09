@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   User,
   Shield,
@@ -52,28 +53,92 @@ export default function ProfilePage() {
     if (authUser) {
       setUserData(authUser);
     } else {
-      // Fallback for development/demo if not logged in
-      setUserData({
-        name: "John Doe",
-        xNumber: "X12345/67",
-        phone: "+123-456-7890",
-        category: "PRIVATE CASH",
-        role: "client",
-        address: "123 Healthcare Ave, Medical District",
-        emergencyContact: "+123-987-6543",
-        created_at: Date.now() - 1000 * 60 * 60 * 24 * 365,
-      });
+      setUserData(null);
     }
   }, [authUser]);
 
   if (!userData) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <div className="relative w-12 h-12">
-          <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className="max-w-6xl mx-auto px-1 pt-2 pb-10">
+        <div className="relative mb-8 pt-4 overflow-hidden rounded-[32px] bg-zinc-50 dark:bg-zinc-900/50 p-6 md:p-10 border border-zinc-100 dark:border-zinc-800/50">
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10">
+            <Skeleton className="h-28 w-28 md:h-32 md:w-32 rounded-full" />
+            <div className="flex flex-col items-center md:items-start text-center md:text-left w-full max-w-md space-y-3">
+              <Skeleton className="h-8 w-48" />
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                <Skeleton className="h-6 w-28" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+              <Skeleton className="h-4 w-40" />
+            </div>
+          </div>
         </div>
-        <p className="text-sm font-medium text-muted-foreground animate-pulse">Loading profile...</p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-7 space-y-8">
+            <div className="bg-card rounded-[24px] border border-black/[0.03] dark:border-white/[0.03] overflow-hidden shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
+              <div className="space-y-0">
+                {[0, 1, 2].map((index) => (
+                  <div key={`profile-skeleton-left-${index}`} className="flex items-center gap-4 px-5 py-4 border-b border-black/[0.03] dark:border-white/[0.03] last:border-0">
+                    <Skeleton className="h-11 w-11 rounded-2xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-5 w-48" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-card rounded-[24px] border border-black/[0.03] dark:border-white/[0.03] overflow-hidden shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
+              {[0, 1, 2].map((index) => (
+                <div key={`profile-skeleton-comm-${index}`} className="flex items-center gap-4 px-5 py-4 border-b border-black/[0.03] dark:border-white/[0.03] last:border-0">
+                  <Skeleton className="h-11 w-11 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-5 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 space-y-8">
+            <div className="grid grid-cols-2 gap-4">
+              {[0, 1].map((index) => (
+                <div key={`profile-skeleton-stat-${index}`} className="bg-card p-5 rounded-[28px] border border-black/[0.03] dark:border-white/[0.03] shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] space-y-3">
+                  <Skeleton className="h-10 w-10 rounded-2xl" />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-6 w-20" />
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-card rounded-[24px] border border-black/[0.03] dark:border-white/[0.03] overflow-hidden shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
+              {[0, 1].map((index) => (
+                <div key={`profile-skeleton-emergency-${index}`} className="flex items-center gap-4 px-5 py-4 border-b border-black/[0.03] dark:border-white/[0.03] last:border-0">
+                  <Skeleton className="h-11 w-11 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-5 w-40" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-card rounded-[24px] border border-black/[0.03] dark:border-white/[0.03] overflow-hidden shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
+              {[0, 1].map((index) => (
+                <div key={`profile-skeleton-notif-${index}`} className="flex items-center gap-4 px-5 py-4 border-b border-black/[0.03] dark:border-white/[0.03] last:border-0">
+                  <Skeleton className="h-9 w-9 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

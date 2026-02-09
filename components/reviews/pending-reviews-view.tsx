@@ -528,55 +528,58 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
 
       {/* Floating Batch Action Bar */}
       <AnimatePresence>
-        {selectedIds.size > 0 && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl"
-          >
-            <div className="bg-foreground text-background rounded-full px-6 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-between gap-6 border border-white/10 ring-1 ring-black/5">
-              <div className="flex items-center gap-3 font-medium cursor-default">
-                <div className="bg-background/20 text-background px-2.5 py-0.5 rounded-full text-xs font-bold">
-                  {selectedIds.size}
+        {/* Mobile-only bulk action bar - hidden on desktop */}
+        <div className="md:hidden">
+          {selectedIds.size > 0 && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-xl"
+            >
+              <div className="bg-foreground text-background rounded-full px-6 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-between gap-6 border border-white/10 ring-1 ring-black/5">
+                <div className="flex items-center gap-3 font-medium cursor-default">
+                  <div className="bg-background/20 text-background px-2.5 py-0.5 rounded-full text-xs font-bold">
+                    {selectedIds.size}
+                  </div>
+                  <span className="text-sm sm:text-base">Selected</span>
+                  <Button
+                    variant="link"
+                    className="text-background/70 hover:text-background h-auto p-0 text-xs sm:text-sm ml-2"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    Clear
+                  </Button>
                 </div>
-                <span className="text-sm sm:text-base">Selected</span>
-                <Button
-                  variant="link"
-                  className="text-background/70 hover:text-background h-auto p-0 text-xs sm:text-sm ml-2"
-                  onClick={() => setSelectedIds(new Set())}
-                >
-                  Clear
-                </Button>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-background hover:bg-background/20 hover:text-white h-9 rounded-full px-4"
-                  onClick={() => {
-                    setRejectReason("");
-                    setBatchRejectDialogOpen(true);
-                  }}
-                >
-                  Reschedule
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-background text-foreground hover:bg-background/90 h-9 rounded-full px-5 font-semibold shadow-sm"
-                  onClick={() => {
-                    setConfirmNotes("");
-                    setBatchConfirmDialogOpen(true);
-                  }}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Confirm ({selectedIds.size})
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-background hover:bg-background/20 hover:text-white h-9 rounded-full px-4"
+                    onClick={() => {
+                      setRejectReason("");
+                      setBatchRejectDialogOpen(true);
+                    }}
+                  >
+                    Reschedule
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-background text-foreground hover:bg-background/90 h-9 rounded-full px-5 font-semibold shadow-sm"
+                    onClick={() => {
+                      setConfirmNotes("");
+                      setBatchConfirmDialogOpen(true);
+                    }}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Confirm ({selectedIds.size})
+                  </Button>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </div>
       </AnimatePresence>
 
       {/* --- DIALOGS --- */}

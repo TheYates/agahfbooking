@@ -13,6 +13,7 @@ const STORES = {
   APPOINTMENTS: "appointments",
   USER_DATA: "userData",
   SYNC_QUEUE: "syncQueue",
+  REMINDERS: "reminders",
 } as const;
 
 interface AppointmentCache {
@@ -29,6 +30,15 @@ interface SyncQueueItem {
   data: any;
   createdAt: number;
   retries: number;
+}
+
+export interface LocalReminder {
+  id: string;
+  appointmentId: string | number;
+  title: string;
+  body: string;
+  scheduledAt: number;
+  createdAt: number;
 }
 
 /**
@@ -68,6 +78,15 @@ function openDB(): Promise<IDBDatabase> {
           keyPath: "id",
         });
         syncStore.createIndex("createdAt", "createdAt", { unique: false });
+      }
+
+      // Scheduled reminders store (best-effort local notifications)
+      if (!db.objectStoreNames.contains(STORES.REMINDERS)) {
+        const reminderStore = db.createObjectStore(STORES.REMINDERS, {
+          keyPath: "id",
+        });
+        reminderStore.createIndex("scheduledAt", "scheduledAt", { unique: false });
+        reminderStore.createIndex("appointmentId", "appointmentId", { unique: false });
       }
     };
   });
@@ -179,12 +198,13 @@ export async function clearAllCache(): Promise<void> {
   try {
     const db = await openDB();
     const transaction = db.transaction(
-      [STORES.APPOINTMENTS, STORES.USER_DATA],
+      [STORES.APPOINTMENTS, STORES.USER_DATA, STORES.REMINDERS],
       "readwrite"
     );
 
     transaction.objectStore(STORES.APPOINTMENTS).clear();
     transaction.objectStore(STORES.USER_DATA).clear();
+    transaction.objectStore(STORES.REMINDERS).clear();
 
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
@@ -194,6 +214,80 @@ export async function clearAllCache(): Promise<void> {
     db.close();
   } catch (error) {
     console.error("Failed to clear cache:", error);
+  }
+}
+
+export async function storeLocalReminders(reminders: LocalReminder[]): Promise<void> {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORES.REMINDERS, "readwrite");
+    const store = transaction.objectStore(STORES.REMINDERS);
+
+    for (const reminder of reminders) {
+      store.put(reminder);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+
+    db.close();
+  } catch (error) {
+    console.error("Failed to store reminders:", error);
+  }
+}
+
+export async function getLocalReminders(
+  appointmentId?: string | number
+): Promise<LocalReminder[]> {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORES.REMINDERS, "readonly");
+    const store = transaction.objectStore(STORES.REMINDERS);
+
+    const reminders = await new Promise<LocalReminder[]>((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result as LocalReminder[]);
+      request.onerror = () => reject(request.error);
+    });
+
+    db.close();
+
+    return appointmentId
+      ? reminders.filter((reminder) => reminder.appointmentId === appointmentId)
+      : reminders;
+  } catch (error) {
+    console.error("Failed to get reminders:", error);
+    return [];
+  }
+}
+
+export async function clearLocalReminders(
+  appointmentId?: string | number
+): Promise<void> {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORES.REMINDERS, "readwrite");
+    const store = transaction.objectStore(STORES.REMINDERS);
+
+    if (!appointmentId) {
+      store.clear();
+    } else {
+      const reminders = await getLocalReminders(appointmentId);
+      for (const reminder of reminders) {
+        store.delete(reminder.id);
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+
+    db.close();
+  } catch (error) {
+    console.error("Failed to clear reminders:", error);
   }
 }
 

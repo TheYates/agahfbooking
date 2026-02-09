@@ -39,6 +39,7 @@ import {
 } from "@/hooks/use-hospital-queries";
 
 import { MobileAppointmentsList } from "./mobile-appointments-list";
+import { useAppointmentReminders } from "@/hooks/use-appointment-reminders";
 import { QuickBookingDialogTanstack } from "@/components/ui/quick-booking-dialog-tanstack";
 
 interface Appointment {
@@ -87,6 +88,9 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
 
   // Extract appointments with safe default
   const appointments: Appointment[] = (appointmentsData as any)?.data || [];
+
+  // Schedule local reminders for upcoming appointments
+  useAppointmentReminders(appointments, currentUserId);
   const error = queryError?.message || "";
 
   // 🚀 TanStack Query: Simplified cancel with optimistic updates
@@ -294,10 +298,9 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
         ) : (
           <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
             {/* Header Row */}
-            <div className="grid grid-cols-[2.5fr_1.5fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[2.5fr_1.5fr_1fr_1.5fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div>Title</div>
               <div>Status</div>
-              <div>Doctor</div>
               <div>Date</div>
               <div>Actions</div>
             </div>
@@ -360,7 +363,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                       {groupAppointments.map((appointment) => (
                         <div
                           key={appointment.id}
-                          className="grid grid-cols-[2.5fr_1.5fr_1fr_1fr_1.5fr] gap-4 px-6 py-4 items-center group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                          className="grid grid-cols-[2.5fr_1.5fr_1fr_1.5fr] gap-4 px-6 py-4 items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
                         >
                           {/* Title Column */}
                           <div className="flex items-start gap-3">
@@ -484,26 +487,6 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                             })()}
                           </div>
 
-                          {/* Doctor/Recipients Column */}
-                          <div className="flex -space-x-2">
-                            {appointment.doctorName ? (
-                              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                                {appointment.doctorName
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .substring(0, 2)}
-                              </div>
-                            ) : (
-                              <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-gray-700 dark:text-gray-300">
-                                ?
-                              </div>
-                            )}
-                            <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-zinc-950 flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                              DE
-                            </div>
-                          </div>
-
                           {/* Date Column */}
                           <div className="text-sm text-zinc-500">
                             {new Date(appointment.date).toLocaleDateString(
@@ -517,7 +500,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                           </div>
 
                           {/* Actions Column */}
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-2">
                             {(appointment.status === "pending_review" ||
                               appointment.status === "reschedule_requested" ||
                               appointment.status === "booked" ||

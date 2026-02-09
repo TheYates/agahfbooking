@@ -27,6 +27,8 @@ import { Combobox } from "@/components/ui/combobox";
 import { isWorkingDay } from "@/lib/working-days-utils";
 import { getSlotTimeInfo, type WorkingHours } from "@/lib/slot-time-utils";
 import { toast } from "sonner";
+import { useLocalReminders } from "@/hooks/use-local-reminders";
+import { buildReminderSchedule } from "@/lib/reminder-utils";
 
 interface Department {
   id: number;
@@ -75,6 +77,8 @@ export function BookingModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+
+  const { scheduleMultipleLocalReminders } = useLocalReminders();
 
   // Fetch data from API
   useEffect(() => {
@@ -248,6 +252,32 @@ export function BookingModal({
         } on ${formattedDate}, ${toastSlotText}`,
         duration: 5000,
       });
+
+      // Schedule local reminders for the new appointment
+      try {
+        const slotInfo = department.working_hours
+          ? getSlotTimeInfo(
+              department.working_hours,
+              selectedSlot,
+              department.slot_duration_minutes || 30
+            )
+          : null;
+
+        const appointmentDateTime = `${selectedDate.toISOString().split("T")[0]}T${slotInfo?.startTime || "00:00:00"}`;
+        const reminderSchedules = buildReminderSchedule(appointmentDateTime);
+
+        const localReminders = reminderSchedules.map(({ scheduledAt, offsetMinutes }) => ({
+          appointmentId: data.data.id,
+          title: "Appointment Reminder",
+          body: `Your appointment at ${department.name} is in ${offsetMinutes / 60} hour${offsetMinutes === 60 ? "" : "s"}`,
+          scheduledAt,
+        }));
+
+        await scheduleMultipleLocalReminders(localReminders);
+      } catch (reminderErr) {
+        console.error("Failed to schedule local reminders:", reminderErr);
+        // Don't fail the booking flow if reminder scheduling fails
+      }
 
       // Call the callback to refresh appointments list
       onAppointmentBooked();
