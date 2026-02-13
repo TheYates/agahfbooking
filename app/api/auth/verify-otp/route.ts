@@ -2,9 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { arkeselSMS } from "@/lib/arkesel-sms";
 import { logLoginAttempt } from "@/lib/login-audit";
+import { createSession } from "@/lib/session-service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,9 +58,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
-    // Find client profile
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select("id,x_number,name,phone,category,is_active")
@@ -92,12 +92,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Client account is inactive" }, { status: 403 });
     }
 
-    // Check OTP mode - use Arkesel verification if in arkesel mode
     const otpMode = process.env.OTP_MODE || "mock";
     let otpValid = false;
 
     if (otpMode === "arkesel") {
-      // Verify OTP via Arkesel's API
       console.log(`[Arkesel] Verifying OTP for ${(client as any).phone}`);
       const verifyResult = await arkeselSMS.verifyOTPViaArkeselAPI(
         (client as any).phone,
@@ -105,10 +103,10 @@ export async function POST(request: NextRequest) {
       );
       
       if (verifyResult.isValid) {
-        console.log(`✅ OTP verified successfully via Arkesel for ${xNumber}`);
+        console.log(`OTP verified successfully via Arkesel for ${xNumber}`);
         otpValid = true;
       } else {
-        console.log(`❌ OTP verification failed via Arkesel: ${verifyResult.message}`);
+        console.log(`OTP verification failed via Arkesel: ${verifyResult.message}`);
         rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
         await logLoginAttempt({
           userType: "client",
@@ -124,7 +122,6 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // Verify OTP from database (for hubtel/mock modes)
       const { data: otpRecord, error: otpErr } = await supabase
         .from("otp_codes")
         .select("*")
@@ -152,7 +149,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Mark OTP as used
       await supabase
         .from("otp_codes")
         .update({ is_used: true })
@@ -161,15 +157,17 @@ export async function POST(request: NextRequest) {
       otpValid = true;
     }
 
-    const userData = {
-      id: (client as any).id as number,
+    const session = await createSession({
+      userId: (client as any).id as number,
+      userType: "client",
+      role: "client",
       xNumber: (client as any).x_number as string,
       name: (client as any).name as string,
       phone: (client as any).phone as string,
       category: (client as any).category as string,
-      role: "client" as const,
-      loginTime: new Date().toISOString(),
-    };
+      ipAddress: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
+    });
 
     rateLimiter.recordAttempt(clientInfo.ip, true, xNumber, clientInfo.userAgent);
 
@@ -183,7 +181,7 @@ export async function POST(request: NextRequest) {
     });
 
     const cookieStore = await cookies();
-    cookieStore.set("session_token", JSON.stringify(userData), {
+    cookieStore.set("session_id", session.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -193,7 +191,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: userData,
+      user: {
+        id: session.userId,
+        xNumber: session.xNumber,
+        name: session.name,
+        phone: session.phone,
+        category: session.category,
+        role: session.role,
+      },
       redirectUrl: "/dashboard",
     });
   } catch (error) {

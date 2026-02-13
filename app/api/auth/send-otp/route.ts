@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { hubtelSMS } from "@/lib/hubtel-sms";
 
 export async function POST(request: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     // Look up client
     const { data: client, error: clientErr } = await supabase

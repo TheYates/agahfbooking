@@ -3,42 +3,32 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { User } from "./types";
-
-// These functions work with BetterAuth by reading the session_token cookie
-// which is maintained for backward compatibility
+import { getSession, revokeSession } from "./session-service";
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
 
-    if (!sessionToken?.value) {
+    if (!sessionId) {
       return null;
     }
 
-    // Try to parse the session token
-    let userData;
-    try {
-      userData = JSON.parse(sessionToken.value);
-    } catch (parseError) {
-      console.error("Failed to parse session token:", parseError);
-      // Don't delete cookie here - let middleware handle it
+    const session = await getSession(sessionId);
+    
+    if (!session) {
       return null;
     }
 
-    // Validate user data structure
-    if (
-      !userData ||
-      typeof userData !== "object" ||
-      !userData.id ||
-      !userData.name ||
-      !userData.role
-    ) {
-      console.error("Invalid user data structure:", userData);
-      return null;
-    }
-
-    return userData as User;
+    return {
+      id: session.userId,
+      name: session.name,
+      role: session.role,
+      xNumber: session.xNumber,
+      phone: session.phone,
+      category: session.category,
+      employeeId: session.employeeId,
+    };
   } catch (error) {
     console.error("Error getting current user:", error);
     return null;
@@ -56,7 +46,7 @@ export async function requireAuth(): Promise<User> {
 export async function requireAdminAuth(): Promise<User> {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
-    redirect("/login");
+    redirect("/staff-login");
   }
   return user;
 }
@@ -64,7 +54,7 @@ export async function requireAdminAuth(): Promise<User> {
 export async function requireStaffAuth(): Promise<User> {
   const user = await getCurrentUser();
   if (!user || !["admin", "receptionist", "reviewer"].includes(user.role)) {
-    redirect("/login");
+    redirect("/staff-login");
   }
   return user;
 }
@@ -72,7 +62,7 @@ export async function requireStaffAuth(): Promise<User> {
 export async function requireReviewerAuth(): Promise<User> {
   const user = await getCurrentUser();
   if (!user || !["admin", "reviewer"].includes(user.role)) {
-    redirect("/login");
+    redirect("/staff-login");
   }
   return user;
 }
@@ -99,10 +89,16 @@ export async function redirectBasedOnRole(user: User) {
   }
 }
 
-// Server Action to clear invalid session cookies
 export async function clearInvalidSession() {
   try {
     const cookieStore = await cookies();
+    const sessionId = cookieStore.get("session_id")?.value;
+    
+    if (sessionId) {
+      await revokeSession(sessionId);
+    }
+    
+    cookieStore.delete("session_id");
     cookieStore.delete("session_token");
     return { success: true };
   } catch (error) {

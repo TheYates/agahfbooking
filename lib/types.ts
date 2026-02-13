@@ -1,11 +1,11 @@
 export interface User {
   id: number;
-  xNumber: string;
+  xNumber?: string;
   name: string;
-  phone: string | null;
+  phone?: string | null;
   email?: string;
-  category: string;
+  category?: string;
   role: "client" | "receptionist" | "admin" | "reviewer";
   username?: string;
-  employee_id?: string; // Deprecated: use username instead
+  employeeId?: string;
 }

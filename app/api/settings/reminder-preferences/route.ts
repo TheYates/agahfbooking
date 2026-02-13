@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth-server";
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const supabase = createServerClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
       .from("user_reminder_preferences")
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { enabled, remind_24h, remind_1h, remind_30m, push_enabled, sms_enabled } = body;
 
-    const supabase = createServerClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase
       .from("user_reminder_preferences")

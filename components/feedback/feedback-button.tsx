@@ -12,7 +12,7 @@ export function FeedbackButton() {
     <>
       <Button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 rounded-full shadow-lg z-50 h-14 w-14 p-0"
+        className="fixed bottom-24 right-6 md:bottom-6 rounded-full shadow-lg z-50 h-14 w-14 p-0"
         size="icon"
         title="Send Feedback"
       >

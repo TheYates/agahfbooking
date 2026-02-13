@@ -1,7 +1,7 @@
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function getUserReminderPreferences(userId: number) {
-  const supabase = createServerClient();
+  const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
     .from("user_reminder_preferences")

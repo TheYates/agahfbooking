@@ -455,8 +455,8 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         <div
-          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
-          style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
+          className="grid grid-cols-7 gap-1"
+          style={{ gridTemplateRows: "auto repeat(6, minmax(80px, auto))" }}
         >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
