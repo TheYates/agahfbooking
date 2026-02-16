@@ -191,20 +191,10 @@ export function useSupabaseRealtime(options: UseSupabaseRealtimeOptions) {
           if (debug) {
             console.log(`✅ [Realtime] ${table} subscription active`);
           }
-        } else if (status === "CHANNEL_ERROR") {
-          console.error(`❌ [Realtime] ${table} subscription error`);
-          if (showToasts) {
-            toast.error("Realtime connection failed", {
-              description: "Falling back to periodic polling.",
-            });
-          }
-        } else if (status === "TIMED_OUT") {
+} else if (status === "CHANNEL_ERROR") {
+          console.warn(`⚠️ [Realtime] ${table} subscription failed - using polling fallback`);
+} else if (status === "TIMED_OUT") {
           console.warn(`⏱️ [Realtime] ${table} subscription timed out`);
-          if (debug) {
-            toast.warning("Realtime connection timeout", {
-              description: "Attempting to reconnect...",
-            });
-          }
         }
       });
 
