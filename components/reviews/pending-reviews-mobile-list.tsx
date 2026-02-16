@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RescheduleReasonSelector } from "@/components/reschedule-reason-selector";
 
 interface PendingAppointment {
     id: number;
@@ -446,11 +447,11 @@ export function PendingReviewsMobileList({ user, className, showHeader = true }:
                         <DialogDescription>Send a request to reschedule?</DialogDescription>
                     </DialogHeader>
                     <div className="py-2">
-                        <Label className="mb-2 block">Reason *</Label>
-                        <Textarea
+                        <RescheduleReasonSelector
                             value={rejectReason}
-                            onChange={(e) => setRejectReason(e.target.value)}
+                            onChange={setRejectReason}
                             placeholder="Reason..."
+                            required
                         />
                     </div>
                     <DialogFooter className="flex-row gap-2">
@@ -494,11 +495,11 @@ export function PendingReviewsMobileList({ user, className, showHeader = true }:
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-2">
-                        <Label className="mb-2 block">Reason for all *</Label>
-                        <Textarea
+                        <RescheduleReasonSelector
                             value={rejectReason}
-                            onChange={(e) => setRejectReason(e.target.value)}
-                            placeholder="Reason..."
+                            onChange={setRejectReason}
+                            placeholder="Reason for all..."
+                            required
                         />
                     </div>
                     <DialogFooter className="flex-row gap-2">

@@ -16,7 +16,7 @@ export async function GET() {
         const supabase = await createServerSupabaseClient();
 
         // Appointment counts
-        const [todayCountRes, completedTodayRes, monthCountRes, upcomingCountRes] =
+        const [todayCountRes, completedTodayRes, monthCountRes, upcomingCountRes, activeStaffRes] =
           await Promise.all([
             supabase
               .from("appointments")
@@ -38,6 +38,10 @@ export async function GET() {
               .select("id", { count: "exact", head: true })
               .gte("appointment_date", today)
               .not("status", "in", "(cancelled,completed,no_show)"),
+            supabase
+              .from("users")
+              .select("id", { count: "exact", head: true })
+              .eq("is_active", true),
           ]);
 
         if (todayCountRes.error) throw new Error(todayCountRes.error.message);
@@ -86,6 +90,7 @@ export async function GET() {
           completedAppointments: completedTodayRes.count ?? 0,
           availableSlots: Math.max(0, totalSlots - bookedSlots),
           daysUntilNext: null,
+          activeStaffCount: activeStaffRes.count ?? 0,
           recentAppointments: (recentRes.data || []).map((row: any) => ({
             id: row.id,
             date: (row.appointment_date || "").toString().split("T")[0],

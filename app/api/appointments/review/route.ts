@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/session-service";
 import { invalidateAppointmentsListCache } from "@/lib/appointments-cache";
 import {
   sendReviewConfirmedNotification,
@@ -8,7 +9,18 @@ import {
   fetchAppointmentForNotification,
 } from "@/lib/notification-service";
 
-// GET: Fetch appointments pending review
+async function getAuthenticatedUser() {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("session_id")?.value;
+
+  if (!sessionId) {
+    return null;
+  }
+
+  const session = await getSession(sessionId);
+  return session;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -18,29 +30,16 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
 
-    // Check authentication
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const session = await getAuthenticatedUser();
 
-    if (!sessionToken) {
+    if (!session) {
       return NextResponse.json(
         { success: false, error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    let sessionData: { id: number; role: string };
-    try {
-      sessionData = JSON.parse(sessionToken.value);
-    } catch {
-      return NextResponse.json(
-        { success: false, error: "Invalid session" },
-        { status: 401 }
-      );
-    }
-
-    // Only allow admin and reviewer roles
-    if (!["admin", "reviewer"].includes(sessionData.role)) {
+    if (!["admin", "reviewer"].includes(session.role)) {
       return NextResponse.json(
         { success: false, error: "Unauthorized. Reviewer or admin access required." },
         { status: 403 }
@@ -49,7 +48,6 @@ export async function GET(request: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    // Build query
     let query = supabase
       .from("appointments")
       .select(`
@@ -61,7 +59,6 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: true })
       .range(offset, offset + limit - 1);
 
-    // Apply filters
     if (departmentId) {
       query = query.eq("department_id", parseInt(departmentId, 10));
     }
@@ -72,13 +69,12 @@ export async function GET(request: Request) {
       query = query.lte("appointment_date", endDate);
     }
 
-    const { data: appointments, error, count } = await query;
+    const { data: appointments, error } = await query;
 
     if (error) {
       throw new Error(error.message);
     }
 
-    // Get total count for pagination
     const { count: totalCount } = await supabase
       .from("appointments")
       .select("*", { count: "exact", head: true })
@@ -106,7 +102,6 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: Confirm/approve an appointment
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -119,29 +114,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check authentication
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const session = await getAuthenticatedUser();
 
-    if (!sessionToken) {
+    if (!session) {
       return NextResponse.json(
         { success: false, error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    let sessionData: { id: number; role: string };
-    try {
-      sessionData = JSON.parse(sessionToken.value);
-    } catch {
-      return NextResponse.json(
-        { success: false, error: "Invalid session" },
-        { status: 401 }
-      );
-    }
-
-    // Only allow admin and reviewer roles
-    if (!["admin", "reviewer"].includes(sessionData.role)) {
+    if (!["admin", "reviewer"].includes(session.role)) {
       return NextResponse.json(
         { success: false, error: "Unauthorized. Reviewer or admin access required." },
         { status: 403 }
@@ -150,7 +132,6 @@ export async function POST(request: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    // Fetch the appointment
     const { data: appointment, error: fetchError } = await supabase
       .from("appointments")
       .select("*")
@@ -164,7 +145,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if appointment is in pending_review status
     if (appointment.status !== "pending_review") {
       return NextResponse.json(
         {
@@ -175,13 +155,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update appointment to booked
     const { data: updated, error: updateError } = await supabase
       .from("appointments")
       .update({
         status: "booked",
         reviewer_notes: notes || null,
-        reviewed_by: sessionData.id,
+        reviewed_by: session.userId,
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", appointmentId)
@@ -192,10 +171,8 @@ export async function POST(request: Request) {
       throw new Error(updateError.message);
     }
 
-    // Invalidate caches
     await invalidateAppointmentsListCache();
 
-    // Send confirmation notification to client
     try {
       const appointmentForNotification = await fetchAppointmentForNotification(appointmentId);
       if (appointmentForNotification) {
@@ -203,7 +180,6 @@ export async function POST(request: Request) {
       }
     } catch (notificationError) {
       console.error("Failed to send confirmation notification:", notificationError);
-      // Don't fail the confirmation if notification fails
     }
 
     return NextResponse.json({
@@ -224,7 +200,6 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT: Request client to reschedule
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
@@ -244,29 +219,16 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Check authentication
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const session = await getAuthenticatedUser();
 
-    if (!sessionToken) {
+    if (!session) {
       return NextResponse.json(
         { success: false, error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    let sessionData: { id: number; role: string };
-    try {
-      sessionData = JSON.parse(sessionToken.value);
-    } catch {
-      return NextResponse.json(
-        { success: false, error: "Invalid session" },
-        { status: 401 }
-      );
-    }
-
-    // Only allow admin and reviewer roles
-    if (!["admin", "reviewer"].includes(sessionData.role)) {
+    if (!["admin", "reviewer"].includes(session.role)) {
       return NextResponse.json(
         { success: false, error: "Unauthorized. Reviewer or admin access required." },
         { status: 403 }
@@ -275,7 +237,6 @@ export async function PUT(request: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    // Fetch the appointment with client info
     const { data: appointment, error: fetchError } = await supabase
       .from("appointments")
       .select(`
@@ -292,7 +253,6 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Check if appointment is in pending_review status
     if (appointment.status !== "pending_review") {
       return NextResponse.json(
         {
@@ -303,14 +263,12 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Update appointment status to reschedule_requested
-    // This removes it from the pending review queue and signals to client to pick a new time
     const { data: updated, error: updateError } = await supabase
       .from("appointments")
       .update({
         status: "reschedule_requested",
         reschedule_reason: reason.trim(),
-        reviewed_by: sessionData.id,
+        reviewed_by: session.userId,
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", appointmentId)
@@ -321,7 +279,6 @@ export async function PUT(request: Request) {
       throw new Error(updateError.message);
     }
 
-    // Send reschedule request notification to client
     try {
       const appointmentForNotification = await fetchAppointmentForNotification(appointmentId);
       if (appointmentForNotification) {
@@ -329,7 +286,6 @@ export async function PUT(request: Request) {
       }
     } catch (notificationError) {
       console.error("Failed to send reschedule request notification:", notificationError);
-      // Don't fail the request if notification fails
     }
 
     return NextResponse.json({

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth-server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 interface SystemSettings {
@@ -78,7 +78,6 @@ const SETTINGS_KEYS = {
 
 export async function GET(_request: NextRequest) {
   try {
-    // Get current user without redirect (for API routes)
     const user = await getCurrentUser();
 
     if (!user) {

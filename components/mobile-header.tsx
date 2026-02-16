@@ -82,8 +82,12 @@ export function MobileHeader({ user }: MobileHeaderProps) {
             />
           </motion.div>
           <div className="flex flex-col">
-            <h1 className="text-lg font-bold tracking-tight leading-none text-foreground">{getPageTitle()}</h1>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">AGA HEALTH FOUNDATION</p>
+            <h1 className="text-lg font-bold tracking-tight leading-none text-foreground">
+              {getPageTitle()}
+            </h1>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+              AGA HEALTH FOUNDATION
+            </p>
           </div>
         </div>
 
@@ -95,7 +99,10 @@ export function MobileHeader({ user }: MobileHeaderProps) {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 ring-2 ring-primary/10">
+              <Button
+                variant="ghost"
+                className="relative h-9 w-9 rounded-full p-0 ring-2 ring-primary/10"
+              >
                 <Avatar className="h-9 w-9">
                   <AvatarFallback className="bg-gradient-to-br from-green-500 to-green-700 text-white text-xs font-bold">
                     {getUserInitials(user.name)}
@@ -125,7 +132,7 @@ export function MobileHeader({ user }: MobileHeaderProps) {
                   className="w-full flex items-center py-2.5"
                 >
                   <Settings className="h-4 w-4 mr-3 text-muted-foreground" />
-                  Account Settings
+                  Profile
                 </button>
               </DropdownMenuItem>
 

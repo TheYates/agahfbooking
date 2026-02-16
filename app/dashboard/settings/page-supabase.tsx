@@ -13,12 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Settings, Shield, Bell } from "lucide-react";
+import { Calendar, Settings, Shield, Bell, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import { CalendarConfigurationTab } from "@/components/settings/calendar-configuration-tab";
 import { AntiAbuseManagementTab } from "@/components/settings/anti-abuse-management-tab";
 import { ReminderPreferencesTab } from "@/components/settings/reminder-preferences-tab";
+import { ReschedulePresetsTab } from "@/components/settings/reschedule-presets-tab";
 import {
   useSystemSettings,
   useUpdateSystemSettings,
@@ -29,6 +30,9 @@ export default function SettingsPageSupabase() {
   const { data: systemSettings, isLoading } = useSystemSettings(true);
   const updateSystemSettings = useUpdateSystemSettings();
   const { user } = useSessionUser();
+
+  const isAdmin = user?.role === "admin";
+  const isStaff = user?.role && ["admin", "receptionist", "reviewer"].includes(user.role);
 
   const [form, setForm] = useState({
     maxAdvanceBookingDays: 14,
@@ -66,165 +70,189 @@ export default function SettingsPageSupabase() {
         </p>
       </div>
 
-      <Tabs defaultValue="system" className="space-y-4">
+      <Tabs defaultValue={isStaff && !isAdmin ? "presets" : "system"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="system" className="gap-2">
-            <Settings className="h-4 w-4" />
-            System
-          </TabsTrigger>
-          <TabsTrigger value="calendar" className="gap-2">
-            <Calendar className="h-4 w-4" />
-            Calendar
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="system" className="gap-2">
+              <Settings className="h-4 w-4" />
+              System
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="calendar" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              Calendar
+            </TabsTrigger>
+          )}
           <TabsTrigger value="reminders" className="gap-2">
             <Bell className="h-4 w-4" />
             Reminders
           </TabsTrigger>
-          <TabsTrigger value="antiabuse" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Anti-abuse
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="antiabuse" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Anti-abuse
+            </TabsTrigger>
+          )}
+          {isStaff && (
+            <TabsTrigger value="presets" className="gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Presets
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="system">
-          <Card>
-            <CardHeader>
-              <CardTitle>System Settings</CardTitle>
-              <CardDescription>
-                These settings affect booking rules and session behavior.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {isLoading ? (
-                <div className="text-sm text-muted-foreground">Loading…</div>
-              ) : (
-                <>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Max advance booking days</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={365}
-                        value={form.maxAdvanceBookingDays}
-                        onChange={(e) =>
-                          setForm((p) => ({
-                            ...p,
-                            maxAdvanceBookingDays: parseInt(e.target.value) || 1,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Default slots per day</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={form.defaultSlotsPerDay}
-                        onChange={(e) =>
-                          setForm((p) => ({
-                            ...p,
-                            defaultSlotsPerDay: parseInt(e.target.value) || 1,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Session duration (hours)</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={168}
-                        value={form.sessionDurationHours}
-                        onChange={(e) =>
-                          setForm((p) => ({
-                            ...p,
-                            sessionDurationHours: parseInt(e.target.value) || 1,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Session timeout (minutes)</Label>
-                      <Input
-                        type="number"
-                        min={5}
-                        max={480}
-                        value={form.sessionTimeoutMinutes}
-                        onChange={(e) =>
-                          setForm((p) => ({
-                            ...p,
-                            sessionTimeoutMinutes: parseInt(e.target.value) || 5,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="flex items-center justify-between rounded-md border p-3">
-                      <div>
-                        <div className="font-medium">Same-day booking</div>
-                        <div className="text-sm text-muted-foreground">
-                          Allow booking appointments on the same date.
-                        </div>
+        {isAdmin && (
+          <TabsContent value="system">
+            <Card>
+              <CardHeader>
+                <CardTitle>System Settings</CardTitle>
+                <CardDescription>
+                  These settings affect booking rules and session behavior.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {isLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading…</div>
+                ) : (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Max advance booking days</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={form.maxAdvanceBookingDays}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              maxAdvanceBookingDays: parseInt(e.target.value) || 1,
+                            }))
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={form.sameDayBookingAllowed}
-                        onCheckedChange={(v) =>
-                          setForm((p) => ({ ...p, sameDayBookingAllowed: v }))
-                        }
-                      />
-                    </div>
 
-                    <div className="flex items-center justify-between rounded-md border p-3">
-                      <div>
-                        <div className="font-medium">Multiple appointments</div>
-                        <div className="text-sm text-muted-foreground">
-                          Allow clients to hold multiple upcoming appointments.
-                        </div>
+                      <div className="space-y-2">
+                        <Label>Default slots per day</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={form.defaultSlotsPerDay}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              defaultSlotsPerDay: parseInt(e.target.value) || 1,
+                            }))
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={form.multipleAppointmentsAllowed}
-                        onCheckedChange={(v) =>
-                          setForm((p) => ({
-                            ...p,
-                            multipleAppointmentsAllowed: v,
-                          }))
-                        }
-                      />
+
+                      <div className="space-y-2">
+                        <Label>Session duration (hours)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={168}
+                          value={form.sessionDurationHours}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              sessionDurationHours: parseInt(e.target.value) || 1,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Session timeout (minutes)</Label>
+                        <Input
+                          type="number"
+                          min={5}
+                          max={480}
+                          value={form.sessionTimeoutMinutes}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              sessionTimeoutMinutes: parseInt(e.target.value) || 5,
+                            }))
+                          }
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={onSaveSystem}
-                      disabled={updateSystemSettings.isPending}
-                    >
-                      {updateSystemSettings.isPending ? "Saving…" : "Save"}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div>
+                          <div className="font-medium">Same-day booking</div>
+                          <div className="text-sm text-muted-foreground">
+                            Allow booking appointments on the same date.
+                          </div>
+                        </div>
+                        <Switch
+                          checked={form.sameDayBookingAllowed}
+                          onCheckedChange={(v) =>
+                            setForm((p) => ({ ...p, sameDayBookingAllowed: v }))
+                          }
+                        />
+                      </div>
 
-        <TabsContent value="calendar">
-          <CalendarConfigurationTab />
-        </TabsContent>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div>
+                          <div className="font-medium">Multiple appointments</div>
+                          <div className="text-sm text-muted-foreground">
+                            Allow clients to hold multiple upcoming appointments.
+                          </div>
+                        </div>
+                        <Switch
+                          checked={form.multipleAppointmentsAllowed}
+                          onCheckedChange={(v) =>
+                            setForm((p) => ({
+                              ...p,
+                              multipleAppointmentsAllowed: v,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={onSaveSystem}
+                        disabled={updateSystemSettings.isPending}
+                      >
+                        {updateSystemSettings.isPending ? "Saving…" : "Save"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="calendar">
+            <CalendarConfigurationTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="reminders">
           {user && <ReminderPreferencesTab userId={user.id} />}
         </TabsContent>
 
-        <TabsContent value="antiabuse">
-          <AntiAbuseManagementTab />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="antiabuse">
+            <AntiAbuseManagementTab />
+          </TabsContent>
+        )}
+
+        {isStaff && (
+          <TabsContent value="presets">
+            <ReschedulePresetsTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

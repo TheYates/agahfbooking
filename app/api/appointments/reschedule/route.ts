@@ -12,6 +12,7 @@ import {
 } from "@/lib/notification-service";
 import { buildReminderSchedule } from "@/lib/reminder-utils";
 import { getUserReminderPreferences, getOffsetMinutesFromPreferences } from "@/lib/reminder-preferences-service";
+import { getSession } from "@/lib/session-service";
 
 export async function POST(request: Request) {
   try {
@@ -29,21 +30,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get session for authorization
+// Get session for authorization
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
 
-    if (!sessionToken) {
+    if (!sessionId) {
       return NextResponse.json(
         { success: false, error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    let sessionData: { id: number; role: string };
-    try {
-      sessionData = JSON.parse(sessionToken.value);
-    } catch {
+    const session = await getSession(sessionId);
+    if (!session) {
       return NextResponse.json(
         { success: false, error: "Invalid session" },
         { status: 401 }
@@ -75,9 +74,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check authorization
-    const isStaff = ["admin", "receptionist", "reviewer"].includes(sessionData.role);
-    const isOwnAppointment = sessionData.role === "client" && originalAppointment.client_id === sessionData.id;
+// Check authorization
+    const isStaff = ["admin", "receptionist", "reviewer"].includes(session.role);
+    const isOwnAppointment = session.role === "client" && originalAppointment.client_id === session.userId;
 
     if (!isStaff && !isOwnAppointment) {
       return NextResponse.json(
@@ -138,10 +137,10 @@ export async function POST(request: Request) {
       newStatus = "booked";
     }
 
-    // Get bookedById (for staff, use their ID; for clients, use admin)
+// Get bookedById (for staff, use their ID; for clients, use admin)
     let bookedById: number;
     if (isStaff) {
-      bookedById = sessionData.id;
+      bookedById = session.userId;
     } else {
       const { data: adminUser } = await supabase
         .from("users")
@@ -175,14 +174,14 @@ export async function POST(request: Request) {
       throw new Error(createError.message);
     }
 
-    // Update the original appointment
+// Update the original appointment
     const { error: updateError } = await supabase
       .from("appointments")
       .update({
         status: "rescheduled",
         rescheduled_to_id: newAppointment.id,
         reschedule_reason: reason || null,
-        rescheduled_by: isStaff ? sessionData.id : null,
+        rescheduled_by: isStaff ? session.userId : null,
         rescheduled_at: new Date().toISOString(),
       })
       .eq("id", originalAppointment.id);

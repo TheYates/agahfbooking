@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { getSession } from "@/lib/session-service";
 
 /**
  * SSE endpoint for server-side realtime subscriptions
@@ -60,24 +61,18 @@ export async function GET(request: NextRequest) {
   }
 
   // Get session from cookie
-  const sessionToken = request.cookies.get("session_token")?.value;
+  const sessionId = request.cookies.get("session_id")?.value;
   
-  if (!sessionToken) {
+  if (!sessionId) {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
       { status: 401, headers: { "Content-Type": "application/json" } }
     );
   }
 
-  // Parse and validate session
-  let userData: any;
-  try {
-    userData = JSON.parse(sessionToken);
-    
-    if (!userData?.id || !userData?.role) {
-      throw new Error("Invalid session data");
-    }
-  } catch (error) {
+  // Validate session
+  const session = await getSession(sessionId);
+  if (!session) {
     return new Response(
       JSON.stringify({ error: "Invalid session" }),
       { status: 401, headers: { "Content-Type": "application/json" } }
@@ -85,8 +80,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Role-based access control
-  const userRole = userData.role;
-  const userId = userData.id;
+  const userRole = session.role;
+  const userId = session.userId;
 
   // Validate filter based on role
   if (filter) {

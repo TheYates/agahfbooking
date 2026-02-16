@@ -22,7 +22,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@/lib/types";
-import { useUnifiedDashboardStats } from "@/hooks/use-hospital-queries";
+import { useUnifiedDashboardStats, usePendingReviewsCount, useWeeklyAppointmentsTrend } from "@/hooks/use-hospital-queries";
 import { Bar, BarChart, CartesianGrid, XAxis, ResponsiveContainer } from "recharts";
 import {
     ChartContainer,
@@ -42,6 +42,9 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
         isLoading: loading,
     } = useUnifiedDashboardStats(user.role, user.id);
 
+    const { data: pendingReviewsCount = 0 } = usePendingReviewsCount(user.role === "reviewer" || user.role === "admin");
+    const { data: weeklyTrend = [] } = useWeeklyAppointmentsTrend(user.role === "admin" || user.role === "receptionist");
+
     const isReviewer = user.role === "reviewer";
     const dashboardTitle = isReviewer ? "Reviewer Dashboard" : "Admin Dashboard";
 
@@ -52,15 +55,14 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
         recentAppointments: [],
     };
 
-    // Mock data for the chart (in a real app this would come from the API)
-    const chartData = [
-        { day: "Mon", appointments: 12, completed: 10 },
-        { day: "Tue", appointments: 18, completed: 15 },
-        { day: "Wed", appointments: 15, completed: 14 },
-        { day: "Thu", appointments: 22, completed: 20 },
-        { day: "Fri", appointments: 25, completed: 22 },
-        { day: "Sat", appointments: 10, completed: 9 },
-        { day: "Sun", appointments: 5, completed: 4 },
+    const chartData = weeklyTrend.length > 0 ? weeklyTrend : [
+        { day: "Mon", appointments: 0, completed: 0 },
+        { day: "Tue", appointments: 0, completed: 0 },
+        { day: "Wed", appointments: 0, completed: 0 },
+        { day: "Thu", appointments: 0, completed: 0 },
+        { day: "Fri", appointments: 0, completed: 0 },
+        { day: "Sat", appointments: 0, completed: 0 },
+        { day: "Sun", appointments: 0, completed: 0 },
     ];
 
     const chartConfig = {
@@ -154,12 +156,12 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                                 <AlertCircle className="h-4 w-4" />
                             </div>
                         </CardHeader>
-                        <CardContent>
+<CardContent>
                             <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-                                {loading ? "..." : "4"}
+                                {loading ? "..." : pendingReviewsCount}
                             </div>
                             <div className="flex items-center text-xs text-amber-600 mt-1 font-medium">
-                                Requires attention <ArrowUpRight className="ml-1 h-3 w-3" />
+                                {pendingReviewsCount > 0 ? 'Requires attention' : 'All caught up!'} <ArrowUpRight className="ml-1 h-3 w-3" />
                             </div>
                         </CardContent>
                     </Card>
@@ -174,10 +176,12 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                             <Activity className="h-4 w-4" />
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">12</div>
+<CardContent>
+                        <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">
+                            {loading ? "..." : (currentStats as any).activeStaffCount ?? 0}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                            Doctors & Nurses on duty
+                            Active staff members
                         </p>
                     </CardContent>
                 </Card>

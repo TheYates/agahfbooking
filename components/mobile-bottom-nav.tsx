@@ -119,16 +119,16 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none p-4 pb-6">
       <div className="pointer-events-auto mx-auto max-w-sm">
-        <div className="relative flex items-center justify-around bg-black/80 dark:bg-white/10 backdrop-blur-xl border border-white/10 dark:border-white/5 rounded-full px-2 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+        <div className="relative flex items-center justify-around bg-black dark:bg-zinc-900 border border-zinc-700 dark:border-zinc-700 rounded-full px-2 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
 
           {navItems.map((item) => {
             if (item.isAdd) {
               return (
                 <div key={item.title} className="-mt-8">
-                  <Button
+<Button
                     onClick={item.onClick}
                     size="icon"
-                    className="h-14 w-14 rounded-full bg-green-500 hover:bg-green-400 shadow-xl ring-4 ring-black/80 dark:ring-background"
+                    className="h-14 w-14 rounded-full bg-green-500 hover:bg-green-400 shadow-xl ring-4 ring-black dark:ring-zinc-900"
                   >
                     <motion.div
                       whileTap={{ scale: 0.9 }}
@@ -152,10 +152,10 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
                   "relative flex flex-col items-center justify-center min-w-[4rem] py-2 transition-all duration-300",
                 )}
               >
-                {isActive && (
+{isActive && (
                   <motion.div
                     layoutId="navBlob"
-                    className="absolute inset-x-1 inset-y-1 bg-white/[0.08] dark:bg-white/[0.05] rounded-[18px] border border-white/5"
+                    className="absolute inset-x-1 inset-y-1 bg-zinc-800 rounded-[18px] border border-zinc-600"
                     initial={false}
                     transition={{
                       type: "spring",
@@ -169,12 +169,12 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
                   whileTap={{ scale: 0.9 }}
                   className="relative z-10 flex flex-col items-center"
                 >
-                  <Icon
+<Icon
                     className={cn(
                       "h-[22px] w-[22px] transition-all duration-300",
                       isActive
                         ? "text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.3)]"
-                        : "text-zinc-400"
+                        : "text-zinc-500"
                     )}
                     strokeWidth={isActive ? 2.5 : 2}
                   />

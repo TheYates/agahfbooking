@@ -2031,6 +2031,69 @@ export const useTestOTPService = () => {
 }
 
 // ==========================================
+// 📊 DASHBOARD ANALYTICS HOOKS
+// ==========================================
+
+export const usePendingReviewsCount = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['dashboard', 'pendingReviewsCount'],
+    queryFn: async () => {
+      const response = await fetch('/api/appointments/review?limit=1000')
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error || 'Failed to fetch pending reviews')
+      return data.data?.length || 0
+    },
+    enabled,
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchInterval: 60 * 1000,
+  })
+}
+
+export const useWeeklyAppointmentsTrend = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['dashboard', 'weeklyTrend'],
+    queryFn: async () => {
+      const today = new Date()
+      const days = []
+      
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today)
+        date.setDate(date.getDate() - i)
+        days.push(date.toISOString().split('T')[0])
+      }
+      
+      const response = await fetch(`/api/appointments/list?dateFilter=week&limit=1000`)
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error || 'Failed to fetch appointments')
+      
+      const appointments = data.data || []
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      
+      const trendData = days.map(dateStr => {
+        const date = new Date(dateStr)
+        const dayAppointments = appointments.filter((apt: any) => {
+          const aptDate = apt.date?.split('T')[0] || apt.appointment_date?.split('T')[0]
+          return aptDate === dateStr
+        })
+        
+        return {
+          day: dayNames[date.getDay()],
+          appointments: dayAppointments.length,
+          completed: dayAppointments.filter((apt: any) => apt.status === 'completed').length,
+        }
+      })
+      
+      return trendData
+    },
+    enabled,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  })
+}
+
+// ==========================================
 // 🏥 DEPARTMENTS & DOCTORS MANAGEMENT HOOKS
 // ==========================================
 

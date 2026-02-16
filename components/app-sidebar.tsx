@@ -65,6 +65,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
+    { title: "Settings", url: "/dashboard/settings", icon: Settings },
   ];
 
   const adminMenuItems = [

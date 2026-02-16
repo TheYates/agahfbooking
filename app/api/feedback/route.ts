@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
+import { getSession } from "@/lib/session-service";
 
 export async function POST(request: Request) {
   try {
@@ -14,24 +15,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get user info from session (optional - guests can also submit)
+// Get user info from session (optional - guests can also submit)
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
     
     let userId = null;
     let userType = "guest";
     let userName = null;
     let userContact = null;
 
-    if (sessionToken) {
-      try {
-        const userData = JSON.parse(sessionToken.value);
-        userId = userData.id;
-        userType = userData.role || "client";
-        userName = userData.name || userData.username;
-        userContact = userData.phone || userData.email;
-      } catch (error) {
-        console.error("Failed to parse session token:", error);
+    if (sessionId) {
+      const session = await getSession(sessionId);
+      if (session) {
+        userId = session.userId;
+        userType = session.role || "client";
+        userName = session.name;
+        userContact = session.phone;
       }
     }
 

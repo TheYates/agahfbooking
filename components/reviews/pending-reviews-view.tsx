@@ -46,6 +46,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { RescheduleReasonSelector } from "@/components/reschedule-reason-selector";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -445,10 +446,14 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
                           className={cn("border-muted-foreground/30", isSelected && "data-[state=checked]:bg-primary")}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">
+<TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span className="text-base">{appointment.clients?.name || "Unknown"}</span>
-                          <span className="text-xs text-muted-foreground">{appointment.clients?.phone}</span>
+                          <span className="text-base">
+                            {appointment.clients?.name || appointment.clients?.x_number || `Client #${appointment.client_id || 'Unknown'}`}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {appointment.clients?.phone || ''}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -619,16 +624,13 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
               This will notify {selectedAppointment?.clients?.name} to pick a new time.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Reason <span className="text-destructive">*</span></Label>
-              <Textarea
-                placeholder="Why is a reschedule needed?"
-                value={rejectReason}
-                onChange={e => setRejectReason(e.target.value)}
-                className="min-h-[100px]"
-              />
-            </div>
+          <div className="py-2">
+            <RescheduleReasonSelector
+              value={rejectReason}
+              onChange={setRejectReason}
+              placeholder="Why is a reschedule needed?"
+              required
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
@@ -675,16 +677,13 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
               Request all selected clients to reschedule. They will receive a notification with the reason below.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Reason <span className="text-destructive">*</span></Label>
-              <Textarea
-                placeholder="Reason for bulk reschedule request..."
-                value={rejectReason}
-                onChange={e => setRejectReason(e.target.value)}
-                className="min-h-[100px]"
-              />
-            </div>
+          <div className="py-2">
+            <RescheduleReasonSelector
+              value={rejectReason}
+              onChange={setRejectReason}
+              placeholder="Reason for bulk reschedule request..."
+              required
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBatchRejectDialogOpen(false)}>Cancel</Button>

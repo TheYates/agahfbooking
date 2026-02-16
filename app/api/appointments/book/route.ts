@@ -12,6 +12,7 @@ import {
 } from "@/lib/notification-service";
 import { buildReminderSchedule } from "@/lib/reminder-utils";
 import { getUserReminderPreferences, getOffsetMinutesFromPreferences } from "@/lib/reminder-preferences-service";
+import { getSession } from "@/lib/session-service";
 
 export async function POST(request: Request) {
   try {
@@ -28,14 +29,14 @@ export async function POST(request: Request) {
       );
     }
 
-    let finalClientId = clientId;
+let finalClientId = clientId;
 
-    // If no clientId provided, get from session (for client self-booking)
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
+    const session = sessionId ? await getSession(sessionId) : null;
     
     if (!finalClientId) {
-      if (!sessionToken) {
+      if (!session) {
         return NextResponse.json(
           {
             success: false,
@@ -44,30 +45,30 @@ export async function POST(request: Request) {
           { status: 401 }
         );
       }
-
-      try {
-        const sessionData = JSON.parse(sessionToken.value);
-        finalClientId = sessionData.id;
-      } catch {
-        return NextResponse.json({ success: false, error: "Invalid session" }, { status: 401 });
+      
+      if (session.userType === "staff") {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Please select a client for this appointment",
+          },
+          { status: 400 }
+        );
       }
+      
+      finalClientId = session.userId;
     }
 
     const supabase = await createServerSupabaseClient();
 
-    // Determine who is booking the appointment
+// Determine who is booking the appointment
     // booked_by must reference users table (staff), not clients table
     let bookedById;
     
-    if (sessionToken) {
-      try {
-        const sessionData = JSON.parse(sessionToken.value);
-        // If it's a staff member (admin/receptionist), use their ID
-        if (sessionData.role === "admin" || sessionData.role === "receptionist") {
-          bookedById = sessionData.id;
-        }
-      } catch {
-        // Session parsing failed, will use default admin below
+    if (session) {
+      // If it's a staff member (admin/receptionist), use their ID
+      if (session.role === "admin" || session.role === "receptionist") {
+        bookedById = session.userId;
       }
     }
     
@@ -130,15 +131,8 @@ export async function POST(request: Request) {
       slotEndTime = slotTimes.endTime;
     }
 
-    // Determine initial status based on review settings
-    const isStaffBooking = sessionToken ? (() => {
-      try {
-        const sessionData = JSON.parse(sessionToken.value);
-        return ["admin", "receptionist", "reviewer"].includes(sessionData.role);
-      } catch {
-        return false;
-      }
-    })() : false;
+// Determine initial status based on review settings
+    const isStaffBooking = session ? ["admin", "receptionist", "reviewer"].includes(session.role) : false;
 
     let initialStatus: "booked" | "pending_review" = "pending_review";
 

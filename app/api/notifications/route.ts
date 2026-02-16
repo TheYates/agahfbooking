@@ -1,18 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
+import { getSession } from "@/lib/session-service";
 
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
 
-    if (!sessionToken) {
+    if (!sessionId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userData = JSON.parse(sessionToken.value);
-    const userId = userData.id;
+    const session = await getSession(sessionId);
+    if (!session) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const limitParam = searchParams.get("limit");
@@ -20,11 +23,11 @@ export async function GET(request: NextRequest) {
 
     const limit = Math.min(Number(limitParam) || 20, 100);
 
-    const supabase = await createServerSupabaseClient();
+const supabase = await createServerSupabaseClient();
     let query = supabase
       .from("in_app_notifications")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", session.userId)
       .order("created_at", { ascending: false })
       .limit(limit);
 

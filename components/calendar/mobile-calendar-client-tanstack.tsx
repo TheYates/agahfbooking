@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RescheduleReasonSelector } from "@/components/reschedule-reason-selector";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -752,11 +753,11 @@ export function MobileCalendarClientTanstack({
             </DialogDescriptionText>
           </DialogHeader>
           <div className="py-2">
-            <Label className="mb-2 block">Reason *</Label>
-            <Textarea
+            <RescheduleReasonSelector
               value={rescheduleReason}
-              onChange={(e) => setRescheduleReason(e.target.value)}
+              onChange={setRescheduleReason}
               placeholder="Why is a reschedule needed?"
+              required
             />
           </div>
           <DialogFooter className="flex-row gap-2">

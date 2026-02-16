@@ -19,7 +19,6 @@ import { authActions } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
-  // Email OTP via Supabase-backed API routes
   const sendOTP = authActions.sendOTP;
   const verifyOTP = authActions.verifyOTP;
   
