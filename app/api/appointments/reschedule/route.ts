@@ -125,17 +125,14 @@ export async function POST(request: Request) {
     const slotDuration = department.slot_duration_minutes || 30;
     const slotTimes = calculateSlotTimes(workingHours, newSlotNumber, slotDuration);
 
-    // Determine status for new appointment
-    // Staff reschedules are always auto-confirmed (they're already acting as confirmation)
-    // Client reschedules follow the department's require_review setting
+// Determine status for new appointment
+    // Staff reschedules are auto-confirmed (they're acting as confirmation)
+    // Client reschedules always require review
     let newStatus: "booked" | "pending_review" = "pending_review";
     if (isStaff) {
-      // Staff reschedules are always confirmed
-      newStatus = "booked";
-    } else if (!department.require_review) {
-      // Department doesn't require review
       newStatus = "booked";
     }
+    // Client reschedules always require review, regardless of department settings
 
 // Get bookedById (for staff, use their ID; for clients, use admin)
     let bookedById: number;
@@ -203,12 +200,12 @@ export async function POST(request: Request) {
     );
     await invalidateAppointmentsListCache();
 
-    // Send reschedule notification
+// Send reschedule notification
     try {
       const oldApptForNotification = await fetchAppointmentForNotification(originalAppointment.id);
       const newApptForNotification = await fetchAppointmentForNotification(newAppointment.id);
       if (oldApptForNotification && newApptForNotification) {
-        await sendRescheduleCompletedNotification(oldApptForNotification, newApptForNotification);
+        await sendRescheduleCompletedNotification(oldApptForNotification, newApptForNotification, newStatus === "pending_review");
       }
     } catch (notificationError) {
       console.error("Failed to send reschedule notification:", notificationError);

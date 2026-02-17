@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import type { User } from "@/lib/types";
 import { useUnifiedDashboardStats, usePendingReviewsCount, useWeeklyAppointmentsTrend } from "@/hooks/use-hospital-queries";
 import { Bar, BarChart, CartesianGrid, XAxis, ResponsiveContainer } from "recharts";
@@ -47,6 +48,38 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
 
     const isReviewer = user.role === "reviewer";
     const dashboardTitle = isReviewer ? "Reviewer Dashboard" : "Admin Dashboard";
+
+    const getStatusLabel = (status: string) => {
+        const labels: { [key: string]: string } = {
+            pending_review: "Pending",
+            reschedule_requested: "Reschedule",
+            booked: "Confirmed",
+            confirmed: "Confirmed",
+            arrived: "Arrived",
+            waiting: "Waiting",
+            completed: "Done",
+            no_show: "Missed",
+            cancelled: "Cancelled",
+            rescheduled: "Moved",
+        };
+        return labels[status] || status;
+    };
+
+    const getStatusTooltip = (status: string) => {
+        const tooltips: { [key: string]: string } = {
+            pending_review: "Awaiting confirmation",
+            reschedule_requested: "Staff requested a new time",
+            booked: "Appointment confirmed",
+            confirmed: "Appointment confirmed",
+            arrived: "Patient has arrived",
+            waiting: "Patient is waiting",
+            completed: "Appointment completed",
+            no_show: "Patient did not show up",
+            cancelled: "Appointment cancelled",
+            rescheduled: "Moved to a new time",
+        };
+        return tooltips[status] || status;
+    };
 
     const currentStats = stats || {
         upcomingAppointments: 0,
@@ -76,7 +109,8 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
         },
     } satisfies ChartConfig;
 
-    return (
+return (
+        <TooltipProvider>
         <div className="space-y-8 p-1">
             {/* Header with more visual punch */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b pb-6">
@@ -356,16 +390,23 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                                         <div className="text-sm">{apt.doctorName || '-'}</div>
                                         <div className="text-xs text-muted-foreground">{apt.departmentName}</div>
                                     </div>
-                                    <div className="col-span-2">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize 
-                                    ${apt.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                                                apt.status === 'pending_review' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                                                    apt.status === 'pending' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                                        'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'}`}>
-                                            {apt.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
-                                            {(apt.status === 'pending' || apt.status === 'pending_review') && <Clock className="w-3 h-3 mr-1" />}
-                                            {apt.status === 'pending_review' ? 'Review' : apt.status}
-                                        </span>
+<div className="col-span-2">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-help 
+                                            ${apt.status === 'confirmed' || apt.status === 'booked' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                        apt.status === 'pending_review' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                            apt.status === 'reschedule_requested' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'}`}>
+                                                    {apt.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
+                                                    {(apt.status === 'pending' || apt.status === 'pending_review') && <Clock className="w-3 h-3 mr-1" />}
+                                                    {getStatusLabel(apt.status)}
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>{getStatusTooltip(apt.status)}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                     </div>
                                     <div className="col-span-1 text-right">
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -377,7 +418,8 @@ export function AdminDashboardClient({ user }: AdminDashboardClientProps) {
                         </div>
                     )}
                 </CardContent>
-            </Card>
+</Card>
         </div>
+        </TooltipProvider>
     );
 }

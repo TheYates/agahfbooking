@@ -448,9 +448,14 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
                       </TableCell>
 <TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span className="text-base">
-                            {appointment.clients?.name || appointment.clients?.x_number || `Client #${appointment.client_id || 'Unknown'}`}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">
+                              {appointment.clients?.name || appointment.clients?.x_number || `Client #${appointment.client_id || 'Unknown'}`}
+                            </span>
+                            <span className="text-xs text-muted-foreground md:hidden">
+                              {formatSlotTime(appointment)}
+                            </span>
+                          </div>
                           <span className="text-xs text-muted-foreground">
                             {appointment.clients?.phone || ''}
                           </span>
@@ -461,7 +466,7 @@ export function PendingReviewsView({ userId, userRole }: PendingReviewsViewProps
                           <span className="text-sm font-medium">
                             {format(new Date(appointment.appointment_date), "MMM d, yyyy")}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground hidden md:block">
                             {formatSlotTime(appointment)}
                           </span>
                         </div>

@@ -1,6 +1,16 @@
 "use client";
 
-import { Home, Calendar, Plus, CalendarDays, User, List, ClipboardCheck } from "lucide-react";
+import {
+  Home,
+  Calendar,
+  Plus,
+  CalendarDays,
+  User,
+  List,
+  ClipboardCheck,
+  Heart,
+  Stethoscope,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -13,7 +23,10 @@ interface MobileBottomNavProps {
   user?: UserType;
 }
 
-export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) {
+export function MobileBottomNav({
+  onBookingClick,
+  user,
+}: MobileBottomNavProps) {
   const pathname = usePathname();
 
   type BaseNavItem = {
@@ -61,10 +74,10 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
       isActive: pathname === "/dashboard/calendar",
     },
     {
-      title: "Profile",
-      href: "/dashboard/profile",
-      icon: User,
-      isActive: pathname === "/dashboard/profile",
+      title: "Medicals",
+      href: "/dashboard/medicals",
+      icon: Stethoscope,
+      isActive: pathname === "/dashboard/medicals",
     },
   ];
 
@@ -94,17 +107,17 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
       isActive: pathname === "/dashboard/appointments",
     },
     {
-      title: "Profile", // Added Profile for consistency/logout access
-      href: "/dashboard/profile",
-      icon: User,
-      isActive: pathname === "/dashboard/profile",
+      title: "Medicals",
+      href: "/dashboard/medicals",
+      icon: Stethoscope,
+      isActive: pathname === "/dashboard/medicals",
     },
   ];
 
-  // Logic: 
+  // Logic:
   // - Client: Standard Client Nav
   // - Reviewer: Reviewer Nav
-  // - Admin/Receptionist: Could fallback to Reviewer-like or keep generic. 
+  // - Admin/Receptionist: Could fallback to Reviewer-like or keep generic.
   //   For now, we prioritize Reviewer as requested. Admin generally uses sidebar on desktop but on mobile generic nav is okay?
   //   Actually, Admin on mobile might need access to more too, but user asked for Reviewer.
   //   Let's map Admin to reviewerNavItems for now as it's better than Client nav for them (no "Book" button needed).
@@ -120,19 +133,22 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
     <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none p-4 pb-6">
       <div className="pointer-events-auto mx-auto max-w-sm">
         <div className="relative flex items-center justify-around bg-black dark:bg-zinc-900 border border-zinc-700 dark:border-zinc-700 rounded-full px-2 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
-
           {navItems.map((item) => {
             if (item.isAdd) {
               return (
                 <div key={item.title} className="-mt-8">
-<Button
+                  <Button
                     onClick={item.onClick}
                     size="icon"
                     className="h-14 w-14 rounded-full bg-green-500 hover:bg-green-400 shadow-xl ring-4 ring-black dark:ring-zinc-900"
                   >
                     <motion.div
                       whileTap={{ scale: 0.9 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 10,
+                      }}
                     >
                       <Plus className="h-7 w-7 text-white" strokeWidth={2.5} />
                     </motion.div>
@@ -152,7 +168,7 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
                   "relative flex flex-col items-center justify-center min-w-[4rem] py-2 transition-all duration-300",
                 )}
               >
-{isActive && (
+                {isActive && (
                   <motion.div
                     layoutId="navBlob"
                     className="absolute inset-x-1 inset-y-1 bg-zinc-800 rounded-[18px] border border-zinc-600"
@@ -169,12 +185,12 @@ export function MobileBottomNav({ onBookingClick, user }: MobileBottomNavProps) 
                   whileTap={{ scale: 0.9 }}
                   className="relative z-10 flex flex-col items-center"
                 >
-<Icon
+                  <Icon
                     className={cn(
                       "h-[22px] w-[22px] transition-all duration-300",
                       isActive
                         ? "text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.3)]"
-                        : "text-zinc-500"
+                        : "text-zinc-500",
                     )}
                     strokeWidth={isActive ? 2.5 : 2}
                   />

@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const totalCount = count || 0;
     const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
-    const appointments = (data || []).map((appointment: any) => ({
+const appointments = (data || []).map((appointment: any) => ({
       id: appointment.id,
       clientId: appointment.client_id,
       clientName: appointment.clients?.name,
@@ -64,9 +64,8 @@ export async function GET(request: Request) {
       departmentId: appointment.department_id,
       departmentName: appointment.departments?.name,
       departmentColor: appointment.departments?.color,
-      // Doctor name not currently stored on appointment; department is the scheduling unit.
       doctorName: null,
-      createdAt: appointment.created_at,
+      bookedAt: appointment.created_at,
     }));
 
     return NextResponse.json({

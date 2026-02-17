@@ -207,6 +207,7 @@ export type NotificationEventType =
   | "booking_confirmation"
   | "reschedule_request"
   | "reschedule_completed"
+  | "reschedule_pending_review"
   | "review_confirmed"
   | "reminder";
 export type NotificationStatus = "pending" | "sent" | "failed" | "delivered";

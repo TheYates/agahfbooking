@@ -24,11 +24,20 @@ export function MobileHeader({ user }: MobileHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const getPageTitle = () => {
+const getPageTitle = () => {
     if (pathname === "/dashboard") return "Overview";
     if (pathname === "/dashboard/my-appointments") return "My Appointments";
-    if (pathname === "/dashboard/calendar") return "Schedule";
-    if (pathname === "/dashboard/profile") return "My Profile";
+    if (pathname === "/dashboard/appointments") return "Appointments";
+    if (pathname === "/dashboard/calendar") return "Calendar";
+    if (pathname === "/dashboard/reviews") return "Reviews";
+    if (pathname === "/dashboard/medicals") return "Medicals";
+    if (pathname === "/dashboard/notifications") return "Notifications";
+    if (pathname === "/dashboard/clients") return "Clients";
+    if (pathname === "/dashboard/departments") return "Departments";
+    if (pathname === "/dashboard/users") return "Users";
+    if (pathname === "/dashboard/reports") return "Reports";
+    if (pathname === "/dashboard/settings") return "Settings";
+    if (pathname.startsWith("/dashboard/settings/")) return "Settings";
     return "Dashboard";
   };
 
@@ -86,7 +95,9 @@ export function MobileHeader({ user }: MobileHeaderProps) {
               {getPageTitle()}
             </h1>
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-              AGA HEALTH FOUNDATION
+              <span className="md:hidden">AGA HEALTH FOUNDATION</span>
+              <span className="hidden md:inline lg:hidden">AGAHF</span>
+              <span className="hidden lg:inline">AGA HEALTH FOUNDATION</span>
             </p>
           </div>
         </div>

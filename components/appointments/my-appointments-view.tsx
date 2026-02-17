@@ -1,16 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
@@ -54,6 +45,7 @@ interface Appointment {
   departmentName: string;
   departmentColor: string;
   notes?: string;
+  bookedAt?: string;
 }
 
 interface MyAppointmentsViewProps {
@@ -80,7 +72,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
   } = useClientAppointmentsPaginated(
     currentUserId,
     1,
-    1000 // Fetch all appointments at once for filtering
+    1000, // Fetch all appointments at once for filtering
   );
 
   // 🚀 TanStack Query: Use mutation hook for cancellations
@@ -99,7 +91,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     if (!appointment) return;
 
     const confirmCancel = window.confirm(
-      `Are you sure you want to cancel your appointment${appointment.doctorName ? ` with Dr. ${appointment.doctorName}` : ""} on ${new Date(appointment.date).toLocaleDateString()}?`
+      `Are you sure you want to cancel your appointment${appointment.doctorName ? ` with Dr. ${appointment.doctorName}` : ""} on ${new Date(appointment.date).toLocaleDateString()}?`,
     );
 
     if (!confirmCancel) return;
@@ -164,7 +156,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
     ];
     if (nonReschedulableStatuses.includes(appointment.status)) {
       toast.error(
-        `Cannot reschedule an appointment with status: ${appointment.status}`
+        `Cannot reschedule an appointment with status: ${appointment.status}`,
       );
       return;
     }
@@ -215,7 +207,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                 "px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap border shadow-sm transition-all",
                 filter === tab.toLowerCase()
                   ? "bg-zinc-900 text-white border-zinc-900 dark:bg-white dark:text-zinc-900"
-                  : "bg-white text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800"
+                  : "bg-white text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800",
               )}
             >
               {tab}
@@ -298,10 +290,11 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
         ) : (
           <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
             {/* Header Row */}
-            <div className="grid grid-cols-[2.5fr_1.5fr_1fr_1.5fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div>Title</div>
               <div>Status</div>
               <div>Date</div>
+              <div>Booked On</div>
               <div>Actions</div>
             </div>
 
@@ -340,8 +333,8 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                     groups[groupKey].push(appointment);
                     return groups;
                   },
-                  {} as Record<string, Appointment[]>
-                )
+                  {} as Record<string, Appointment[]>,
+                ),
               )
                 .sort((a, b) => {
                   // Custom sort order
@@ -363,7 +356,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                       {groupAppointments.map((appointment) => (
                         <div
                           key={appointment.id}
-                          className="grid grid-cols-[2.5fr_1.5fr_1fr_1.5fr] gap-4 px-6 py-4 items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                          className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] gap-4 px-6 py-4 items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
                         >
                           {/* Title Column */}
                           <div className="flex items-start gap-3">
@@ -384,7 +377,8 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                               </p>
                               <p className="text-xs text-muted-foreground truncate">
                                 {appointment.departmentName} •{" "}
-                                {appointment.slotStartTime && appointment.slotEndTime
+                                {appointment.slotStartTime &&
+                                appointment.slotEndTime
                                   ? `${appointment.slotStartTime.slice(0, 5)} - ${appointment.slotEndTime.slice(0, 5)}`
                                   : `Slot #${appointment.slotNumber}`}
                               </p>
@@ -400,13 +394,13 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                               > = {
                                 pending_review: {
                                   icon: Clock,
-                                  label: "Pending Confirmation",
+                                  label: "Pending",
                                   className:
                                     "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400",
                                 },
                                 reschedule_requested: {
                                   icon: AlertTriangle,
-                                  label: "Reschedule Requested",
+                                  label: "Reschedule",
                                   className:
                                     "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400",
                                 },
@@ -436,13 +430,13 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                                 },
                                 completed: {
                                   icon: Check,
-                                  label: "Completed",
+                                  label: "Done",
                                   className:
                                     "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400",
                                 },
                                 no_show: {
                                   icon: UserX,
-                                  label: "No Show",
+                                  label: "Missed",
                                   className:
                                     "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400",
                                 },
@@ -454,7 +448,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                                 },
                                 rescheduled: {
                                   icon: RefreshCw,
-                                  label: "Rescheduled",
+                                  label: "Moved",
                                   className:
                                     "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400",
                                 },
@@ -475,7 +469,7 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                                 <div
                                   className={cn(
                                     "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium shadow-sm transition-colors",
-                                    config.className
+                                    config.className,
                                   )}
                                 >
                                   <StatusIcon className="h-3.5 w-3.5" />
@@ -495,7 +489,33 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
                                 month: "short",
                                 day: "numeric",
                                 year: "numeric",
-                              }
+                              },
+                            )}
+                          </div>
+
+                          {/* Booked On Column */}
+                          <div className="text-sm text-zinc-500">
+                            {appointment.bookedAt ? (
+                              <div className="flex flex-col">
+                                <span>
+                                  {new Date(
+                                    appointment.bookedAt,
+                                  ).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </span>
+                                <span className="text-xs text-zinc-400">
+                                  {new Date(
+                                    appointment.bookedAt,
+                                  ).toLocaleTimeString("en-US", {
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-400">—</span>
                             )}
                           </div>
 
@@ -547,13 +567,17 @@ export function MyAppointmentsView({ currentUserId }: MyAppointmentsViewProps) {
           setAppointmentToReschedule(null);
         }}
         mode="reschedule"
-        rescheduleAppointment={appointmentToReschedule ? {
-          id: appointmentToReschedule.id,
-          departmentId: appointmentToReschedule.departmentId,
-          departmentName: appointmentToReschedule.departmentName,
-          date: appointmentToReschedule.date,
-          slotNumber: appointmentToReschedule.slotNumber,
-        } : undefined}
+        rescheduleAppointment={
+          appointmentToReschedule
+            ? {
+                id: appointmentToReschedule.id,
+                departmentId: appointmentToReschedule.departmentId,
+                departmentName: appointmentToReschedule.departmentName,
+                date: appointmentToReschedule.date,
+                slotNumber: appointmentToReschedule.slotNumber,
+              }
+            : undefined
+        }
         userRole="client"
         currentUserId={currentUserId}
         onRescheduleSuccess={() => {

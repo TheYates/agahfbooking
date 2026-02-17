@@ -329,7 +329,8 @@ export async function sendRescheduleRequestNotification(
  */
 export async function sendRescheduleCompletedNotification(
   oldAppointment: AppointmentDetails,
-  newAppointment: AppointmentDetails
+  newAppointment: AppointmentDetails,
+  needsConfirmation: boolean = false
 ): Promise<NotificationResult> {
   const result: NotificationResult = {
     sms: { sent: false },
@@ -342,25 +343,34 @@ export async function sendRescheduleCompletedNotification(
     return result;
   }
 
-  const clientPhone = newAppointment.clients.phone;
+const clientPhone = newAppointment.clients.phone;
   const clientId = newAppointment.client_id;
   const departmentName = newAppointment.departments.name;
   const oldDate = formatDate(oldAppointment.appointment_date);
   const newDate = formatDate(newAppointment.appointment_date);
   const newTime = getSlotTimeDisplay(newAppointment);
 
-  const smsMessage = `AGAHF Hospital: Your ${departmentName} appointment has been rescheduled from ${oldDate} to ${newDate} at ${newTime}. Please arrive 15 minutes early.`;
+  const smsMessage = needsConfirmation
+    ? `AGAHF Hospital: Your ${departmentName} appointment reschedule request for ${newDate} at ${newTime} is pending confirmation. You will be notified once confirmed.`
+    : `AGAHF Hospital: Your ${departmentName} appointment has been rescheduled from ${oldDate} to ${newDate} at ${newTime}. Please arrive 15 minutes early.`;
+
+  const notificationTitle = needsConfirmation ? "Reschedule Pending" : "Appointment Rescheduled";
+  const notificationBody = needsConfirmation
+    ? `Your ${departmentName} reschedule request for ${newDate} at ${newTime} is pending confirmation.`
+    : `Your ${departmentName} appointment has been rescheduled to ${newDate} at ${newTime}.`;
 
   // Create in-app notification
   await createInAppNotification(
     clientId,
-    "Appointment Rescheduled",
-    `Your ${departmentName} appointment has been rescheduled to ${newDate} at ${newTime}.`,
-    "info",
-    "rescheduled",
+    notificationTitle,
+    notificationBody,
+    needsConfirmation ? "warning" : "info",
+    needsConfirmation ? "reschedule_pending_review" : "reschedule_completed",
     newAppointment.id,
     "/dashboard/my-appointments"
   );
+
+  const eventType: NotificationEventType = needsConfirmation ? "reschedule_pending_review" : "reschedule_completed";
 
   // Send SMS
   try {
@@ -374,11 +384,11 @@ export async function sendRescheduleCompletedNotification(
       result.sms.error = smsResult.message;
     }
 
-    await logNotification(
+await logNotification(
       newAppointment.id,
       clientId,
       "sms",
-      "reschedule_completed",
+      eventType,
       clientPhone,
       result.sms.sent ? "sent" : "failed",
       smsMessage,
@@ -388,15 +398,22 @@ export async function sendRescheduleCompletedNotification(
     result.sms.error = error instanceof Error ? error.message : "SMS failed";
   }
 
-  // Send Push notification
+// Send Push notification
   if (isPushConfigured()) {
     try {
-      const pushPayload = NotificationTemplates.appointmentRescheduled(
-        departmentName,
-        oldDate,
-        newDate,
-        newTime
-      );
+      const pushPayload = needsConfirmation
+        ? {
+            title: "Reschedule Pending",
+            body: `Your ${departmentName} reschedule request for ${newDate} at ${newTime} is pending confirmation.`,
+            tag: "reschedule-pending",
+            data: { type: "reschedule_pending_review" },
+          }
+        : NotificationTemplates.appointmentRescheduled(
+            departmentName,
+            oldDate,
+            newDate,
+            newTime
+          );
       const pushResult = await sendPushNotification(clientId, pushPayload);
       result.push = pushResult;
 
@@ -405,7 +422,7 @@ export async function sendRescheduleCompletedNotification(
           newAppointment.id,
           clientId,
           "push",
-          "reschedule_completed",
+          eventType,
           `${pushResult.sent} devices`,
           "sent",
           pushPayload.body

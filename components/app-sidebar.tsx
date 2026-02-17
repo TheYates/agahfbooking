@@ -12,6 +12,8 @@ import {
   MessageSquare,
   UserCog,
   ClipboardCheck,
+  Heart,
+  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -41,7 +43,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const router = useRouter();
   const { state } = useSidebar();
 
-  const clientMenuItems = [
+const clientMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
     {
       title: "Appointments",
@@ -49,7 +51,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
       icon: Calendar,
     },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
-    { title: "Profile", url: "/dashboard/profile", icon: UserIcon },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Heart },
+    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
   ];
 
   const receptionistMenuItems = [
@@ -65,6 +68,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Heart },
+    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
   ];
 
@@ -75,7 +80,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
     { title: "Clients", url: "/admin/clients", icon: Users },
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Heart },
     { title: "Users", url: "/admin/users", icon: UserCog },
+    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
     { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },

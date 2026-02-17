@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCheck, Info, AlertTriangle, AlertCircle, Calendar, ExternalLink } from "lucide-react";
+import { CheckCheck, Info, AlertTriangle, AlertCircle, Calendar, ExternalLink, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -73,20 +73,30 @@ export function NotificationList({
   };
 
   return (
-    <div className="flex flex-col">
+<div className="flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <h3 className="font-semibold text-lg">Notifications</h3>
-        {notifications.some((n) => !n.is_read) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onMarkAllRead}
-            className="text-xs"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/notifications"
+            onClick={onClose}
+            className="p-2 rounded-md hover:bg-muted transition-colors"
+            title="View all notifications"
           >
-            Mark all read
-          </Button>
-        )}
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </Link>
+          {notifications.some((n) => !n.is_read) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onMarkAllRead}
+              className="text-xs"
+            >
+              Mark all read
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Notification List */}
@@ -106,23 +116,10 @@ export function NotificationList({
             <p className="text-sm">No notifications yet</p>
           </div>
         ) : (
-          <div className="divide-y">
+<div className="divide-y">
             {notifications.map((notification) => {
-              const NotificationWrapper = notification.action_url ? Link : "div";
-              const wrapperProps = notification.action_url
-                ? { href: notification.action_url }
-                : {};
-
-              return (
-                <NotificationWrapper
-                  key={notification.id}
-                  {...wrapperProps}
-                  onClick={() => handleNotificationClick(notification)}
-                  className={cn(
-                    "flex gap-3 p-4 hover:bg-muted/50 transition-colors cursor-pointer",
-                    !notification.is_read && "bg-blue-50 dark:bg-blue-950/20"
-                  )}
-                >
+              const content = (
+                <>
                   <div className="flex-shrink-0 mt-1">
                     {getNotificationIcon(notification.type)}
                   </div>
@@ -152,7 +149,36 @@ export function NotificationList({
                       )}
                     </div>
                   </div>
-                </NotificationWrapper>
+                </>
+              );
+
+              if (notification.action_url) {
+                return (
+                  <Link
+                    key={notification.id}
+                    href={notification.action_url}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={cn(
+                      "flex gap-3 p-4 hover:bg-muted/50 transition-colors cursor-pointer",
+                      !notification.is_read && "bg-blue-50 dark:bg-blue-950/20"
+                    )}
+                  >
+                    {content}
+                  </Link>
+                );
+              }
+
+              return (
+                <div
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
+                  className={cn(
+                    "flex gap-3 p-4 hover:bg-muted/50 transition-colors cursor-pointer",
+                    !notification.is_read && "bg-blue-50 dark:bg-blue-950/20"
+                  )}
+                >
+                  {content}
+                </div>
               );
             })}
           </div>

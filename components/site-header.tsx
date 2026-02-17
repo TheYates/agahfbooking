@@ -42,7 +42,7 @@ export function SiteHeader() {
 
     if (segments.length > 1) {
       const section = segments[1]
-      const sectionLabels: Record<string, string> = {
+const sectionLabels: Record<string, string> = {
         'appointments': 'Appointments',
         'my-appointments': 'My Appointments',
         'calendar': 'Calendar',
@@ -51,7 +51,9 @@ export function SiteHeader() {
         'users': 'Users',
         'reports': 'Reports',
         'settings': 'Settings',
-        'profile': 'Profile',
+        'medicals': 'Medicals',
+        'notifications': 'Notifications',
+        'reviews': 'Reviews',
         'test-sms': 'Test SMS',
         'rate-limit-monitor': 'Rate Limiting Monitor',
         'login-audit': 'Login Audit',

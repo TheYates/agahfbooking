@@ -328,15 +328,17 @@ export function PendingReviewsMobileList({ user, className, showHeader = true }:
                                         )}
                                     </div>
 
-                                    {/* Main Content */}
+{/* Main Content */}
                                     <div>
-                                        <h4 className="text-lg font-bold text-foreground leading-tight mb-1">
-                                            {apt.clients?.name}
-                                        </h4>
-                                        <p className="text-sm text-muted-foreground flex items-center gap-1.5 mb-3">
-                                            <Clock className="w-3.5 h-3.5" />
-                                            {formatTime(apt)}
-                                        </p>
+                                        <div className="flex items-baseline justify-between gap-2 mb-1">
+                                            <h4 className="text-base font-bold text-foreground leading-tight truncate">
+                                                {apt.clients?.name}
+                                            </h4>
+                                            <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />
+                                                {formatTime(apt)}
+                                            </span>
+                                        </div>
 
                                         {apt.notes && (
                                             <div className="bg-muted/30 p-2 rounded-lg text-xs italic text-muted-foreground mb-3 line-clamp-2">
