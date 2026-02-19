@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,12 +13,15 @@ import {
 } from "@/components/ui/input-otp";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield } from "lucide-react";
+import { Shield, Clock } from "lucide-react";
 import Link from "next/link";
 import { authActions } from "@/lib/auth-client";
+import { PrivacyPolicyDialog } from "@/components/dialogs/privacy-policy-dialog";
+import { HelpCenterDialog } from "@/components/dialogs/help-center-dialog";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sendOTP = authActions.sendOTP;
   const verifyOTP = authActions.verifyOTP;
   
@@ -29,6 +32,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [mockOtp, setMockOtp] = useState("");
   const [isMockMode, setIsMockMode] = useState(false);
+
+  const timeoutMessage = searchParams.get("reason") === "timeout" 
+    ? "You were logged out due to inactivity. Please log in again to continue."
+    : "";
 
   const handleXNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^0-9]/g, "");
@@ -189,8 +196,17 @@ export default function LoginPage() {
                   </p>
                 </div>
 
-                {/* Main Content Area */}
+{/* Main Content Area */}
                 <div className="flex-1 flex flex-col justify-center py-8 space-y-6 max-w-sm mx-auto w-full">
+                  {timeoutMessage && (
+                    <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700 dark:text-amber-400">
+                        {timeoutMessage}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   {error && (
                     <Alert variant="destructive" className="animate-in slide-in-from-top-2">
                       <AlertDescription>{error}</AlertDescription>
@@ -305,12 +321,12 @@ export default function LoginPage() {
                     </Button>
                   )}
                   
-                  <div className="text-center">
-                     <p className="text-xs text-muted-foreground">
-                        Protected by secure OTP verification. <br/>
-                        <a href="#" className="hover:underline text-green-600/80">Privacy Policy</a> &bull; <a href="#" className="hover:underline text-green-600/80">Help Center</a>
-                     </p>
-                  </div>
+                   <div className="text-center">
+                      <p className="text-xs text-muted-foreground">
+                         Protected by secure OTP verification. <br/>
+                         <PrivacyPolicyDialog triggerClassName="text-xs text-green-600/80 hover:underline" /> &bull; <HelpCenterDialog triggerClassName="text-xs text-green-600/80 hover:underline" />
+                      </p>
+                   </div>
                 </div>
               </form>
             </div>

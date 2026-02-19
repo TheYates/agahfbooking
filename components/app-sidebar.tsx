@@ -12,8 +12,8 @@ import {
   MessageSquare,
   UserCog,
   ClipboardCheck,
-  Heart,
-  Bell,
+  Stethoscope,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -51,8 +51,7 @@ const clientMenuItems = [
       icon: Calendar,
     },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
-    { title: "Medicals", url: "/dashboard/medicals", icon: Heart },
-    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
   ];
 
   const receptionistMenuItems = [
@@ -68,8 +67,6 @@ const clientMenuItems = [
     { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
-    { title: "Medicals", url: "/dashboard/medicals", icon: Heart },
-    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
   ];
 
@@ -80,12 +77,12 @@ const clientMenuItems = [
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
     { title: "Clients", url: "/admin/clients", icon: Users },
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
-    { title: "Medicals", url: "/dashboard/medicals", icon: Heart },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
     { title: "Users", url: "/admin/users", icon: UserCog },
-    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
     { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    { title: "Content", url: "/dashboard/content-management", icon: FileText },
     { title: "Login Audit", url: "/admin/login-audit", icon: ClipboardCheck },
     { title: "Feedback", url: "/admin/feedback", icon: MessageSquare },
   ];

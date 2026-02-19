@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCheck, Info, AlertTriangle, AlertCircle, Calendar, ExternalLink, Settings } from "lucide-react";
+import { CheckCheck, Info, AlertTriangle, AlertCircle, Calendar, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,10 +81,9 @@ export function NotificationList({
           <Link
             href="/dashboard/notifications"
             onClick={onClose}
-            className="p-2 rounded-md hover:bg-muted transition-colors"
-            title="View all notifications"
+            className="text-xs text-primary hover:underline font-medium"
           >
-            <Settings className="h-4 w-4 text-muted-foreground" />
+            View all
           </Link>
           {notifications.some((n) => !n.is_read) && (
             <Button

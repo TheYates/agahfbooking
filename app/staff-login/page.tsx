@@ -1,10 +1,9 @@
 "use client";
 
-// This component is BetterAuth-ready and uses the updated API endpoints
 import type React from "react";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,16 +15,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield } from "lucide-react";
+import { Shield, Clock } from "lucide-react";
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
+
+  const timeoutMessage = searchParams.get("reason") === "timeout"
+    ? "You were logged out due to inactivity. Please log in again to continue."
+    : "";
 
   const handleUsernameLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,12 +107,20 @@ export default function StaffLoginPage() {
                       className="h-32 w-32 md:h-10 md:w-10 object-contain hidden dark:block"
                     />
                   </div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+<h1 className="text-2xl md:text-3xl font-bold tracking-tight">
                     Staff Access
                   </h1>
                   <p className="text-muted-foreground text-sm md:text-base max-w-xs mx-auto">
                     Please log in with your credentials
                   </p>
+                  {timeoutMessage && (
+                    <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 mt-4 max-w-sm">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                        {timeoutMessage}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
 
                 {/* Main Content Area */}

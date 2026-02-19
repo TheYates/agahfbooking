@@ -7,7 +7,6 @@ import {
   LogOut,
   Menu,
   Stethoscope,
-  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -50,7 +49,6 @@ const clientMenuItems = [
     },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
-    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
   ];
 
   const handleLogout = async () => {

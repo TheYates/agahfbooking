@@ -81,7 +81,7 @@ export function MobileBottomNav({
     },
   ];
 
-  const reviewerNavItems: NavItem[] = [
+const reviewerNavItems: NavItem[] = [
     {
       title: "Home",
       href: "/dashboard",
@@ -105,12 +105,6 @@ export function MobileBottomNav({
       href: "/dashboard/appointments",
       icon: List,
       isActive: pathname === "/dashboard/appointments",
-    },
-    {
-      title: "Medicals",
-      href: "/dashboard/medicals",
-      icon: Stethoscope,
-      isActive: pathname === "/dashboard/medicals",
     },
   ];
 
