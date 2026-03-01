@@ -5,7 +5,7 @@ import { Session, SessionUser } from "../types";
 /**
  * Send OTP to client
  */
-export async function sendOTP(xNumber: string): Promise<{ message: string }> {
+export async function sendOTP(xNumber: string): Promise<{ message: string; otp?: string }> {
   return api.post("/api/auth/send-otp", { xNumber });
 }
 

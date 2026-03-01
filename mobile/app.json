@@ -19,8 +19,8 @@
     "android": {
       "package": "com.agahf.booking",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/adaptive-icon.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/agahflogo.png"
       }
     },
     "web": {

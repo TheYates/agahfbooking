@@ -13,7 +13,7 @@ interface AuthContextType {
   user: SessionUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  sendOTP: (xNumber: string) => Promise<void>;
+  sendOTP: (xNumber: string) => Promise<{ mockOtp?: string }>;
   verifyOTP: (xNumber: string, otp: string) => Promise<void>;
   staffLogin: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -44,7 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleSendOTP = async (xNumber: string) => {
-    await sendOTP(xNumber);
+    const result = await sendOTP(xNumber);
+    return result;
   };
 
   const handleVerifyOTP = async (xNumber: string, otp: string) => {

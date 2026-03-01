@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -22,7 +23,9 @@ export default function VerifyOTPScreen() {
   const [canResend, setCanResend] = useState(false);
   
   const inputRefs = useRef<(TextInput | null)[]>([]);
-  const { xNumber } = useLocalSearchParams<{ xNumber: string }>();
+  const params = useLocalSearchParams<{ xNumber: string; mockOtp?: string }>();
+  const xNumber = params.xNumber;
+  const mockOtp = params.mockOtp;
   const { verifyOTP, sendOTP } = useAuth();
   const router = useRouter();
 
@@ -78,7 +81,8 @@ export default function VerifyOTPScreen() {
 
     try {
       await verifyOTP(xNumber, code);
-      // Auth context will handle navigation
+      // Navigate to main app
+      router.replace("/(tabs)");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid OTP");
       setOtp(["", "", "", "", "", ""]);
@@ -116,12 +120,28 @@ export default function VerifyOTPScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            <Text style={styles.title}>Verify OTP</Text>
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+              <Image
+                source={require("../../assets/agahflogo.png")}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            </View>
+
+            <Text style={styles.title}>Security Verification</Text>
             <Text style={styles.subtitle}>
               Enter the 6-digit code sent to your phone
             </Text>
             
             <Text style={styles.xNumber}>{xNumber}</Text>
+
+            {mockOtp && mockOtp.length > 0 ? (
+              <View style={styles.mockOtpBox}>
+                <Text style={styles.mockOtpLabel}>Development Code</Text>
+                <Text style={styles.mockOtpCode}>{mockOtp}</Text>
+              </View>
+            ) : null}
 
             <View style={styles.otpContainer}>
               {otp.map((digit, index) => (
@@ -188,6 +208,14 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: "center",
   },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+  },
   title: {
     fontSize: 32,
     fontWeight: "bold",
@@ -229,6 +257,31 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 14,
     textAlign: "center",
+    backgroundColor: "#fee",
+    padding: 12,
+    borderRadius: 8,
+  },
+  mockOtpBox: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  mockOtpLabel: {
+    fontSize: 11,
+    color: "#1E40AF",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  mockOtpCode: {
+    fontSize: 24,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontWeight: "bold",
+    letterSpacing: 4,
+    color: "#1E3A8A",
   },
   button: {
     backgroundColor: "#007AFF",

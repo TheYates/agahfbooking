@@ -1,14 +1,24 @@
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import {
+  Card,
+  Title,
+  Paragraph,
+  Button,
+  Text,
+  Surface,
+  Avatar,
+  Chip,
+  Divider,
+  IconButton,
+} from "react-native-paper";
 import { useAuth } from "../../src/context/AuthContext";
 import { useDashboardStats, useClientAppointments } from "../../src/hooks/useAppointments";
 
@@ -38,76 +48,140 @@ export default function HomeScreen() {
         }
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.name}>{user?.name || "Patient"}</Text>
-          <Text style={styles.xNumber}>{user?.xNumber}</Text>
-        </View>
+        <Surface style={styles.header} elevation={1}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerText}>
+              <Text variant="bodyMedium" style={styles.greeting}>
+                Welcome back,
+              </Text>
+              <Title style={styles.name}>{user?.name || "Patient"}</Title>
+              <Chip icon="card-account-details" compact style={styles.xNumberChip}>
+                {user?.xNumber}
+              </Chip>
+            </View>
+            <Avatar.Icon size={56} icon="account-circle" style={styles.avatar} />
+          </View>
+        </Surface>
 
         {/* Quick Stats */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {stats?.upcomingAppointments || 0}
-            </Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {stats?.totalAppointments || 0}
-            </Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
+          <Card style={styles.statCard}>
+            <Card.Content>
+              <Avatar.Icon
+                size={40}
+                icon="calendar-clock"
+                style={styles.statIcon}
+              />
+              <Title style={styles.statNumber}>
+                {stats?.upcomingAppointments || 0}
+              </Title>
+              <Paragraph style={styles.statLabel}>Upcoming</Paragraph>
+            </Card.Content>
+          </Card>
+          <Card style={styles.statCard}>
+            <Card.Content>
+              <Avatar.Icon
+                size={40}
+                icon="calendar-check"
+                style={styles.statIcon}
+              />
+              <Title style={styles.statNumber}>
+                {stats?.totalAppointments || 0}
+              </Title>
+              <Paragraph style={styles.statLabel}>Total</Paragraph>
+            </Card.Content>
+          </Card>
         </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push("/(tabs)/book")}
-          >
-            <Text style={styles.actionText}>📅 Book New Appointment</Text>
-          </TouchableOpacity>
+          <Text variant="titleLarge" style={styles.sectionTitle}>
+            Quick Actions
+          </Text>
+          <Card style={styles.actionCard}>
+            <Card.Content style={styles.actionCardContent}>
+              <Button
+                mode="contained"
+                icon="calendar-plus"
+                onPress={() => router.push("/(tabs)/book")}
+                style={styles.actionButton}
+              >
+                Book New Appointment
+              </Button>
+              <Button
+                mode="outlined"
+                icon="calendar-month"
+                onPress={() => router.push("/(tabs)/appointments")}
+                style={styles.actionButton}
+              >
+                View My Appointments
+              </Button>
+            </Card.Content>
+          </Card>
         </View>
 
         {/* Recent Appointments */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Appointments</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/appointments")}>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
+            <Text variant="titleLarge" style={styles.sectionTitle}>
+              Recent Appointments
+            </Text>
+            <Button
+              mode="text"
+              compact
+              onPress={() => router.push("/(tabs)/appointments")}
+            >
+              See All
+            </Button>
           </View>
 
           {appointments.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No appointments yet</Text>
-              <Text style={styles.emptySubtext}>
-                Book your first appointment now!
-              </Text>
-            </View>
+            <Card style={styles.emptyState}>
+              <Card.Content style={styles.emptyContent}>
+                <Avatar.Icon
+                  size={64}
+                  icon="calendar-blank"
+                  style={styles.emptyIcon}
+                />
+                <Title>No appointments yet</Title>
+                <Paragraph>Book your first appointment now!</Paragraph>
+              </Card.Content>
+            </Card>
           ) : (
             appointments.map((apt) => (
-              <View key={apt.id} style={styles.appointmentCard}>
-                <View style={styles.appointmentHeader}>
-                  <Text style={styles.departmentName}>{apt.department_name}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(apt.status) },
-                    ]}
-                  >
-                    <Text style={styles.statusText}>
+              <Card key={apt.id} style={styles.appointmentCard}>
+                <Card.Content>
+                  <View style={styles.appointmentHeader}>
+                    <View style={styles.appointmentInfo}>
+                      <Avatar.Icon
+                        size={40}
+                        icon="hospital-building"
+                        style={styles.deptIcon}
+                      />
+                      <View style={styles.appointmentText}>
+                        <Title style={styles.departmentName}>
+                          {apt.department_name}
+                        </Title>
+                        <Paragraph style={styles.appointmentDate}>
+                          {new Date(apt.appointment_date).toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}{" "}
+                          • {apt.slot_start_time?.slice(0, 5) || "TBD"}
+                        </Paragraph>
+                      </View>
+                    </View>
+                    <Chip
+                      mode="outlined"
+                      style={{ backgroundColor: getStatusColor(apt.status) }}
+                      textStyle={{ color: "#fff", fontSize: 11 }}
+                    >
                       {formatStatus(apt.status)}
-                    </Text>
+                    </Chip>
                   </View>
-                </View>
-                <Text style={styles.appointmentDate}>
-                  {new Date(apt.appointment_date).toLocaleDateString()} at{" "}
-                  {apt.slot_start_time?.slice(0, 5) || "TBD"}
-                </Text>
-              </View>
+                </Card.Content>
+              </Card>
             ))
           )}
         </View>
@@ -148,23 +222,29 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    marginBottom: 8,
+  },
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerText: {
+    flex: 1,
   },
   greeting: {
-    fontSize: 16,
     color: "#666",
+    marginBottom: 4,
   },
   name: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#111",
-    marginTop: 4,
+    marginTop: 0,
+    marginBottom: 8,
   },
-  xNumber: {
-    fontSize: 14,
-    color: "#007AFF",
-    marginTop: 4,
+  xNumberChip: {
+    alignSelf: "flex-start",
+  },
+  avatar: {
+    backgroundColor: "#16a34a",
   },
   statsContainer: {
     flexDirection: "row",
@@ -173,25 +253,18 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+  },
+  statIcon: {
+    backgroundColor: "#16a34a",
+    alignSelf: "center",
   },
   statNumber: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#007AFF",
+    textAlign: "center",
+    color: "#16a34a",
+    marginTop: 8,
   },
   statLabel: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
+    textAlign: "center",
   },
   section: {
     padding: 16,
@@ -203,75 +276,54 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 12,
-  },
-  seeAll: {
-    color: "#007AFF",
-    fontSize: 14,
+    flex: 1,
   },
   actionCard: {
-    backgroundColor: "#007AFF",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
+    marginBottom: 8,
   },
-  actionText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+  actionCardContent: {
+    gap: 12,
+  },
+  actionButton: {
+    marginVertical: 4,
   },
   emptyState: {
-    backgroundColor: "#fff",
-    padding: 32,
-    borderRadius: 12,
+    marginBottom: 8,
+  },
+  emptyContent: {
     alignItems: "center",
+    paddingVertical: 16,
   },
-  emptyText: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 4,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: "#999",
+  emptyIcon: {
+    backgroundColor: "#e5e5e5",
+    marginBottom: 16,
   },
   appointmentCard: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 12,
   },
   appointmentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+  },
+  appointmentInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
+  },
+  deptIcon: {
+    backgroundColor: "#0284c7",
+    marginRight: 12,
+  },
+  appointmentText: {
+    flex: 1,
   },
   departmentName: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#111",
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "500",
+    marginBottom: 4,
   },
   appointmentDate: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 13,
   },
 });

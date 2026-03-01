@@ -13,7 +13,7 @@ const DEFAULT_TIMEOUT_MINUTES = 60;
 
 async function fetchInactivitySettings(): Promise<InactivitySettings> {
   try {
-    const response = await fetch("/api/settings/system");
+    const response = await fetch("/api/settings/public");
     const data = await response.json();
     if (data.success) {
       return {

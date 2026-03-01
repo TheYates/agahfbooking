@@ -26,16 +26,20 @@ interface RescheduleReasonSelectorProps {
   textareaClassName?: string;
 }
 
+const OTHER_OPTION = "other";
+
 export function RescheduleReasonSelector({
   value,
   onChange,
-  placeholder = "Enter a reason or select a preset...",
+  placeholder = "Please specify the reason...",
   required = false,
   className = "",
   textareaClassName = "",
 }: RescheduleReasonSelectorProps) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOption, setSelectedOption] = useState<string>("");
+  const [customReason, setCustomReason] = useState("");
 
   useEffect(() => {
     async function fetchPresets() {
@@ -55,45 +59,67 @@ export function RescheduleReasonSelector({
     fetchPresets();
   }, []);
 
-  const handlePresetSelect = (presetId: string) => {
-    if (presetId === "custom") {
-      return;
-    }
-    const preset = presets.find((p) => p.id === parseInt(presetId));
-    if (preset) {
-      onChange(preset.message);
+  const handleSelectChange = (optionValue: string) => {
+    setSelectedOption(optionValue);
+    
+    if (optionValue === OTHER_OPTION) {
+      // Switch to custom input, preserve any existing custom text
+      onChange(customReason);
+    } else {
+      // Use preset message
+      const preset = presets.find((p) => p.id === parseInt(optionValue));
+      if (preset) {
+        onChange(preset.message);
+      }
     }
   };
 
+  const handleCustomReasonChange = (text: string) => {
+    setCustomReason(text);
+    onChange(text);
+  };
+
+  const showTextarea = selectedOption === OTHER_OPTION;
+
   return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="flex items-center justify-between gap-2">
+    <div className={`space-y-3 ${className}`}>
+      <div className="space-y-2">
         <Label>
           Reason {required && <span className="text-destructive">*</span>}
         </Label>
-        {!loading && presets.length > 0 && (
-          <Select onValueChange={handlePresetSelect}>
-            <SelectTrigger className="w-[180px] h-8 text-xs">
-              <SelectValue placeholder="Quick select..." />
-            </SelectTrigger>
-            <SelectContent>
-              {presets.map((preset) => (
-                <SelectItem key={preset.id} value={preset.id.toString()}>
-                  {preset.message.length > 30
-                    ? preset.message.slice(0, 30) + "..."
-                    : preset.message}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select 
+          value={selectedOption} 
+          onValueChange={handleSelectChange}
+          disabled={loading}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={loading ? "Loading reasons..." : "Select a reason..."} />
+          </SelectTrigger>
+          <SelectContent>
+            {presets.map((preset) => (
+              <SelectItem key={preset.id} value={preset.id.toString()}>
+                {preset.message}
+              </SelectItem>
+            ))}
+            <SelectItem value={OTHER_OPTION}>Other (specify reason)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`min-h-[100px] ${textareaClassName}`}
-      />
+
+      {showTextarea && (
+        <div className="space-y-2">
+          <Label htmlFor="custom-reason" className="text-sm text-muted-foreground">
+            Specify your reason
+          </Label>
+          <Textarea
+            id="custom-reason"
+            value={customReason}
+            onChange={(e) => handleCustomReasonChange(e.target.value)}
+            placeholder={placeholder}
+            className={`min-h-[100px] ${textareaClassName}`}
+          />
+        </div>
+      )}
     </div>
   );
 }

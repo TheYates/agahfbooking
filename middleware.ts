@@ -6,6 +6,7 @@ const PUBLIC_API_ROUTES = [
   "/api/test",
   "/api/departments",
   "/api/test-rls",
+  "/api/settings/public",
 ];
 
 const CLIENT_API_ROUTES = [

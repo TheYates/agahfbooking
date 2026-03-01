@@ -62,6 +62,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      token: session.id, // Return session ID as token for mobile apps
+      session: {
+        user: {
+          id: session.userId,
+          name: session.name,
+          phone: session.phone,
+          role: session.role,
+          employeeId: session.employeeId,
+        },
+      },
       user: {
         id: session.userId,
         name: session.name,
