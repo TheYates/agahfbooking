@@ -196,7 +196,7 @@ export default function LoginPage() {
                   </p>
                 </div>
 
-{/* Main Content Area */}
+                {/* Main Content Area */}
                 <div className="flex-1 flex flex-col justify-center py-8 space-y-6 max-w-sm mx-auto w-full">
                   {timeoutMessage && (
                     <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
