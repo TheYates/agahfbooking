@@ -1,72 +1,73 @@
-/**
- * PWA Icon Generator Script
- * 
- * This script helps generate PWA icons from your SVG logo.
- * 
- * OPTION 1: Use an online tool (Easiest)
- * =====================================
- * 1. Go to https://realfavicongenerator.net/ or https://www.pwabuilder.com/imageGenerator
- * 2. Upload your logo (public/agahflogo.svg or public/agahflogo white.svg)
- * 3. Download the generated icons
- * 4. Place them in public/icons/ with these names:
- *    - icon-72x72.png
- *    - icon-96x96.png
- *    - icon-128x128.png
- *    - icon-144x144.png
- *    - icon-152x152.png
- *    - icon-192x192.png
- *    - icon-384x384.png
- *    - icon-512x512.png
- * 
- * OPTION 2: Use Sharp (requires installation)
- * ===========================================
- * Run: pnpm add -D sharp
- * Then run: node scripts/generate-pwa-icons.js
- */
-
-const fs = require('fs');
+const sharp = require('sharp');
+const fs = require('fs').promises;
 const path = require('path');
 
+const SOURCE_IMAGE = 'mobile/assets/agahflogo.png';
+const ICONS_DIR = 'public/icons';
+
+// Icon sizes needed for PWA
+const ICON_SIZES = [
+  { size: 72, name: 'icon-72x72' },
+  { size: 96, name: 'icon-96x96' },
+  { size: 128, name: 'icon-128x128' },
+  { size: 144, name: 'icon-144x144' },
+  { size: 152, name: 'icon-152x152' },
+  { size: 180, name: 'icon-180x180' },
+  { size: 192, name: 'icon-192x192' },
+  { size: 384, name: 'icon-384x384' },
+  { size: 512, name: 'icon-512x512' },
+  { size: 1024, name: 'icon-1024x1024' }
+];
+
 async function generateIcons() {
-  try {
-    const sharp = require('sharp');
-    
-    const sizes = [72, 96, 128, 144, 152, 180, 192, 384, 512, 1024];
-    const inputSvg = path.join(__dirname, '../public/agahflogo white.svg');
-    const outputDir = path.join(__dirname, '../public/icons');
+  console.log('Generating PWA icons...\n');
 
-    // Ensure output directory exists
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
+  // Ensure icons directory exists
+  await fs.mkdir(ICONS_DIR, { recursive: true });
 
-    console.log('Generating PWA icons...');
+  const sourcePath = path.join(process.cwd(), SOURCE_IMAGE);
 
-    for (const size of sizes) {
-      const outputPath = path.join(outputDir, `icon-${size}x${size}.png`);
-      
-      await sharp(inputSvg)
+  for (const { size, name } of ICON_SIZES) {
+    try {
+      // Regular icon (logo fills entire canvas) - for splashscreen and crisp display
+      await sharp(sourcePath)
         .resize(size, size, {
           fit: 'contain',
-          background: { r: 0, g: 0, b: 0, alpha: 1 } // Black background
+          background: { r: 0, g: 0, b: 0, alpha: 0 } // Transparent background
         })
         .png()
-        .toFile(outputPath);
-      
-      console.log(`✓ Generated ${size}x${size} icon`);
-    }
+        .toFile(path.join(ICONS_DIR, `${name}.png`));
+      console.log(`✓ ${name}.png (${size}x${size}) - Regular`);
 
-    console.log('\n✅ All PWA icons generated successfully!');
-    console.log(`Icons saved to: ${outputDir}`);
-  } catch (error) {
-    if (error.code === 'MODULE_NOT_FOUND') {
-      console.log('Sharp module not found. Please install it first:');
-      console.log('  pnpm add -D sharp');
-      console.log('\nOr use an online tool like https://www.pwabuilder.com/imageGenerator');
-    } else {
-      console.error('Error generating icons:', error.message);
+      // Maskable icon (logo centered in 80% safe zone) - for Android adaptive icons
+      // Android adaptive icons require a 48dp safe zone (20% padding on each side)
+      const padding = Math.round(size * 0.1); // 10% padding on each side = 80% safe zone
+      const logoSize = size - (padding * 2);
+      
+      await sharp(sourcePath)
+        .resize(logoSize, logoSize, {
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        })
+        .extend({
+          top: padding,
+          bottom: padding,
+          left: padding,
+          right: padding,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        })
+        .png()
+        .toFile(path.join(ICONS_DIR, `${name}-maskable.png`));
+      console.log(`✓ ${name}-maskable.png (${size}x${size}) - Maskable (20% padding)`);
+    } catch (error) {
+      console.error(`✗ Error generating ${name}:`, error.message);
     }
   }
+
+  console.log('\n✅ Icon generation complete!');
+  console.log(`\nGenerated ${ICON_SIZES.length * 2} icons in ${ICONS_DIR}/`);
+  console.log('- Regular icons: For splashscreen, iOS, Windows, Edge');
+  console.log('- Maskable icons: For Android adaptive icons');
 }
 
-generateIcons();
+generateIcons().catch(console.error);
