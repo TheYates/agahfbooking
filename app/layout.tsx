@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     title: "AGAHF Booking",
-    description: "AGAHF Hospital Appointment Booking System",
+    description: "AGAHF Appointment Booking System",
     siteName: "AGAHF Booking",
   },
 };
