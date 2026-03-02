@@ -31,7 +31,7 @@ async function generateIcons() {
   try {
     const sharp = require('sharp');
     
-    const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+    const sizes = [72, 96, 128, 144, 152, 180, 192, 384, 512, 1024];
     const inputSvg = path.join(__dirname, '../public/agahflogo white.svg');
     const outputDir = path.join(__dirname, '../public/icons');
 

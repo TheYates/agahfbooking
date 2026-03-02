@@ -13,10 +13,12 @@ export const metadata: Metadata = {
   generator: "AGAHF Booking System",
   manifest: "/manifest.json",
   icons: {
-    icon: "/agahflogo white.svg",
+    icon: "/icons/icon-512x512.png",
     apple: [
       { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-180x180.png", sizes: "180x180", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-1024x1024.png", sizes: "1024x1024", type: "image/png" },
     ],
   },
   appleWebApp: {
@@ -60,9 +62,11 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
         <meta name="theme-color" content="#000000" />
         <link rel="apple-touch-icon" href="/icons/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="384x384" href="/icons/icon-384x384.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+        <link rel="apple-touch-icon" sizes="1024x1024" href="/icons/icon-1024x1024.png" />
         <style>{`
 html {
   font-family: ${GeistSans.style.fontFamily};
