@@ -24,6 +24,39 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
+
+const getStatusLabel = (status: string) => {
+  const labels: { [key: string]: string } = {
+    pending_review: "Pending",
+    reschedule_requested: "Reschedule",
+    booked: "Confirmed",
+    confirmed: "Confirmed",
+    arrived: "Arrived",
+    waiting: "Waiting",
+    completed: "Done",
+    no_show: "Missed",
+    cancelled: "Cancelled",
+    rescheduled: "Moved",
+  };
+  return labels[status] || status;
+};
+
+const getStatusTooltip = (status: string) => {
+  const tooltips: { [key: string]: string } = {
+    pending_review: "Awaiting staff confirmation",
+    reschedule_requested: "Staff requested a new time",
+    booked: "Appointment confirmed",
+    confirmed: "Appointment confirmed",
+    arrived: "Patient has arrived",
+    waiting: "Patient is waiting",
+    completed: "Appointment completed",
+    no_show: "Patient did not show up",
+    cancelled: "Appointment cancelled",
+    rescheduled: "Moved to a new time",
+  };
+  return tooltips[status] || status;
+};
 
 interface Appointment {
   id: number;
@@ -36,6 +69,8 @@ interface Appointment {
   departmentName: string;
   date: string;
   slotNumber: number;
+  slotStartTime?: string;
+  slotEndTime?: string;
   status: string;
   statusColor: string;
   notes?: string;
@@ -45,14 +80,15 @@ interface AppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   appointment: Appointment | null;
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
   onAppointmentUpdate: (appointment: Appointment) => void;
   onAppointmentDelete: (appointmentId: number) => void;
 }
 
 const statusOptions = [
-  { value: "booked", label: "Booked", color: "#3B82F6" },
+  { value: "pending_review", label: "Pending Confirmation", color: "#F59E0B" },
+  { value: "booked", label: "Confirmed", color: "#3B82F6" },
   { value: "confirmed", label: "Confirmed", color: "#8B5CF6" },
   { value: "arrived", label: "Arrived", color: "#10B981" },
   { value: "waiting", label: "Waiting", color: "#F59E0B" },
@@ -60,6 +96,7 @@ const statusOptions = [
   { value: "completed", label: "Completed", color: "#059669" },
   { value: "no_show", label: "No Show", color: "#EF4444" },
   { value: "cancelled", label: "Cancelled", color: "#6B7280" },
+  { value: "rescheduled", label: "Rescheduled", color: "#F97316" },
 ];
 
 export function AppointmentModal({
@@ -298,7 +335,9 @@ export function AppointmentModal({
             </div>
           </DialogTitle>
           <DialogDescription>
-            {appointmentDate} - Slot {appointment.slotNumber}
+            {appointmentDate} - {appointment.slotStartTime && appointment.slotEndTime 
+              ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+              : `Slot ${appointment.slotNumber}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -391,7 +430,7 @@ export function AppointmentModal({
                     color: "white",
                   }}
                 >
-                  {appointment.status}
+                  {getStatusLabel(appointment.status)}
                 </Badge>
               </div>
             )}

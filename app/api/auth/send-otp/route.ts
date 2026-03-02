@@ -1,64 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { sendOTP } from "@/lib/auth";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
-
-/**
- * Mask phone number for display purposes
- * Examples: +233240298713 -> +233****8713, +1234567890 -> +1****7890
- */
-function maskPhoneNumber(phone: string): string {
-  if (!phone || phone.length < 6) return phone;
-
-  // Remove any spaces, dashes, or parentheses
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
-
-  if (cleanPhone.length <= 6) {
-    // For very short numbers, mask middle part
-    return cleanPhone.slice(0, 2) + "****" + cleanPhone.slice(-2);
-  }
-
-  // For longer numbers, show country code + first digit and last 4 digits
-  if (cleanPhone.startsWith("+")) {
-    const countryCodeEnd =
-      cleanPhone.indexOf("0") > 0 ? cleanPhone.indexOf("0") : 4;
-    const prefix = cleanPhone.slice(0, Math.min(countryCodeEnd + 1, 5));
-    const suffix = cleanPhone.slice(-4);
-    return prefix + "****" + suffix;
-  }
-
-  // Fallback for numbers without country code
-  return cleanPhone.slice(0, 2) + "****" + cleanPhone.slice(-4);
-}
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { hubtelSMS } from "@/lib/hubtel-sms";
 
 export async function POST(request: NextRequest) {
   let requestBody: { xNumber?: string } = {};
-  
+
   try {
     requestBody = await request.json();
     const { xNumber } = requestBody;
 
-    // Get client information for rate limiting
     const clientInfo = getClientInfo(request);
 
     // Validate X-number format
     const xNumberRegex = /^X\d{5}\/\d{2}$/;
-    if (!xNumberRegex.test(xNumber)) {
-      // Record failed attempt for invalid format
-      rateLimiter.recordAttempt(
-        clientInfo.ip,
-        false,
-        undefined,
-        clientInfo.userAgent
-      );
-
-      return NextResponse.json(
-        { error: "Invalid X-number format" },
-        { status: 400 }
-      );
+    if (!xNumber || !xNumberRegex.test(xNumber)) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, undefined, clientInfo.userAgent);
+      return NextResponse.json({ error: "Invalid X-number format" }, { status: 400 });
     }
 
-    // Check rate limiting before processing
     const rateLimitResult = rateLimiter.checkRateLimit(
       clientInfo.ip,
       xNumber,
@@ -66,15 +27,10 @@ export async function POST(request: NextRequest) {
     );
 
     if (!rateLimitResult.allowed) {
-      console.log(
-        `🚫 Rate limit exceeded for ${clientInfo.ip} (${xNumber}): ${rateLimitResult.reason}`
-      );
-
       return NextResponse.json(
         {
           error:
-            rateLimitResult.reason ||
-            "Too many attempts. Please try again later.",
+            rateLimitResult.reason || "Too many attempts. Please try again later.",
           rateLimited: true,
           resetTime: rateLimitResult.resetTime,
           blockDuration: rateLimitResult.blockDuration,
@@ -84,20 +40,92 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use BetterAuth sendOTP function
-    const result = await sendOTP(xNumber);
+    const supabase = createAdminSupabaseClient();
 
-    // Record successful attempt
-    rateLimiter.recordAttempt(
-      clientInfo.ip,
-      true,
-      xNumber,
-      clientInfo.userAgent
-    );
+    // Look up client
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .select("id,x_number,phone,name")
+      .eq("x_number", xNumber)
+      .eq("is_active", true)
+      .single();
 
-    // Include rate limiting info in response
+    if (clientErr || !client) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    // Generate a simple 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store OTP in database
+    const { error: otpInsertErr } = await supabase
+      .from("otp_codes")
+      .insert({
+        x_number: xNumber,
+        otp_code: otp,
+        expires_at: expiresAt.toISOString(),
+        is_used: false,
+      });
+
+    if (otpInsertErr) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      return NextResponse.json({ error: "Failed to generate OTP" }, { status: 500 });
+    }
+
+    // Send OTP via SMS
+    const otpMode = process.env.OTP_MODE || "mock";
+    
+    if (otpMode === "production" || otpMode === "hubtel") {
+      // Send real SMS via Hubtel
+      try {
+        const smsResult = await hubtelSMS.sendOTP(client.phone, otp, "AGAHF Hospital");
+        
+        if (smsResult.status !== 'success') {
+          console.error("Hubtel SMS sending failed:", smsResult.message);
+          // Continue anyway - OTP is stored in DB and can be used
+          // But log the failure for monitoring
+        } else {
+          console.log(`✅ OTP SMS sent successfully via Hubtel to ${client.phone}`);
+        }
+      } catch (smsError) {
+        console.error("Error sending SMS via Hubtel:", smsError);
+        // Continue - OTP is still valid in database
+      }
+    } else if (otpMode === "arkesel") {
+      // Send real SMS via Arkesel
+      try {
+        const { arkeselSMS } = await import("@/lib/arkesel-sms");
+        const smsResult = await arkeselSMS.sendOTP(client.phone, otp, "AGAHF Hospital");
+        
+        if (smsResult.status !== 'success') {
+          console.error("Arkesel SMS sending failed:", smsResult.message);
+          // Continue anyway - OTP is stored in DB and can be used
+        } else {
+          console.log(`✅ OTP SMS sent successfully via Arkesel to ${client.phone}`);
+        }
+      } catch (smsError) {
+        console.error("Error sending SMS via Arkesel:", smsError);
+        // Continue - OTP is still valid in database
+      }
+    } else {
+      // Mock mode - log to console
+      console.log(`\n🔐 OTP for ${xNumber} (${client.name}): ${otp}`);
+      console.log(`   Phone: ${client.phone}`);
+      console.log(`   Expires: ${expiresAt.toLocaleTimeString()}\n`);
+    }
+
+    rateLimiter.recordAttempt(clientInfo.ip, true, xNumber, clientInfo.userAgent);
+
     return NextResponse.json({
-      ...result,
+      success: true,
+      message: otpMode === "mock" 
+        ? `OTP sent successfully. Check console logs (DEV MODE)` 
+        : `OTP sent to ${client.phone}`,
+      xNumber,
+      // In mock mode, return the OTP for testing (REMOVE IN PRODUCTION!)
+      ...(otpMode === "mock" && { otp }),
       rateLimitInfo: {
         remainingAttempts: rateLimitResult.remainingAttempts,
         requiresCaptcha: rateLimitResult.requiresCaptcha,
@@ -107,32 +135,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Send OTP error:", error);
 
-    // Record failed attempt for server errors
     try {
       const clientInfo = getClientInfo(request);
-      const { xNumber } = requestBody; // Use already parsed body
+      const { xNumber } = requestBody;
       if (xNumber) {
-        rateLimiter.recordAttempt(
-          clientInfo.ip,
-          false,
-          xNumber,
-          clientInfo.userAgent
-        );
+        rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
       }
-    } catch (recordError) {
-      console.error("Failed to record rate limit attempt:", recordError);
+    } catch {
+      // ignore
     }
 
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      {
-        status:
-          error instanceof Error && error.message.includes("not found")
-            ? 404
-            : 500,
-      }
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
     );
   }
 }

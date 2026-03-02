@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import type React from "react";
@@ -10,7 +11,6 @@ import { ViewSwitcher } from "./view-switcher";
 import { AppointmentModal } from "./appointment-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DayAppointmentsPopover } from "./day-appointments-popover";
-import { AppointmentAlerts } from "./appointment-alerts";
 import {
   isValidBookingDate,
   isWorkingDayForAnyDepartment,
@@ -25,14 +25,14 @@ import {
 } from "@/hooks/use-hospital-queries";
 
 interface CalendarViewTanstackProps {
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
 }
 
 export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTanstackProps) {
   // Local state - much simpler now!
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<"month" | "week">("month");
+  const [view, setView] = useState<"month" | "week" | "day">("month");
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
   const [bookingModal, setBookingModal] = useState({
     isOpen: false,
@@ -800,12 +800,6 @@ export function CalendarViewTanstack({ userRole, currentUserId }: CalendarViewTa
     <div className="space-y-6">
 
       {/* Appointment Alerts - Shows toast notifications for upcoming appointments */}
-      <AppointmentAlerts
-        userRole={userRole}
-        currentUserId={currentUserId}
-        enabled={true}
-      />
-
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
 

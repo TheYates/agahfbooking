@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { calendarConfig, CalendarVisibility } from "@/lib/calendar-config-service";
 import { cookies } from "next/headers";
+import { getSession } from "@/lib/session-service";
 
 // Helper function to check admin authentication for API routes
 async function checkAdminAuth(): Promise<{ isAdmin: boolean; user?: any }> {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
 
-    if (!sessionCookie?.value) {
+    if (!sessionId) {
       return { isAdmin: false };
     }
 
-    const userData = JSON.parse(sessionCookie.value);
-
-    if (userData.role !== "admin") {
+    const session = await getSession(sessionId);
+    if (!session || session.role !== "admin") {
       return { isAdmin: false };
     }
 
-    return { isAdmin: true, user: userData };
+    return { isAdmin: true, user: session };
   } catch (error) {
     return { isAdmin: false };
   }
@@ -95,8 +95,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update visibility setting
-    await calendarConfig.setVisibility(visibility as CalendarVisibility, user.id);
+// Update visibility setting
+    await calendarConfig.setVisibility(visibility as CalendarVisibility, user.userId);
 
     // Get updated configuration
     const updatedConfig = await calendarConfig.getConfig();
@@ -142,8 +142,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Reset to default
-    await calendarConfig.resetToDefault(user.id);
+// Reset to default
+    await calendarConfig.resetToDefault(user.userId);
 
     // Get updated configuration
     const updatedConfig = await calendarConfig.getConfig();

@@ -2,9 +2,8 @@
 // Expected performance: 1-5ms (vs 50-200ms previous) = 10-200x faster!
 
 import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 const { MemoryCache } = require("@/lib/memory-cache.js");
-const { ConvexHttpClient } = require("convex/browser");
-const { api } = require("@/convex/_generated/api");
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
@@ -19,30 +18,22 @@ export async function GET(request: Request) {
     const departments = await MemoryCache.get(
       cacheKey,
       async () => {
-        // Use Convex instead of PostgreSQL
-        const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-        if (!convexUrl) {
-          throw new Error("Convex URL not configured");
-        }
+        const supabase = await createServerSupabaseClient();
 
-        const convexClient = new ConvexHttpClient(convexUrl);
+        // NOTE: `date` availability enrichment is not implemented yet for Supabase.
+        // For now, return active departments and keep the existing cache strategy.
+        const query = supabase
+          .from("departments")
+          .select(
+            "id,name,description,slots_per_day,working_days,working_hours,color,is_active,slot_duration_minutes,require_review,auto_confirm_staff_bookings"
+          )
+          .eq("is_active", true)
+          .order("name", { ascending: true });
 
-        let departmentData;
+        const { data: departmentData, error } = await query;
+        if (error) throw new Error(error.message);
 
-        if (date) {
-          // Get departments with availability for specific date
-          // For now, get all departments and we'll enhance this later
-          departmentData = await convexClient.query(api.queries.getDepartments, {
-            isActive: true
-          });
-        } else {
-          // Get all active departments (most common case)
-          departmentData = await convexClient.query(api.queries.getDepartments, {
-            isActive: true
-          });
-        }
-
-        return departmentData;
+        return departmentData || [];
       },
       // 🎯 Cache strategy: departments rarely change, availability changes more frequently
       date ? 'availableSlots' : 'departments' // 15s for availability, 1hr for general departments
@@ -103,22 +94,39 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use Convex instead of PostgreSQL
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-    if (!convexUrl) {
-      throw new Error("Convex URL not configured");
-    }
+    // Auto-calculate slots_per_day from working_hours and slot_duration_minutes
+    const workingHours = body.working_hours ?? { start: "09:00", end: "17:00" };
+    const slotDuration = body.slot_duration_minutes ?? 30;
+    
+    const startParts = workingHours.start.split(":");
+    const endParts = workingHours.end.split(":");
+    const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1] || "0");
+    const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1] || "0");
+    const totalMinutes = endMinutes - startMinutes;
+    const calculatedSlots = Math.floor(totalMinutes / slotDuration);
 
-    const convexClient = new ConvexHttpClient(convexUrl);
+    const supabase = await createServerSupabaseClient();
 
-    const department = await convexClient.mutation(api.mutations.createDepartment, {
-      name,
-      description: body.description,
-      slots_per_day: body.slots_per_day,
-      working_days: body.working_days,
-      working_hours: body.working_hours,
-      color: body.color,
-    });
+    const { data: department, error } = await supabase
+      .from("departments")
+      .insert({
+        name,
+        description: body.description ?? null,
+        slots_per_day: calculatedSlots,
+        working_days: body.working_days ?? ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        working_hours: workingHours,
+        color: body.color ?? "#3B82F6",
+        is_active: true,
+        slot_duration_minutes: slotDuration,
+        require_review: body.require_review ?? true,
+        auto_confirm_staff_bookings: body.auto_confirm_staff_bookings ?? false,
+      })
+      .select(
+        "id,name,description,slots_per_day,working_days,working_hours,color,is_active,slot_duration_minutes,require_review,auto_confirm_staff_bookings"
+      )
+      .single();
+
+    if (error) throw new Error(error.message);
 
     // 🔄 Invalidate departments cache after creation
     await MemoryCache.invalidate('departments_');
@@ -148,10 +156,10 @@ export async function POST(request: Request) {
   }
 }
 
-// 🔄 Cache invalidation helper for when departments change
-export async function invalidateDepartmentsCache() {
-  await MemoryCache.invalidate('departments_');
-}
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// Cache invalidation should be triggered by calling `MemoryCache.invalidate()`
+// within the handler methods (GET/POST/PUT/DELETE) or by moving helpers to a
+// separate module outside `route.ts`.
 
 // 🌟 Expected Performance Results (Memory Cache):
 // - First request (cache miss): 10-50ms (vs 100-200ms previous)

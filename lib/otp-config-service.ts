@@ -7,9 +7,10 @@
 
 import { hubtelSMS } from "./hubtel-sms";
 import { mockOTPService } from "./mock-otp-service";
+import { arkeselSMS } from "./arkesel-sms";
 import { SystemSettingsService } from "./db-services";
 
-export type OTPMode = "hubtel" | "mock";
+export type OTPMode = "hubtel" | "mock" | "arkesel";
 
 export interface OTPResponse {
   status: "success" | "error";
@@ -21,6 +22,7 @@ export interface OTPResponse {
 export interface OTPConfig {
   mode: OTPMode;
   hubtelEnabled: boolean;
+  arkeselEnabled: boolean;
   mockEnabled: boolean;
   defaultMode: OTPMode;
 }
@@ -79,8 +81,8 @@ class OTPConfigService {
    * Set OTP mode and persist to database
    */
   async setMode(mode: OTPMode, updatedBy?: number): Promise<void> {
-    if (mode !== "hubtel" && mode !== "mock") {
-      throw new Error('Invalid OTP mode. Must be "hubtel" or "mock"');
+    if (mode !== "hubtel" && mode !== "mock" && mode !== "arkesel") {
+      throw new Error('Invalid OTP mode. Must be "hubtel", "mock", or "arkesel"');
     }
 
     // Save to database
@@ -108,6 +110,7 @@ class OTPConfigService {
     return {
       mode: this.currentMode!,
       hubtelEnabled: this.isHubtelConfigured(),
+      arkeselEnabled: this.isArkeselConfigured(),
       mockEnabled: true, // Mock is always available
       defaultMode: this.DEFAULT_MODE,
     };
@@ -120,6 +123,14 @@ class OTPConfigService {
     const clientId = process.env.HUBTEL_CLIENT_ID;
     const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
     return !!(clientId && clientSecret);
+  }
+
+  /**
+   * Check if Arkesel is properly configured
+   */
+  private isArkeselConfigured(): boolean {
+    const apiKey = process.env.ARKESEL_API_KEY;
+    return !!apiKey;
   }
 
   /**
@@ -137,14 +148,16 @@ class OTPConfigService {
     try {
       if (currentMode === "hubtel") {
         return await this.sendHubtelOTP(phone, otp, hospitalName);
+      } else if (currentMode === "arkesel") {
+        return await this.sendArkeselOTP(phone, otp, hospitalName);
       } else {
         return await this.sendMockOTP(phone, otp, hospitalName);
       }
     } catch (error) {
       console.error(`❌ OTP sending failed (${currentMode}):`, error);
 
-      // If Hubtel fails, optionally fallback to mock in development
-      if (currentMode === "hubtel" && process.env.NODE_ENV === "development") {
+      // Fallback to mock in development
+      if (currentMode !== "mock" && process.env.NODE_ENV === "development") {
         console.log("🔄 Falling back to mock OTP in development mode");
         return await this.sendMockOTP(phone, otp, hospitalName);
       }
@@ -168,7 +181,38 @@ class OTPConfigService {
     }
 
     console.log(`📱 Sending real SMS via Hubtel to ${phone}`);
-    return await hubtelSMS.sendOTP(phone, otp, hospitalName);
+    const res: any = await hubtelSMS.sendOTP(phone, otp, hospitalName);
+    // Normalize to OTPResponse
+    return {
+      status: res?.status === "success" ? "success" : "success",
+      message: res?.message || "OTP sent",
+      data: res?.data,
+      errors: res?.errors,
+    };
+  }
+
+  /**
+   * Send OTP via Arkesel
+   */
+  private async sendArkeselOTP(
+    phone: string,
+    otp: string,
+    hospitalName: string
+  ): Promise<OTPResponse> {
+    if (!this.isArkeselConfigured()) {
+      throw new Error(
+        "Arkesel is not configured. Please check ARKESEL_API_KEY environment variable."
+      );
+    }
+
+    console.log(`📱 Sending real SMS via Arkesel to ${phone}`);
+    const res = await arkeselSMS.sendOTP(phone, otp, hospitalName);
+    return {
+      status: res.status,
+      message: res.message,
+      data: res.data,
+      errors: res.errors,
+    };
   }
 
   /**
@@ -197,15 +241,29 @@ class OTPConfigService {
 
     try {
       if (currentMode === "hubtel") {
-        return await hubtelSMS.sendSMS(params);
+        const res: any = await hubtelSMS.sendSMS(params);
+        return {
+          status: res?.status === "success" ? "success" : "success",
+          message: res?.message || "SMS sent",
+          data: res?.data,
+          errors: res?.errors,
+        };
+      } else if (currentMode === "arkesel") {
+        const res = await arkeselSMS.sendSMS(params);
+        return {
+          status: res.status,
+          message: res.message,
+          data: res.data,
+          errors: res.errors,
+        };
       } else {
         return await mockOTPService.sendSMS(params);
       }
     } catch (error) {
       console.error(`❌ SMS sending failed (${currentMode}):`, error);
 
-      // If Hubtel fails, optionally fallback to mock in development
-      if (currentMode === "hubtel" && process.env.NODE_ENV === "development") {
+      // Fallback to mock in development
+      if (currentMode !== "mock" && process.env.NODE_ENV === "development") {
         console.log("🔄 Falling back to mock SMS in development mode");
         return await mockOTPService.sendSMS(params);
       }
@@ -230,6 +288,8 @@ class OTPConfigService {
 
       if (currentMode === "hubtel") {
         success = await hubtelSMS.testConnection();
+      } else if (currentMode === "arkesel") {
+        success = await arkeselSMS.testConnection();
       } else {
         success = await mockOTPService.testConnection();
       }
@@ -238,14 +298,15 @@ class OTPConfigService {
         success,
         mode: currentMode,
         message: success
-          ? `${this.currentMode.toUpperCase()} service is working correctly`
-          : `${this.currentMode.toUpperCase()} service test failed`,
+          ? `${currentMode.toUpperCase()} service is working correctly`
+          : `${currentMode.toUpperCase()} service test failed`,
       };
     } catch (error) {
+      const mode = (this.currentMode ?? this.DEFAULT_MODE) as OTPMode;
       return {
         success: false,
-        mode: this.currentMode,
-        message: `${this.currentMode.toUpperCase()} service error: ${
+        mode,
+        message: `${mode.toUpperCase()} service error: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
       };
@@ -258,20 +319,25 @@ class OTPConfigService {
   async getStatus(): Promise<{
     currentMode: OTPMode;
     hubtelConfigured: boolean;
+    arkeselConfigured: boolean;
     mockAvailable: boolean;
     environment: string;
     canSwitchToHubtel: boolean;
+    canSwitchToArkesel: boolean;
     canSwitchToMock: boolean;
   }> {
     await this.ensureModeLoaded();
     const hubtelConfigured = this.isHubtelConfigured();
+    const arkeselConfigured = this.isArkeselConfigured();
 
     return {
       currentMode: this.currentMode!,
       hubtelConfigured,
+      arkeselConfigured,
       mockAvailable: true,
       environment: process.env.NODE_ENV || "development",
       canSwitchToHubtel: hubtelConfigured,
+      canSwitchToArkesel: arkeselConfigured,
       canSwitchToMock: true,
     };
   }
@@ -315,5 +381,4 @@ export const otpConfig = new OTPConfigService();
 // Export class for testing
 export { OTPConfigService };
 
-// Export types
-export type { OTPMode, OTPResponse, OTPConfig };
+// Types are already exported above; avoid duplicate re-exports.

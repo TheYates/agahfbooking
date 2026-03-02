@@ -25,7 +25,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
 import { isWorkingDay } from "@/lib/working-days-utils";
+import { getSlotTimeInfo, type WorkingHours } from "@/lib/slot-time-utils";
 import { toast } from "sonner";
+import { useLocalReminders } from "@/hooks/use-local-reminders";
+import { buildReminderSchedule } from "@/lib/reminder-utils";
 
 interface Department {
   id: number;
@@ -33,7 +36,8 @@ interface Department {
   description: string;
   slots_per_day: number;
   working_days: string[];
-  working_hours: { start: string; end: string };
+  working_hours: WorkingHours;
+  slot_duration_minutes?: number;
   color: string;
   is_active: boolean;
 }
@@ -51,7 +55,7 @@ interface BookingModalProps {
   onClose: () => void;
   selectedDate: Date | null;
   selectedSlot: number | null;
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
   onAppointmentBooked: () => void;
 }
@@ -73,6 +77,8 @@ export function BookingModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+
+  const { scheduleMultipleLocalReminders } = useLocalReminders();
 
   // Fetch data from API
   useEffect(() => {
@@ -197,7 +203,12 @@ export function BookingModal({
         userRole === "client"
           ? currentUserId
           : Number.parseInt(selectedClientId);
-      const bookedBy = currentUserId || 1; // Default to 1 if no currentUserId
+      
+      // booked_by should only be set for staff members (admin/receptionist)
+      // For clients, omit it and let the API use default admin
+      const bookedBy = (userRole === "admin" || userRole === "receptionist") 
+        ? currentUserId 
+        : undefined;
 
       // Create appointment via API
       const response = await fetch("/api/appointments", {
@@ -211,7 +222,7 @@ export function BookingModal({
           appointment_date: selectedDate.toISOString().split("T")[0],
           slot_number: selectedSlot,
           notes: notes || null,
-          booked_by: bookedBy,
+          ...(bookedBy && { booked_by: bookedBy }), // Only include if defined
         }),
       });
 
@@ -226,17 +237,52 @@ export function BookingModal({
       const selectedClient = clients.find((c) => c.id === clientId);
       const formattedDate = selectedDate.toLocaleDateString();
 
-      toast.success("Appointment Booked Successfully! 🎉", {
+      // Calculate display time for toast
+      const toastSlotText = department.working_hours
+        ? getSlotTimeInfo(
+            department.working_hours,
+            selectedSlot,
+            department.slot_duration_minutes || 30
+          ).displayTime
+        : `Slot ${selectedSlot}`;
+
+      toast.success("Appointment Booked Successfully!", {
         description: `${selectedClient?.name || "Client"} - ${
           department.name
-        } on ${formattedDate}, Slot ${selectedSlot}`,
+        } on ${formattedDate}, ${toastSlotText}`,
         duration: 5000,
       });
+
+      // Schedule local reminders for the new appointment (run async, don't block)
+      const slotInfo = department.working_hours
+        ? getSlotTimeInfo(
+            department.working_hours,
+            selectedSlot,
+            department.slot_duration_minutes || 30
+          )
+        : null;
+
+      const appointmentDateTime = `${selectedDate.toISOString().split("T")[0]}T${slotInfo?.startTime || "00:00:00"}`;
+      
+      // Run reminder scheduling in background
+      buildReminderSchedule(appointmentDateTime)
+        .then(reminderSchedules => {
+          const localReminders = reminderSchedules.map(({ scheduledAt, offsetMinutes }) => ({
+            appointmentId: data.data.id,
+            title: "Appointment Reminder",
+            body: `Your appointment at ${department.name} is in ${offsetMinutes / 60} hour${offsetMinutes === 60 ? "" : "s"}`,
+            scheduledAt,
+          }));
+          return scheduleMultipleLocalReminders(localReminders);
+        })
+        .catch(reminderErr => {
+          console.error("Failed to schedule local reminders:", reminderErr);
+        });
 
       // Call the callback to refresh appointments list
       onAppointmentBooked();
 
-      // Close modal
+      // Close modal immediately
       onClose();
     } catch (err) {
       const errorMessage =
@@ -259,6 +305,27 @@ export function BookingModal({
     return isWorkingDay(department as any, selectedDate);
   });
 
+  // Get selected department for slot time calculation
+  const selectedDepartment = departments.find(
+    (d) => d.id === Number.parseInt(selectedDepartmentId)
+  );
+
+  // Calculate slot time display
+  const getSlotDisplayText = (): string => {
+    if (!selectedSlot) return "";
+    if (!selectedDepartment?.working_hours) {
+      return `Slot ${selectedSlot}`;
+    }
+    const slotInfo = getSlotTimeInfo(
+      selectedDepartment.working_hours,
+      selectedSlot,
+      selectedDepartment.slot_duration_minutes || 30
+    );
+    return slotInfo.displayTime;
+  };
+
+  const slotDisplayText = getSlotDisplayText();
+
   // Prepare client options for combobox
   const clientOptions = clients.map((client) => ({
     value: client.id.toString(),
@@ -280,7 +347,7 @@ export function BookingModal({
               month: "long",
               day: "numeric",
             })}{" "}
-            - Slot {selectedSlot}
+            - {slotDisplayText || `Slot ${selectedSlot}`}
           </DialogDescription>
         </DialogHeader>
 

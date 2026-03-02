@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 export function SiteHeader() {
   const pathname = usePathname()
@@ -20,18 +21,28 @@ export function SiteHeader() {
   // Generate breadcrumbs based on current path
   const generateBreadcrumbs = () => {
     const segments = pathname.split('/').filter(Boolean)
-    
-    if (segments.length === 0 || segments[0] !== 'dashboard') {
+
+    if (segments.length === 0) {
+      return null
+    }
+
+    const isDashboard = segments[0] === 'dashboard'
+    const isAdmin = segments[0] === 'admin'
+
+    if (!isDashboard && !isAdmin) {
       return null
     }
 
     const breadcrumbs = [
-      { label: 'Dashboard', href: '/dashboard' }
+      {
+        label: isAdmin ? 'Admin' : 'Dashboard',
+        href: isAdmin ? '/admin' : '/dashboard'
+      }
     ]
 
     if (segments.length > 1) {
       const section = segments[1]
-      const sectionLabels: Record<string, string> = {
+const sectionLabels: Record<string, string> = {
         'appointments': 'Appointments',
         'my-appointments': 'My Appointments',
         'calendar': 'Calendar',
@@ -40,14 +51,19 @@ export function SiteHeader() {
         'users': 'Users',
         'reports': 'Reports',
         'settings': 'Settings',
-        'profile': 'Profile',
-        'test-sms': 'Test SMS'
+        'medicals': 'Medicals',
+        'notifications': 'Notifications',
+        'reviews': 'Reviews',
+        'test-sms': 'Test SMS',
+        'rate-limit-monitor': 'Rate Limiting Monitor',
+        'login-audit': 'Login Audit',
+        'feedback': 'Feedback'
       }
 
       if (sectionLabels[section]) {
         breadcrumbs.push({
           label: sectionLabels[section],
-          href: `/dashboard/${section}`
+          href: `/${segments[0]}/${section}`
         })
       }
 
@@ -102,6 +118,7 @@ export function SiteHeader() {
         )}
 
         <SearchForm className="w-full sm:ml-auto sm:w-auto" />
+        <NotificationBell />
       </div>
     </header>
   )

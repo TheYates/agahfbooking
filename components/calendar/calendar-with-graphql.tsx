@@ -5,9 +5,11 @@ import { useCalendarData, useCreateAppointment, useUpdateAppointment } from '@/l
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, Clock, User, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { formatDatabaseTimeForDisplay } from '@/lib/slot-time-utils';
 
 interface CalendarWithGraphQLProps {
   userRole: 'CLIENT' | 'RECEPTIONIST' | 'ADMIN';
@@ -40,15 +42,14 @@ export function CalendarWithGraphQL({
   const [updateAppointment, { loading: updating }] = useUpdateAppointment();
 
   // Memoized data processing
-  const { appointments, departments, doctors, stats } = useMemo(() => {
+  const { appointments, departments, stats } = useMemo(() => {
     if (!data?.calendarData) {
-      return { appointments: [], departments: [], doctors: [], stats: null };
+      return { appointments: [], departments: [], stats: null };
     }
 
     return {
       appointments: data.calendarData.appointments || [],
       departments: data.calendarData.departments || [],
-      doctors: data.calendarData.doctors || [],
       stats: data.calendarData.stats,
     };
   }, [data]);
@@ -112,9 +113,25 @@ export function CalendarWithGraphQL({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        <span className="ml-2">Loading calendar...</span>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-8 w-48" />
+              <div className="flex gap-2">
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-10 w-24" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -251,7 +268,6 @@ export function CalendarWithGraphQL({
                         <p className="font-medium">{appointment.client.name}</p>
                         <p className="text-sm text-muted-foreground">
                           {appointment.department.name}
-                          {appointment.doctor && ` • ${appointment.doctor.name}`}
                         </p>
                       </div>
                     </div>
@@ -261,7 +277,9 @@ export function CalendarWithGraphQL({
                         {appointment.status}
                       </Badge>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Slot {appointment.slotNumber}
+                        {appointment.slotStartTime && appointment.slotEndTime 
+                          ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                          : `Slot ${appointment.slotNumber}`}
                       </p>
                     </div>
                   </div>

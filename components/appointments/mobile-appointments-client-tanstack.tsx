@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Calendar,
   Clock,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 import { useBooking } from "@/components/mobile-layout";
 import type { User } from "@/lib/types";
 import { DataPaginationCompact } from "@/components/ui/data-pagination";
@@ -42,7 +44,7 @@ interface Appointment {
   date: string;
   slotNumber: number;
   status: string;
-  doctorName: string;
+  
   departmentName: string;
   departmentColor: string;
   notes?: string;
@@ -68,14 +70,18 @@ export function MobileAppointmentsClientTanstack({
     data: appointmentsData,
     isLoading: appointmentsLoading,
     error: appointmentsError,
-    isPreviousData,
+    // React Query v5 no longer exposes `isPreviousData`.
+    // We keep the UX by treating `isFetching` as the indicator while paginating.
+    isFetching,
   } = useClientAppointmentsPaginated(user.id, currentPage, itemsPerPage);
 
   // Get booking function from context
-  let openBooking: ((departmentId?: number) => void) | undefined;
+  let openBooking:
+    | ((departmentId?: number | string) => void)
+    | undefined;
   try {
     const booking = useBooking();
-    openBooking = booking.openBooking;
+    openBooking = booking.openBooking as any;
   } catch {
     // Not within MobileLayout context
   }
@@ -107,6 +113,8 @@ export function MobileAppointmentsClientTanstack({
   // Helper function to get status colors
   const getStatusColor = (status: string) => {
     const colors: { [key: string]: string } = {
+      pending_review: "#F59E0B",
+      reschedule_requested: "#DC2626",
       booked: "#3B82F6",
       confirmed: "#10B981",
       arrived: "#F59E0B",
@@ -117,6 +125,23 @@ export function MobileAppointmentsClientTanstack({
       rescheduled: "#F97316",
     };
     return colors[status] || "#6B7280";
+  };
+
+  // Helper function to get status display label
+  const getStatusLabel = (status: string) => {
+    const labels: { [key: string]: string } = {
+      pending_review: "Pending Confirmation",
+      reschedule_requested: "Reschedule Requested",
+      booked: "Confirmed",
+      confirmed: "Confirmed",
+      arrived: "Arrived",
+      waiting: "Waiting",
+      completed: "Completed",
+      no_show: "No Show",
+      cancelled: "Cancelled",
+      rescheduled: "Rescheduled",
+    };
+    return labels[status] || status;
   };
 
   // Filter appointments
@@ -335,9 +360,19 @@ export function MobileAppointmentsClientTanstack({
           </CardHeader>
           <CardContent>
             {appointmentsLoading && currentPage === 1 ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <p className="ml-3 text-muted-foreground">Loading appointments...</p>
+              <div className="space-y-3 py-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="p-4 rounded-lg border bg-card space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-6 w-20" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : appointmentsError ? (
               <div className="text-center py-8 text-destructive">
@@ -368,9 +403,13 @@ export function MobileAppointmentsClientTanstack({
             ) : (
               <div className="space-y-3">
                 {/* Show loading indicator for page changes */}
-                {appointmentsLoading && isPreviousData && (
-                  <div className="text-center py-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto"></div>
+                {isFetching && (
+                  <div className="p-4 rounded-lg border bg-card space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-6 w-20" />
+                    </div>
+                    <Skeleton className="h-4 w-48" />
                   </div>
                 )}
 
@@ -379,7 +418,7 @@ export function MobileAppointmentsClientTanstack({
                     key={appointment.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ 
-                      opacity: appointmentsLoading && isPreviousData ? 0.6 : 1, 
+                      opacity: isFetching ? 0.6 : 1, 
                       x: 0 
                     }}
                     transition={{ delay: 0.8 + index * 0.1 }}
@@ -392,14 +431,14 @@ export function MobileAppointmentsClientTanstack({
                             {appointment.departmentName}
                           </h3>
                           <span
-                            className="px-2 py-1 text-xs rounded-full capitalize font-medium"
+                            className="px-2 py-1 text-xs rounded-full font-medium"
                             style={{
                               backgroundColor:
                                 getStatusColor(appointment.status) + "20",
                               color: getStatusColor(appointment.status),
                             }}
                           >
-                            {appointment.status.replace("_", " ")}
+                            {getStatusLabel(appointment.status)}
                           </span>
                         </div>
 
@@ -421,7 +460,11 @@ export function MobileAppointmentsClientTanstack({
 
                           <div className="flex items-center space-x-2">
                             <Clock className="h-4 w-4" />
-                            <span>Slot {appointment.slotNumber}</span>
+                            <span>
+                              {appointment.slotStartTime && appointment.slotEndTime 
+                                ? `${formatDatabaseTimeForDisplay(appointment.slotStartTime)} - ${formatDatabaseTimeForDisplay(appointment.slotEndTime)}`
+                                : `Slot ${appointment.slotNumber}`}
+                            </span>
                           </div>
 
                           {appointment.doctorName && (
@@ -462,7 +505,8 @@ export function MobileAppointmentsClientTanstack({
                 totalPages={pagination.totalPages}
                 onPageChange={handlePageChange}
                 className="px-6 pb-4"
-                disabled={appointmentsLoading} // Prevent rapid pagination clicks
+                // DataPaginationCompact doesn't support `disabled`; disable clicks in handler if needed.
+                // disabled={appointmentsLoading}
               />
             )}
           </CardContent>

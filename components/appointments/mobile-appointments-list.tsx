@@ -7,17 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 interface Appointment {
     id: number;
     date: string;
     slotNumber: number;
+    slotStartTime?: string;
+    slotEndTime?: string;
     status: string;
-    doctorName: string;
     departmentId: number;
     departmentName: string;
     departmentColor: string;
     notes?: string;
+    doctorName?: string;
 }
 
 interface MobileAppointmentsListProps {
@@ -32,12 +36,16 @@ function AppointmentRow({
     apt,
     onCancel,
     onReschedule,
-    getStatusColor
+    getStatusColor,
+    getStatusLabel,
+    getStatusTooltip
 }: {
     apt: Appointment,
     onCancel: (id: number) => void,
     onReschedule?: (id: number) => void,
-    getStatusColor: (s: string) => string
+    getStatusColor: (s: string) => string,
+    getStatusLabel: (s: string) => string,
+    getStatusTooltip: (s: string) => string
 }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -64,16 +72,22 @@ function AppointmentRow({
                 <div className="flex-1 ml-4 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                         <h4 className="font-bold text-sm text-foreground truncate pr-2">
-                            Dr. {apt.doctorName}
+                            {apt.departmentName}
                         </h4>
                         {/* Status Dot */}
-                        {apt.status === 'confirmed' && <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />}
-                        {apt.status === 'booked' && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
+                        {apt.status === 'pending_review' && <div className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />}
+                        {apt.status === 'reschedule_requested' && <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />}
+                        {(apt.status === 'confirmed' || apt.status === 'booked') && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
                         {apt.status === 'cancelled' && <div className="h-1.5 w-1.5 rounded-full bg-zinc-300 shrink-0" />}
                     </div>
 
                     <p className="text-xs text-muted-foreground truncate">
-                        {apt.departmentName} • Slot #{apt.slotNumber}
+                        {apt.doctorName ? `Dr. ${apt.doctorName} • ` : ''}
+                        {apt.slotStartTime && apt.slotEndTime ? (
+                          `${formatDatabaseTimeForDisplay(apt.slotStartTime)} - ${formatDatabaseTimeForDisplay(apt.slotEndTime)}`
+                        ) : (
+                          `Slot #${apt.slotNumber}`
+                        )}
                     </p>
                 </div>
 
@@ -91,17 +105,24 @@ function AppointmentRow({
                 "grid transition-all duration-200 ease-in-out px-4 overflow-hidden",
                 isExpanded ? "grid-rows-[1fr] pb-4 opacity-100" : "grid-rows-[0fr] opacity-0"
             )}>
-                <div className="min-h-0 pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-800">
+<div className="min-h-0 pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-800">
                     <div className="flex items-center justify-between mb-4 mt-2">
-                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 uppercase tracking-widest font-bold">
-                            {apt.status.replace("_", " ")}
-                        </Badge>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Badge variant="secondary" className="text-[10px] h-5 px-1.5 uppercase tracking-widest font-bold cursor-help">
+                                    {getStatusLabel(apt.status)}
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{getStatusTooltip(apt.status)}</p>
+                            </TooltipContent>
+                        </Tooltip>
                         <span className="text-xs text-muted-foreground font-medium">
                             {format(new Date(apt.date), "EEEE")}
                         </span>
                     </div>
 
-                    {(apt.status === "booked" || apt.status === "confirmed") ? (
+                    {(apt.status === "pending_review" || apt.status === "reschedule_requested" || apt.status === "booked" || apt.status === "confirmed") ? (
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"
@@ -144,6 +165,8 @@ export function MobileAppointmentsList({
 
     const getStatusColor = (status: string) => {
         const colors: { [key: string]: string } = {
+            pending_review: "bg-amber-50/50 text-amber-700 border-amber-200 dark:bg-amber-900/10 dark:text-amber-400 dark:border-amber-800",
+            reschedule_requested: "bg-red-50/50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-400 dark:border-red-800",
             booked: "bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/10 dark:text-blue-400 dark:border-blue-800",
             confirmed: "bg-green-50/50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-400 dark:border-green-800",
             arrived: "bg-yellow-50/50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-400 dark:border-yellow-800",
@@ -154,6 +177,39 @@ export function MobileAppointmentsList({
             rescheduled: "bg-orange-50/50 text-orange-700 border-orange-200 dark:bg-orange-900/10 dark:text-orange-400 dark:border-orange-800",
         };
         return colors[status] || "bg-zinc-50 border-zinc-200";
+    };
+
+// Get display label for status
+    const getStatusLabel = (status: string) => {
+        const labels: { [key: string]: string } = {
+            pending_review: "Pending",
+            reschedule_requested: "Reschedule",
+            booked: "Confirmed",
+            confirmed: "Confirmed",
+            arrived: "Arrived",
+            waiting: "Waiting",
+            completed: "Done",
+            no_show: "Missed",
+            cancelled: "Cancelled",
+            rescheduled: "Moved",
+        };
+        return labels[status] || status;
+    };
+
+    const getStatusTooltip = (status: string) => {
+        const tooltips: { [key: string]: string } = {
+            pending_review: "Awaiting staff confirmation",
+            reschedule_requested: "Staff requested a new time",
+            booked: "Appointment confirmed",
+            confirmed: "Appointment confirmed",
+            arrived: "Patient has arrived",
+            waiting: "Patient is waiting",
+            completed: "Appointment completed",
+            no_show: "Patient did not show up",
+            cancelled: "Appointment cancelled",
+            rescheduled: "Moved to a new time",
+        };
+        return tooltips[status] || status;
     };
 
     if (isLoading) {
@@ -186,7 +242,8 @@ export function MobileAppointmentsList({
         );
     }
 
-    return (
+return (
+        <TooltipProvider>
         <div className="pb-24">
             {/* List Container - Simulating the clean list look */}
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800 border-t border-b border-zinc-100 dark:border-zinc-800">
@@ -197,9 +254,12 @@ export function MobileAppointmentsList({
                         onCancel={onCancel}
                         onReschedule={onReschedule}
                         getStatusColor={getStatusColor}
+                        getStatusLabel={getStatusLabel}
+                        getStatusTooltip={getStatusTooltip}
                     />
                 ))}
             </div>
         </div>
+        </TooltipProvider>
     );
 }

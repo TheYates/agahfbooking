@@ -1,10 +1,9 @@
 "use client";
 
-// This component is BetterAuth-ready and uses the updated API endpoints
 import type React from "react";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,16 +15,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield } from "lucide-react";
+import { Shield, Clock } from "lucide-react";
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
+
+  const timeoutMessage = searchParams.get("reason") === "timeout"
+    ? "You were logged out due to inactivity. Please log in again to continue."
+    : "";
 
   const handleUsernameLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,24 +95,32 @@ export default function StaffLoginPage() {
                >
                 {/* Header / Logo */}
                 <div className="flex flex-col items-center text-center mt-8 md:mt-0 space-y-2">
-                  <div className="mb-4 md:mb-6 rounded-2xl bg-blue-50 dark:bg-blue-900/20 p-3">
+                  <div className="mb-2 md:mb-6 p-3">
                     <img
                       src="/agahflogo.svg"
                       alt="AGAHF Logo"
-                      className="h-12 w-12 md:h-10 md:w-10 object-contain dark:hidden"
+                      className="h-32 w-32 md:h-10 md:w-10 object-contain dark:hidden"
                     />
                     <img
                       src="/agahflogo white.svg"
                       alt="AGAHF Logo"
-                      className="h-12 w-12 md:h-10 md:w-10 object-contain hidden dark:block"
+                      className="h-32 w-32 md:h-10 md:w-10 object-contain hidden dark:block"
                     />
                   </div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+<h1 className="text-2xl md:text-3xl font-bold tracking-tight">
                     Staff Access
                   </h1>
                   <p className="text-muted-foreground text-sm md:text-base max-w-xs mx-auto">
                     Please log in with your credentials
                   </p>
+                  {timeoutMessage && (
+                    <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 mt-4 max-w-sm">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                        {timeoutMessage}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
 
                 {/* Main Content Area */}
@@ -131,7 +143,7 @@ export default function StaffLoginPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, username: e.target.value })
                           }
-                          className="h-12 text-lg bg-muted/30 border-muted-foreground/20 focus-visible:border-blue-500"
+                          className="h-12 text-lg bg-muted/30 border-muted-foreground/20 focus-visible:border-green-500"
                           required
                           autoComplete="username"
                         />
@@ -146,7 +158,7 @@ export default function StaffLoginPage() {
                           onChange={(e) =>
                             setFormData({ ...formData, password: e.target.value })
                           }
-                          className="h-12 text-lg bg-muted/30 border-muted-foreground/20 focus-visible:border-blue-500"
+                          className="h-12 text-lg bg-muted/30 border-muted-foreground/20 focus-visible:border-green-500"
                           required
                           autoComplete="current-password"
                         />
@@ -155,7 +167,7 @@ export default function StaffLoginPage() {
 
                     <Button 
                       type="submit" 
-                      className="w-full h-12 text-base font-medium transition-transform active:scale-[0.98] bg-blue-600 hover:bg-blue-700" 
+                      className="w-full h-12 text-base font-medium transition-transform active:scale-[0.98] bg-green-600 hover:bg-green-700" 
                       disabled={loading}
                     >
                       {loading ? (
@@ -192,7 +204,7 @@ export default function StaffLoginPage() {
                   <div className="text-center">
                      <p className="text-xs text-muted-foreground">
                         Restricted System. Authorized personnel only. <br/>
-                        <a href="#" className="hover:underline text-blue-600/80">IT Support</a> &bull; <a href="#" className="hover:underline text-blue-600/80">Security Policy</a>
+                        <a href="#" className="hover:underline text-green-600/80">IT Support</a> &bull; <a href="#" className="hover:underline text-green-600/80">Security Policy</a>
                      </p>
                   </div>
                 </div>

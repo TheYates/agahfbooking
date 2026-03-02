@@ -1,18 +1,40 @@
 import { NextResponse } from "next/server";
-import { ClientService } from "@/lib/db-services";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { MemoryCache } from "@/lib/memory-cache";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
-    let clients;
+    // Create cache key based on search parameter
+    const cacheKey = `clients_list_${search || 'all'}`;
 
-    if (search) {
-      clients = await ClientService.search(search);
-    } else {
-      clients = await ClientService.getAll();
-    }
+    const clients = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        const supabase = await createServerSupabaseClient();
+
+        let query = supabase
+          .from("clients")
+          .select("id,x_number,name,phone,category,is_active,created_at")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
+
+        if (search) {
+          const escaped = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+          query = query.or(
+            `name.ilike.%${escaped}%,x_number.ilike.%${escaped}%,phone.ilike.%${escaped}%`
+          );
+        }
+
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
+
+        return data || [];
+      },
+      'clientsList' // 30 second cache
+    );
 
     return NextResponse.json({
       success: true,
@@ -35,11 +57,12 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     // Validate required fields
-    const { xNumber, name, phone, category, emergencyContact, address } = body;
+    const { xNumber, name, phone, email, category, emergencyContact, address } =
+      body;
 
-    if (!xNumber || !name || !phone || !category) {
+    if (!xNumber || !name || !phone || !email || !category) {
       return NextResponse.json(
-        { error: "xNumber, name, phone, and category are required" },
+        { error: "xNumber, name, phone, email, and category are required" },
         { status: 400 }
       );
     }
@@ -53,14 +76,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = await ClientService.create({
-      x_number: xNumber,
-      name,
-      phone,
-      category,
-      emergency_contact: emergencyContact || null,
-      address: address || null,
-    });
+    const supabase = await createServerSupabaseClient();
+
+    const { data: client, error } = await supabase
+      .from("clients")
+      .insert({
+        x_number: xNumber,
+        name,
+        phone,
+        email,
+        category,
+        emergency_contact: emergencyContact || null,
+        address: address || null,
+        is_active: true,
+      })
+      .select("id,x_number,name,phone,email,category,is_active,created_at")
+      .single();
+
+    if (error) {
+      // Unique constraint violations (duplicate X-number)
+      if ((error as any).code === "23505") {
+        return NextResponse.json(
+          { error: "A client with this X-Number already exists" },
+          { status: 409 }
+        );
+      }
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
       success: true,
@@ -68,14 +110,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error creating client:", error);
-
-    // Handle unique constraint violations (duplicate X-number)
-    if (error instanceof Error && error.message.includes("duplicate key")) {
-      return NextResponse.json(
-        { error: "A client with this X-Number already exists" },
-        { status: 409 }
-      );
-    }
 
     return NextResponse.json(
       {

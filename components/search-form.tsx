@@ -8,7 +8,6 @@ import {
   Building2,
   FileText,
   User,
-  Stethoscope,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -22,10 +21,43 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatDatabaseTimeForDisplay } from "@/lib/slot-time-utils";
 
 interface SearchFormProps {
   className?: string;
 }
+
+const getStatusLabel = (status: string) => {
+  const labels: { [key: string]: string } = {
+    pending_review: "Pending",
+    reschedule_requested: "Reschedule",
+    booked: "Confirmed",
+    confirmed: "Confirmed",
+    arrived: "Arrived",
+    waiting: "Waiting",
+    completed: "Done",
+    no_show: "Missed",
+    cancelled: "Cancelled",
+    rescheduled: "Moved",
+  };
+  return labels[status] || status;
+};
+
+const getStatusTooltip = (status: string) => {
+  const tooltips: { [key: string]: string } = {
+    pending_review: "Awaiting staff confirmation",
+    reschedule_requested: "Staff requested a new time",
+    booked: "Appointment confirmed",
+    confirmed: "Appointment confirmed",
+    arrived: "Patient has arrived",
+    waiting: "Patient is waiting",
+    completed: "Appointment completed",
+    no_show: "Patient did not show up",
+    cancelled: "Appointment cancelled",
+    rescheduled: "Moved to a new time",
+  };
+  return tooltips[status] || status;
+};
 
 interface SearchResults {
   appointments: Array<{
@@ -35,7 +67,6 @@ interface SearchResults {
     status: string;
     clientName: string;
     clientXNumber: string;
-    doctorName: string;
     departmentName: string;
     departmentColor: string;
   }>;
@@ -45,13 +76,6 @@ interface SearchResults {
     xNumber: string;
     phone: string;
     category: string;
-  }>;
-  doctors: Array<{
-    id: number;
-    name: string;
-    specialization: string;
-    departmentName: string;
-    departmentColor: string;
   }>;
   departments: Array<{
     id: number;
@@ -67,7 +91,6 @@ export function SearchForm({ className }: SearchFormProps) {
   const [searchResults, setSearchResults] = React.useState<SearchResults>({
     appointments: [],
     clients: [],
-    doctors: [],
     departments: [],
   });
   const [isSearching, setIsSearching] = React.useState(false);
@@ -90,7 +113,6 @@ export function SearchForm({ className }: SearchFormProps) {
       setSearchResults({
         appointments: [],
         clients: [],
-        doctors: [],
         departments: [],
       });
       return;
@@ -140,7 +162,7 @@ export function SearchForm({ className }: SearchFormProps) {
       </Button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput
-          placeholder="Search appointments, clients, doctors..."
+          placeholder="Search appointments, clients, departments..."
           value={searchQuery}
           onValueChange={setSearchQuery}
         />
@@ -168,9 +190,9 @@ export function SearchForm({ className }: SearchFormProps) {
                     <span className="font-medium">
                       {appointment.clientName} - {appointment.departmentName}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+<span className="text-xs text-muted-foreground">
                       {new Date(appointment.date).toLocaleDateString()} • Slot{" "}
-                      {appointment.slotNumber} • {appointment.status}
+                      {appointment.slotNumber} • {getStatusLabel(appointment.status)}
                     </span>
                   </div>
                 </CommandItem>
@@ -192,27 +214,6 @@ export function SearchForm({ className }: SearchFormProps) {
                     <span className="font-medium">{client.name}</span>
                     <span className="text-xs text-muted-foreground">
                       {client.xNumber} • {client.phone} • {client.category}
-                    </span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-
-          {searchResults.doctors.length > 0 && (
-            <CommandGroup heading="Doctors">
-              {searchResults.doctors.map((doctor) => (
-                <CommandItem
-                  key={`doctor-${doctor.id}`}
-                  onSelect={() =>
-                    runCommand(() => router.push("/dashboard/departments"))
-                  }
-                >
-                  <Stethoscope className="mr-2 h-4 w-4" />
-                  <div className="flex flex-col">
-                    <span className="font-medium">Dr. {doctor.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {doctor.specialization} • {doctor.departmentName}
                     </span>
                   </div>
                 </CommandItem>

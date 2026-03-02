@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { query } from "@/lib/db";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 interface AntiAbuseSettings {
   bookingLimits: {
@@ -84,11 +84,12 @@ const defaultSettings: AntiAbuseSettings = {
   },
 };
 
-export async function GET(request: NextRequest) {
+const SETTING_KEY = "anti_abuse_settings";
+
+export async function GET(_request: NextRequest) {
   try {
     const user = await requireAuth();
 
-    // Only admin can access anti-abuse settings
     if (user.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
@@ -96,18 +97,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get anti-abuse settings from database
-    const result = await query(
-      "SELECT setting_value FROM system_settings WHERE setting_key = 'anti_abuse_settings'"
-    );
+    const supabase = createAdminSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", SETTING_KEY)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
 
     let settings = defaultSettings;
-    if (result.rows.length > 0) {
+
+    const raw = (data as any)?.setting_value;
+    if (raw) {
       try {
-        settings = JSON.parse(result.rows[0].setting_value);
-      } catch (error) {
-        console.error("Error parsing anti-abuse settings:", error);
-        // Use default settings if parsing fails
+        settings = JSON.parse(raw);
+      } catch (e) {
+        console.error("Error parsing anti-abuse settings:", e);
       }
     }
 
@@ -118,7 +125,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Anti-abuse settings GET error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch settings" },
+      {
+        success: false,
+        error: "Failed to fetch settings",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -128,7 +139,6 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth();
 
-    // Only admin can modify anti-abuse settings
     if (user.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
@@ -138,7 +148,6 @@ export async function POST(request: NextRequest) {
 
     const settings: AntiAbuseSettings = await request.json();
 
-    // Validate settings
     const validation = validateSettings(settings);
     if (!validation.isValid) {
       return NextResponse.json(
@@ -147,17 +156,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save settings to database
-    await query(
-      `INSERT INTO system_settings (setting_key, setting_value, description, updated_by)
-       VALUES ('anti_abuse_settings', $1, 'Anti-abuse protection settings', $2)
-       ON CONFLICT (setting_key) 
-       DO UPDATE SET 
-         setting_value = $1, 
-         updated_by = $2, 
-         updated_at = CURRENT_TIMESTAMP`,
-      [JSON.stringify(settings), user.id]
-    );
+    const supabase = createAdminSupabaseClient();
+
+    const updatedBy = typeof user.id === "number" ? user.id : null;
+
+    const { error } = await supabase
+      .from("system_settings")
+      .upsert(
+        {
+          setting_key: SETTING_KEY,
+          setting_value: JSON.stringify(settings),
+          description: "Anti-abuse protection settings",
+          updated_by: updatedBy,
+          updated_at: new Date().toISOString(),
+        } as any,
+        { onConflict: "setting_key" }
+      );
+
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
@@ -166,7 +182,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Anti-abuse settings POST error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to save settings" },
+      {
+        success: false,
+        error: "Failed to save settings",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -176,88 +196,36 @@ function validateSettings(settings: AntiAbuseSettings): {
   isValid: boolean;
   error?: string;
 } {
-  // Validate booking limits
-  if (
-    settings.bookingLimits.maxFutureDays < 7 ||
-    settings.bookingLimits.maxFutureDays > 90
-  ) {
-    return {
-      isValid: false,
-      error: "Max future days must be between 7 and 90",
-    };
+  if (settings.bookingLimits.maxFutureDays < 7 || settings.bookingLimits.maxFutureDays > 90) {
+    return { isValid: false, error: "Max future days must be between 7 and 90" };
   }
 
-  if (
-    settings.bookingLimits.minAdvanceHours < 1 ||
-    settings.bookingLimits.minAdvanceHours > 48
-  ) {
-    return {
-      isValid: false,
-      error: "Min advance hours must be between 1 and 48",
-    };
+  if (settings.bookingLimits.minAdvanceHours < 1 || settings.bookingLimits.minAdvanceHours > 48) {
+    return { isValid: false, error: "Min advance hours must be between 1 and 48" };
   }
 
-  if (
-    settings.bookingLimits.maxDailyAppointments < 1 ||
-    settings.bookingLimits.maxDailyAppointments > 3
-  ) {
-    return {
-      isValid: false,
-      error: "Max daily appointments must be between 1 and 3",
-    };
+  if (settings.bookingLimits.maxDailyAppointments < 1 || settings.bookingLimits.maxDailyAppointments > 3) {
+    return { isValid: false, error: "Max daily appointments must be between 1 and 3" };
   }
 
-  // Validate cancellation rules
-  if (
-    settings.cancellationRules.minCancelHours < 2 ||
-    settings.cancellationRules.minCancelHours > 72
-  ) {
-    return {
-      isValid: false,
-      error: "Min cancel hours must be between 2 and 72",
-    };
+  if (settings.cancellationRules.minCancelHours < 2 || settings.cancellationRules.minCancelHours > 72) {
+    return { isValid: false, error: "Min cancel hours must be between 2 and 72" };
   }
 
-  // Validate no-show penalties
-  if (
-    settings.noShowPenalties.firstOffenseDays < 1 ||
-    settings.noShowPenalties.firstOffenseDays > 7
-  ) {
-    return {
-      isValid: false,
-      error: "First offense penalty must be between 1 and 7 days",
-    };
+  if (settings.noShowPenalties.firstOffenseDays < 1 || settings.noShowPenalties.firstOffenseDays > 7) {
+    return { isValid: false, error: "First offense penalty must be between 1 and 7 days" };
   }
 
-  // Validate scoring thresholds
-  if (
-    settings.scoringSystem.excellentThreshold <=
-    settings.scoringSystem.goodThreshold
-  ) {
-    return {
-      isValid: false,
-      error: "Excellent threshold must be higher than good threshold",
-    };
+  if (settings.scoringSystem.excellentThreshold <= settings.scoringSystem.goodThreshold) {
+    return { isValid: false, error: "Excellent threshold must be higher than good threshold" };
   }
 
-  if (
-    settings.scoringSystem.goodThreshold <=
-    settings.scoringSystem.averageThreshold
-  ) {
-    return {
-      isValid: false,
-      error: "Good threshold must be higher than average threshold",
-    };
+  if (settings.scoringSystem.goodThreshold <= settings.scoringSystem.averageThreshold) {
+    return { isValid: false, error: "Good threshold must be higher than average threshold" };
   }
 
-  if (
-    settings.scoringSystem.averageThreshold <=
-    settings.scoringSystem.poorThreshold
-  ) {
-    return {
-      isValid: false,
-      error: "Average threshold must be higher than poor threshold",
-    };
+  if (settings.scoringSystem.averageThreshold <= settings.scoringSystem.poorThreshold) {
+    return { isValid: false, error: "Average threshold must be higher than poor threshold" };
   }
 
   return { isValid: true };

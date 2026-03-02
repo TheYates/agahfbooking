@@ -3,8 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ConvexClientProvider } from "@/components/providers/convex-provider";
-// Legacy providers (keep during migration)
+// Legacy providers
 import QueryProvider from "@/components/providers/query-provider";
 import { PWAProvider } from "@/components/pwa";
 
@@ -14,10 +13,12 @@ export const metadata: Metadata = {
   generator: "AGAHF Booking System",
   manifest: "/manifest.json",
   icons: {
-    icon: "/agahflogo white.svg",
+    icon: "/icons/icon-512x512.png",
     apple: [
       { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-180x180.png", sizes: "180x180", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-1024x1024.png", sizes: "1024x1024", type: "image/png" },
     ],
   },
   appleWebApp: {
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     title: "AGAHF Booking",
-    description: "AGAHF Hospital Appointment Booking System",
+    description: "AGAHF Appointment Booking System",
     siteName: "AGAHF Booking",
   },
 };
@@ -61,9 +62,11 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
         <meta name="theme-color" content="#000000" />
         <link rel="apple-touch-icon" href="/icons/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png" />
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="384x384" href="/icons/icon-384x384.png" />
         <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
+        <link rel="apple-touch-icon" sizes="1024x1024" href="/icons/icon-1024x1024.png" />
         <style>{`
 html {
   font-family: ${GeistSans.style.fontFamily};
@@ -73,8 +76,7 @@ html {
         `}</style>
       </head>
       <body className="safe-area-inset">
-        <ConvexClientProvider>
-          <QueryProvider>
+        <QueryProvider>
             <ThemeProvider
               attribute="class"
               defaultTheme="system"
@@ -86,7 +88,6 @@ html {
               </PWAProvider>
             </ThemeProvider>
           </QueryProvider>
-        </ConvexClientProvider>
       </body>
     </html>
   );

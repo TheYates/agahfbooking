@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserService } from "@/lib/db-services";
 import { requireAdminAuth } from "@/lib/auth-server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import bcrypt from "bcryptjs";
+import { MemoryCache } from "@/lib/memory-cache";
 
 // GET /api/users - Get all users with optional search
 export async function GET(request: NextRequest) {
@@ -12,12 +13,31 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
-    let users;
-    if (search) {
-      users = await UserService.search(search);
-    } else {
-      users = await UserService.getAll();
-    }
+    // Create cache key based on search parameter
+    const cacheKey = `users_list_${search || 'all'}`;
+
+    const users = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        const supabase = await createServerSupabaseClient();
+
+        let query = supabase
+          .from("users")
+          .select("id,name,phone,role,username,is_active,created_at")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
+
+        if (search) {
+          query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,username.ilike.%${search}%`);
+        }
+
+        const { data: users, error } = await query;
+        if (error) throw new Error(error.message);
+
+        return users || [];
+      },
+      'usersList' // 30 second cache
+    );
 
     return NextResponse.json({ users });
   } catch (error) {
@@ -36,36 +56,48 @@ export async function POST(request: NextRequest) {
     await requireAdminAuth();
 
     const userData = await request.json();
-    const { name, phone, role, employee_id, password } = userData;
+    const { name, phone, role, username, password } = userData;
 
-    // Validate required fields
-    if (!name || !phone || !role || !employee_id) {
+    // Validate required fields (phone is now optional)
+    if (!name || !role || !username) {
       return NextResponse.json(
-        { error: "Name, phone, role, and employee ID are required" },
+        { error: "Name, role, and username are required" },
         { status: 400 }
       );
     }
 
     // Validate role
-    if (!["receptionist", "admin"].includes(role)) {
+    if (!["receptionist", "admin", "reviewer"].includes(role)) {
       return NextResponse.json(
-        { error: "Role must be either 'receptionist' or 'admin'" },
+        { error: "Role must be 'receptionist', 'admin', or 'reviewer'" },
         { status: 400 }
       );
     }
 
-    // Create user
-    const newUser = await UserService.create({
-      name,
-      phone,
-      role,
-      employee_id,
-    });
+    // Hash password if provided
+    const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
-    // Set password if provided
-    if (password) {
-      const passwordHash = await bcrypt.hash(password, 10);
-      await UserService.setPassword(newUser.id, passwordHash);
+    const supabase = await createServerSupabaseClient();
+
+    // Create user
+    const { data: newUser, error } = await supabase
+      .from("users")
+      .insert({
+        name,
+        phone: phone || null,
+        role,
+        username,
+        password_hash: passwordHash,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'P2002' || error.code === '23505') {
+        throw new Error("duplicate key");
+      }
+      throw new Error(error.message);
     }
 
     return NextResponse.json({ 
@@ -78,7 +110,7 @@ export async function POST(request: NextRequest) {
     // Handle unique constraint violations
     if (error instanceof Error && error.message.includes("duplicate key")) {
       return NextResponse.json(
-        { error: "Employee ID already exists" },
+        { error: "Username already exists" },
         { status: 409 }
       );
     }

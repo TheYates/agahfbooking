@@ -11,6 +11,9 @@ import {
   LogOut,
   MessageSquare,
   UserCog,
+  ClipboardCheck,
+  Stethoscope,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -40,7 +43,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const router = useRouter();
   const { state } = useSidebar();
 
-  const clientMenuItems = [
+const clientMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
     {
       title: "Appointments",
@@ -48,7 +51,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
       icon: Calendar,
     },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
-    { title: "Profile", url: "/dashboard/profile", icon: UserIcon },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
   ];
 
   const receptionistMenuItems = [
@@ -59,22 +62,37 @@ export function AppSidebar({ user }: AppSidebarProps) {
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
   ];
 
-  const adminMenuItems = [
+  const reviewerMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
+    { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
     { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
-    { title: "Clients", url: "/dashboard/clients", icon: Users },
+    { title: "Settings", url: "/dashboard/settings", icon: Settings },
+  ];
+
+  const adminMenuItems = [
+    { title: "Dashboard", url: "/dashboard", icon: Home },
+    { title: "Reviews", url: "/dashboard/reviews", icon: ClipboardCheck },
+    { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
+    { title: "Appointments", url: "/dashboard/appointments", icon: Calendar },
+    { title: "Clients", url: "/admin/clients", icon: Users },
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
-    { title: "Users", url: "/dashboard/users", icon: UserCog },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
+    { title: "Users", url: "/admin/users", icon: UserCog },
     { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    { title: "Content", url: "/dashboard/content-management", icon: FileText },
+    { title: "Login Audit", url: "/admin/login-audit", icon: ClipboardCheck },
+    { title: "Feedback", url: "/admin/feedback", icon: MessageSquare },
   ];
 
   const getMenuItems = () => {
     switch (user.role) {
       case "admin":
         return adminMenuItems;
+      case "reviewer":
+        return reviewerMenuItems;
       case "receptionist":
         return receptionistMenuItems;
       default:

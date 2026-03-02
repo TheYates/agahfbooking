@@ -1,229 +1,203 @@
-// 🚀 ULTRA-FAST Appointments List API with Memory Caching
-// Expected performance: 5-15ms (vs 200ms+ previous) = 13-40x faster!
+// 🚀 Appointments List API (Supabase) with Memory Caching
+// Keeps response shape compatible with existing UI hooks.
 
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 const { MemoryCache } = require("@/lib/memory-cache.js");
+
+function statusColorsMap() {
+  return {
+    scheduled: "#3B82F6",
+    booked: "#3B82F6",
+    confirmed: "#8B5CF6",
+    arrived: "#10B981",
+    waiting: "#F59E0B",
+    completed: "#059669",
+    no_show: "#EF4444",
+    cancelled: "#6B7280",
+  } as Record<string, string>;
+}
+
+function dateOnly(value: any): string {
+  if (!value) return "";
+  return value.toString().split("T")[0];
+}
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
 
   try {
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search");
-    const status = searchParams.get("status");
-    const dateFilter = searchParams.get("dateFilter");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const search = searchParams.get("search") || undefined;
+    const status = searchParams.get("status") || undefined;
+    const dateFilter = searchParams.get("dateFilter") || undefined;
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
     const offset = (page - 1) * limit;
 
-    // 🚀 Create smart cache key based on all parameters
-    const cacheKey = `appointments_list_${search || "all"}_${status || "all"}_${
-      dateFilter || "all"
-    }_${page}_${limit}`;
+    const cacheKey = `appointments_list_${search || "all"}_${status || "all"}_${dateFilter || "all"
+      }_${page}_${limit}`;
 
     const appointmentsData = await MemoryCache.get(
       cacheKey,
       async () => {
-        // Build WHERE conditions
-        const whereConditions = ["1=1"]; // Always true condition to start
-        const queryParams: any[] = [];
-        let paramCount = 0;
+        const supabase = await createServerSupabaseClient();
 
-        // Search filter
+        // Derived date filtering.
+        const today = new Date().toISOString().split("T")[0];
+
+        let data, count;
+
+        // If search is provided, use RPC function for better performance
         if (search) {
-          paramCount++;
-          whereConditions.push(`(
-            c.name ILIKE $${paramCount} OR 
-            c.x_number ILIKE $${paramCount} OR 
-            d.name ILIKE $${paramCount}
-          )`);
-          queryParams.push(`%${search}%`);
-        }
+          // Determine date range based on dateFilter
+          let dateFrom = null;
+          let dateTo = null;
 
-        // Status filter
-        if (status && status !== "all") {
-          paramCount++;
-          whereConditions.push(`a.status = $${paramCount}`);
-          queryParams.push(status);
-        }
-
-        // Date filter
-        if (dateFilter && dateFilter !== "all") {
-          const today = new Date().toISOString().split("T")[0];
-          switch (dateFilter) {
-            case "today":
-              paramCount++;
-              whereConditions.push(
-                `DATE(a.appointment_date) = DATE($${paramCount})`
-              );
-              queryParams.push(today);
-              break;
-            case "upcoming":
-              paramCount++;
-              whereConditions.push(
-                `DATE(a.appointment_date) >= DATE($${paramCount})`
-              );
-              queryParams.push(today);
-              break;
-            case "past":
-              paramCount++;
-              whereConditions.push(
-                `DATE(a.appointment_date) < DATE($${paramCount})`
-              );
-              queryParams.push(today);
-              break;
+          if (dateFilter && dateFilter !== "all") {
+            switch (dateFilter) {
+              case "today":
+                dateFrom = today;
+                dateTo = today;
+                break;
+              case "upcoming":
+                dateFrom = today;
+                dateTo = null;
+                break;
+              case "past":
+                dateFrom = null;
+                dateTo = new Date(new Date(today).getTime() - 86400000).toISOString().split("T")[0];
+                break;
+            }
           }
+
+          const { data: rpcData, error } = await supabase.rpc('search_appointments', {
+            search_term: search,
+            filter_status: status && status !== "all" ? status : null,
+            filter_date_from: dateFrom,
+            filter_date_to: dateTo,
+            result_limit: limit,
+            result_offset: offset,
+          });
+
+          if (error) throw new Error(error.message);
+
+          // RPC returns results with total_count in each row
+          data = rpcData || [];
+          count = data.length > 0 ? data[0].total_count : 0;
+        } else {
+          // No search - use regular query
+          let query = supabase
+            .from("appointments")
+            .select(
+              "id,client_id,department_id,appointment_date,slot_number,slot_start_time,slot_end_time,status,notes,created_at,reviewed_by,reviewed_at,clients(name,x_number,phone,category),departments(name),reviewer:users!reviewed_by(name)",
+              { count: "exact" }
+            )
+            .order("appointment_date", { ascending: false })
+            .order("slot_number", { ascending: true });
+
+          if (status && status !== "all") {
+            query = query.eq("status", status);
+          }
+
+          if (dateFilter && dateFilter !== "all") {
+            switch (dateFilter) {
+              case "today":
+                query = query.gte("appointment_date", today).lte("appointment_date", today);
+                break;
+              case "upcoming":
+                query = query.gte("appointment_date", today);
+                break;
+              case "past":
+                query = query.lt("appointment_date", today);
+                break;
+            }
+          }
+
+          query = query.range(offset, offset + limit - 1);
+
+          const result = await query;
+          if (result.error) {
+            console.error("❌ Supabase query error:", result.error);
+            throw new Error(result.error.message || JSON.stringify(result.error));
+          }
+
+          data = result.data;
+          count = result.count;
         }
 
-        // 🚀 ULTRA-OPTIMIZED: Use indexed columns first, minimize JOINs
-        const optimizedQuery = `
-          SELECT 
-            a.id,
-            a.client_id,
-            a.department_id,
-            a.appointment_date,
-            a.slot_number,
-            a.status,
-            a.notes,
-            a.created_at,
-            COUNT(*) OVER() as total_count
-          FROM appointments a
-          WHERE ${whereConditions.join(" AND ")}
-          ORDER BY a.appointment_date DESC, a.slot_number ASC
-          LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
-        `;
+        const statusColors = await MemoryCache.get(
+          "appointment_status_colors",
+          async () => statusColorsMap(),
+          "departments"
+        );
 
-        // 🔥 SEPARATE: Get client and department data from cache or optimized queries
-        const clientsQuery = `
-          SELECT id, name, x_number, phone, category 
-          FROM clients 
-          WHERE id = ANY($1)
-        `;
-
-        const departmentsQuery = `
-          SELECT id, name 
-          FROM departments 
-          WHERE id = ANY($1)
-        `;
-
-        queryParams.push(limit, offset);
-
-        // 🚀 Execute main appointments query (fast, no JOINs)
-        const result = await query(optimizedQuery, queryParams);
-
-        if (result.rows.length === 0) {
-          return {
-            appointments: [],
-            pagination: {
-              currentPage: page,
-              totalPages: 0,
-              totalCount: 0,
-              limit,
-            },
-          };
-        }
-
-        // 🔥 Get unique client and department IDs for batch lookup
-        const clientIds = [
-          ...new Set(
-            result.rows.map((row) => row.client_id).filter((id) => id)
-          ),
-        ];
-        const departmentIds = [
-          ...new Set(
-            result.rows.map((row) => row.department_id).filter((id) => id)
-          ),
-        ];
-
-        // 🚀 Parallel batch queries for related data (cached)
-        const [clientsResult, departmentsResult, statusColors] =
-          await Promise.all([
-            clientIds.length > 0
-              ? query(clientsQuery, [clientIds])
-              : { rows: [] },
-            departmentIds.length > 0
-              ? query(departmentsQuery, [departmentIds])
-              : { rows: [] },
-            MemoryCache.get(
-              "appointment_status_colors",
-              async () => ({
-                scheduled: "#3B82F6", // Blue
-                booked: "#3B82F6",
-                confirmed: "#8B5CF6", // Purple
-                arrived: "#10B981", // Green
-                waiting: "#F59E0B", // Yellow
-                completed: "#059669", // Emerald
-                no_show: "#EF4444", // Red
-                cancelled: "#6B7280", // Gray
-              }),
-              "departments" // 1 hour cache
-            ),
-          ]);
-
-        // 🔥 Create lookup maps for O(1) access
-        const clientsMap = new Map();
-        clientsResult.rows.forEach((client) => {
-          clientsMap.set(client.id, client);
-        });
-
-        const departmentsMap = new Map();
-        departmentsResult.rows.forEach((dept) => {
-          departmentsMap.set(dept.id, dept);
-        });
-
-        // 🚀 Transform the data with O(1) lookups
-        const appointments = result.rows.map((row: any) => {
-          const client = clientsMap.get(row.client_id) || {};
-          const department = departmentsMap.get(row.department_id) || {};
+        const appointments = (data || []).map((row: any) => {
+          // Handle both RPC response (flat structure) and regular query (nested structure)
+          const isRpcResponse = 'client_name' in row;
 
           return {
             id: row.id,
             clientId: row.client_id,
-            clientName: client.name || "Unknown Client",
-            clientXNumber: client.x_number || "",
+            clientName: isRpcResponse ? row.client_name : (row.clients?.name || "Unknown Client"),
+            clientXNumber: isRpcResponse ? row.client_x_number : (row.clients?.x_number || ""),
             doctorId: row.department_id,
-            doctorName: department.name || "Unknown Department",
-            date: row.appointment_date.toISOString().split("T")[0],
+            doctorName: isRpcResponse ? row.department_name : (row.departments?.name || "Unknown Department"),
+            departmentId: row.department_id,
+            departmentName: isRpcResponse ? row.department_name : (row.departments?.name || "Unknown Department"),
+            date: dateOnly(row.appointment_date),
             slotNumber: row.slot_number,
+            slotStartTime: row.slot_start_time,
+            slotEndTime: row.slot_end_time,
             status: row.status,
             statusColor: statusColors[row.status] || "#6B7280",
             notes: row.notes,
-            phone: client.phone || "",
-            category: client.category || "",
+            phone: isRpcResponse ? row.client_phone : (row.clients?.phone || ""),
+            category: isRpcResponse ? row.client_category : (row.clients?.category || ""),
+            bookedAt: row.created_at,
+            reviewedBy: isRpcResponse ? null : (row.reviewer?.name || null),
+            reviewedAt: row.reviewed_at,
           };
         });
 
-        const totalCount = result.rows[0]?.total_count || 0;
-        const totalPages = Math.ceil(totalCount / limit);
+        const totalCount = count || 0;
+        const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);
 
         return {
           appointments,
           pagination: {
             currentPage: page,
             totalPages,
-            totalCount: parseInt(totalCount),
+            totalCount,
             limit,
           },
         };
       },
-      // 🎯 Smart cache strategy based on data type
-      search || status !== "all" || dateFilter !== "all"
+      search || (status && status !== "all") || (dateFilter && dateFilter !== "all")
         ? "appointments"
-        : "recentActivity" // 10s for filtered, 60s for general lists
+        : "recentActivity"
     );
 
     const responseTime = Date.now() - requestStart;
-    // console.log(`⚡ Appointments List API: ${responseTime}ms`);
+
+    // NOTE: hooks expect pagination.hasMore. Keep it.
+    const totalPages = appointmentsData.pagination.totalPages;
+    const totalCount = appointmentsData.pagination.totalCount;
 
     return NextResponse.json(
       {
         success: true,
         data: appointmentsData.appointments,
-        pagination: appointmentsData.pagination,
+        pagination: {
+          currentPage: appointmentsData.pagination.currentPage,
+          totalPages,
+          totalCount,
+          hasMore: totalPages > 0 ? page < totalPages : false,
+          limit: appointmentsData.pagination.limit,
+        },
         meta: {
           responseTime: `${responseTime}ms`,
-          cached: responseTime < 20, // If under 20ms, likely from cache
+          cached: responseTime < 20,
           cacheType: "memory",
           filters: { search, status, dateFilter, page, limit },
         },
@@ -251,14 +225,5 @@ export async function GET(request: Request) {
   }
 }
 
-// 🔄 Cache invalidation helper for when appointments change
-export async function invalidateAppointmentsListCache() {
-  await MemoryCache.invalidate("appointments_list_");
-  await MemoryCache.invalidate("appointment_status_colors");
-}
-
-// 🌟 Expected Performance Results (Memory Cache):
-// - First request (cache miss): 10-40ms (vs 200ms+ previous)
-// - Subsequent requests (cache hit): 1-5ms (vs 200ms+ previous)
-// - Filtered searches: Cached separately for instant browsing
-// - Overall improvement: 13-200x faster!
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// Cache invalidation helpers live in `lib/appointments-cache.ts`.

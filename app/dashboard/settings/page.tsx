@@ -1,6 +1,6 @@
-// Settings page now uses Convex backend
-import SettingsPageConvex from "./page-convex";
+// Settings page now uses Supabase/API backend
+import SettingsPageSupabase from "./page-supabase";
 
 export default function SettingsPage() {
-  return <SettingsPageConvex />;
+  return <SettingsPageSupabase />;
 }

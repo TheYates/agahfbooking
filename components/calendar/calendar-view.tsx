@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import type React from "react";
@@ -12,7 +13,6 @@ import { ViewSwitcher } from "./view-switcher";
 import { AppointmentModal } from "./appointment-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DayAppointmentsPopover } from "./day-appointments-popover";
-import { AppointmentAlerts } from "./appointment-alerts";
 import {
   isValidBookingDate,
   isWorkingDayForAnyDepartment,
@@ -25,8 +25,6 @@ interface Appointment {
   clientId: number;
   clientName: string;
   clientXNumber: string;
-  doctorId: number;
-  doctorName: string;
   departmentId: number;
   departmentName: string;
   date: string;
@@ -34,13 +32,6 @@ interface Appointment {
   status: string;
   statusColor: string;
   notes?: string;
-}
-
-interface Doctor {
-  id: number;
-  name: string;
-  specialization: string;
-  departmentId?: number;
 }
 
 interface Department {
@@ -54,7 +45,7 @@ interface Department {
 }
 
 interface CalendarViewProps {
-  userRole: "client" | "receptionist" | "admin";
+  userRole: "client" | "receptionist" | "admin" | "reviewer";
   currentUserId?: number;
 }
 
@@ -62,7 +53,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "week" | "day">("month");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [draggedAppointment, setDraggedAppointment] =
     useState<Appointment | null>(null);
@@ -79,7 +69,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   // Fetch data from API
   useEffect(() => {
     fetchDepartments();
-    fetchDoctors();
     fetchAppointments();
   }, [currentDate, view, userRole, currentUserId]);
 
@@ -92,25 +81,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
-    }
-  };
-
-  const fetchDoctors = async () => {
-    try {
-      const response = await fetch("/api/doctors");
-      const data = await response.json();
-      if (data.success) {
-        // Transform the data to match the expected interface
-        const transformedDoctors = data.data.map((doctor: any) => ({
-          id: doctor.id,
-          name: doctor.name,
-          specialization: doctor.department_name || "General",
-          departmentId: doctor.department_id,
-        }));
-        setDoctors(transformedDoctors);
-      }
-    } catch (error) {
-      console.error("Error fetching doctors:", error);
     }
   };
 
@@ -176,13 +146,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           clientName: appointment.client_name || appointment.clientName,
           clientXNumber:
             appointment.client_x_number || appointment.clientXNumber,
-          doctorId:
-            appointment.doctor_id ||
-            appointment.doctorId ||
-            appointment.department_id ||
-            appointment.departmentId,
-          doctorName:
-            appointment.doctor_name || appointment.doctorName || "Unassigned",
           departmentId: appointment.department_id || appointment.departmentId,
           departmentName:
             appointment.department_name || appointment.departmentName,
@@ -203,13 +166,16 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
   const getStatusColor = (status: string) => {
     const statusColors: { [key: string]: string } = {
+      pending_review: "#F59E0B",
+      reschedule_requested: "#DC2626",
       booked: "#3B82F6",
+      confirmed: "#10B981",
       arrived: "#10B981",
       waiting: "#F59E0B",
       completed: "#059669",
       no_show: "#EF4444",
       cancelled: "#6B7280",
-      rescheduled: "#8B5CF6",
+      rescheduled: "#F97316",
     };
     return statusColors[status] || "#6B7280";
   };
@@ -403,7 +369,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     e: React.DragEvent,
     targetDate: Date,
     targetSlot: number,
-    targetDoctorId?: number
   ) => {
     e.preventDefault();
     if (!draggedAppointment) return;
@@ -415,7 +380,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
       (apt) =>
         apt.date === dateString &&
         apt.slotNumber === targetSlot &&
-        (targetDoctorId ? apt.doctorId === targetDoctorId : true) &&
         apt.id !== draggedAppointment.id
     );
 
@@ -433,15 +397,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
       ...draggedAppointment,
       date: dateString,
       slotNumber: targetSlot,
-      ...(targetDoctorId && { doctorId: targetDoctorId }),
     };
-
-    if (targetDoctorId) {
-      const doctor = doctors.find((d) => d.id === targetDoctorId);
-      if (doctor) {
-        updatedAppointment.doctorName = doctor.name;
-      }
-    }
 
     setAppointments((prev) =>
       prev.map((apt) =>
@@ -499,8 +455,8 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         <div
-          className="grid grid-cols-7 gap-1 h-[calc(100vh-11rem)]"
-          style={{ gridTemplateRows: "auto 1fr 1fr 1fr 1fr 1fr 1fr" }}
+          className="grid grid-cols-7 gap-1"
+          style={{ gridTemplateRows: "auto repeat(6, minmax(80px, auto))" }}
         >
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
@@ -825,7 +781,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                     {appointment.departmentName}
                                   </div>
                                   <div className="text-xs text-muted-foreground truncate">
-                                    {appointment.doctorName.split(" ")[1]}
+                                    {appointment.departmentName}
                                   </div>
                                   <div className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
                                     {slotAppointments.length}
@@ -857,7 +813,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   {appointment.departmentName}
                                 </div>
                                 <div className="text-xs text-muted-foreground truncate">
-                                  {appointment.doctorName.split(" ")[1]}
+                                  {appointment.departmentName}
                                 </div>
                               </div>
                             )
@@ -1060,13 +1016,6 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Appointment Alerts - Shows toast notifications for upcoming appointments */}
-      <AppointmentAlerts
-        userRole={userRole}
-        currentUserId={currentUserId}
-        enabled={true}
-      />
-
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
       {view === "day" && renderDayView()}

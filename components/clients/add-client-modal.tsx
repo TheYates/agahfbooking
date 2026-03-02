@@ -44,6 +44,7 @@ export function AddClientModal({
     xNumber: "",
     name: "",
     phone: "",
+    email: "",
     category: "",
     emergencyContact: "",
     address: "",
@@ -89,6 +90,7 @@ export function AddClientModal({
       !formData.xNumber ||
       !formData.name ||
       !formData.phone ||
+      !formData.email ||
       !formData.category
     ) {
       setError("Please fill in all required fields");
@@ -124,6 +126,7 @@ export function AddClientModal({
         xNumber: "",
         name: "",
         phone: "",
+        email: "",
         category: "",
         emergencyContact: "",
         address: "",
@@ -146,6 +149,7 @@ export function AddClientModal({
       xNumber: "",
       name: "",
       phone: "",
+      email: "",
       category: "",
       emergencyContact: "",
       address: "",
@@ -230,16 +234,29 @@ export function AddClientModal({
               />
             </div>
             <div>
-              <Label htmlFor="emergencyContact">Emergency Contact</Label>
+              <Label htmlFor="email">Email *</Label>
               <Input
-                id="emergencyContact"
-                placeholder="+1234567891"
-                value={formData.emergencyContact}
+                id="email"
+                type="email"
+                placeholder="client@example.com"
+                value={formData.email}
                 onChange={(e) =>
-                  setFormData({ ...formData, emergencyContact: e.target.value })
+                  setFormData({ ...formData, email: e.target.value })
                 }
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="emergencyContact">Emergency Contact</Label>
+            <Input
+              id="emergencyContact"
+              placeholder="+1234567891"
+              value={formData.emergencyContact}
+              onChange={(e) =>
+                setFormData({ ...formData, emergencyContact: e.target.value })
+              }
+            />
           </div>
 
           <div>

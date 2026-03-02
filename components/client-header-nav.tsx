@@ -1,6 +1,13 @@
 "use client";
 
-import { Calendar, Home, UserIcon, LogOut, Menu } from "lucide-react";
+import {
+  Calendar,
+  Home,
+  UserIcon,
+  LogOut,
+  Menu,
+  Stethoscope,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -23,6 +30,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface ClientHeaderNavProps {
   user: User;
@@ -32,7 +40,7 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const clientMenuItems = [
+const clientMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
     {
       title: "Appointments",
@@ -40,7 +48,7 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
       icon: Calendar,
     },
     { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
-    { title: "Profile", url: "/dashboard/profile", icon: UserIcon },
+    { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
   ];
 
   const handleLogout = async () => {
@@ -90,11 +98,14 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
                   src="/agahflogo.svg"
                   alt="AGAHF Logo"
                   className="h-6 w-6"
-                  style={{ display: 'block' }}
+                  style={{ display: "block" }}
                 />
               </picture>
             </div>
-            <span className="font-semibold text-base">AGA HEALTH FOUNDATION</span>
+            <span className="font-semibold text-base">
+              <span className="hidden lg:inline">AGA HEALTH FOUNDATION</span>
+              <span className="lg:hidden">AGAHF</span>
+            </span>
           </Link>
         </div>
 
@@ -110,7 +121,7 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
                         navigationMenuTriggerStyle(),
                         "h-9 px-3 py-2 text-sm",
                         pathname === item.url &&
-                          "bg-accent text-accent-foreground"
+                          "bg-accent text-accent-foreground",
                       )}
                     >
                       <item.icon className="h-4 w-4 mr-2" />
@@ -125,6 +136,9 @@ export function ClientHeaderNav({ user }: ClientHeaderNavProps) {
 
         {/* User Menu */}
         <div className="flex items-center space-x-3">
+          {/* Notification Bell */}
+          <NotificationBell />
+
           {/* Mobile Menu */}
           <div className="md:hidden">
             <DropdownMenu>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { pool } from "@/lib/db";
+import type { QueryResult } from "pg";
+import { MemoryCache } from "@/lib/memory-cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,45 +16,70 @@ export async function GET(request: NextRequest) {
         data: {
           appointments: [],
           clients: [],
-          doctors: [],
           departments: [],
         },
       });
     }
 
-    const searchTerm = `%${query.trim()}%`;
+    const normalizedQuery = query.trim().toLowerCase();
+    const cacheKey = `search_universal_${normalizedQuery}_${user.role}`;
+
+    const results = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        return await performUniversalSearch(normalizedQuery, user.role);
+      },
+      'search' // 10 second cache
+    );
+
+    return NextResponse.json({
+      success: true,
+      data: results,
+    });
+  } catch (error) {
+    console.error("Universal search error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to perform search",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function performUniversalSearch(query: string, userRole: string) {
+    const searchTerm = `%${query}%`;
 
     // Search appointments
-    const appointments = await pool.query(
+    const appointments: QueryResult<any> = await pool.query(
       `SELECT 
         a.id,
-        a.date,
+        a.appointment_date as date,
         a.slot_number as slotNumber,
         a.status,
         c.name as clientName,
         c.x_number as clientXNumber,
-        d.name as doctorName,
         dept.name as departmentName,
         dept.color as departmentColor
       FROM appointments a
       JOIN clients c ON a.client_id = c.id
-      JOIN doctors d ON a.doctor_id = d.id
       JOIN departments dept ON a.department_id = dept.id
       WHERE (
         c.name ILIKE $1 OR 
         c.x_number ILIKE $1 OR 
-        d.name ILIKE $1 OR 
         dept.name ILIKE $1 OR
         a.status ILIKE $1
       )
-      ORDER BY a.date DESC
+      ORDER BY a.appointment_date DESC
       LIMIT 10`,
       [searchTerm]
     );
 
     // Search clients (only for admin/receptionist)
-    let clients = [];
-    if (user.role === "admin" || user.role === "receptionist") {
+    let clients: QueryResult<any> | null = null;
+    if (userRole === "admin" || userRole === "receptionist") {
       clients = await pool.query(
         `SELECT 
           id,
@@ -68,24 +95,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Search doctors
-    const doctors = await pool.query(
-      `SELECT 
-        d.id,
-        d.name,
-        d.specialization,
-        dept.name as departmentName,
-        dept.color as departmentColor
-      FROM doctors d
-      JOIN departments dept ON d.department_id = dept.id
-      WHERE d.name ILIKE $1 OR d.specialization ILIKE $1 OR dept.name ILIKE $1
-      ORDER BY d.name
-      LIMIT 10`,
-      [searchTerm]
-    );
-
     // Search departments
-    const departments = await pool.query(
+    const departments: QueryResult<any> = await pool.query(
       `SELECT 
         id,
         name,
@@ -98,20 +109,9 @@ export async function GET(request: NextRequest) {
       [searchTerm]
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        appointments: appointments.rows,
-        clients: clients.rows || [],
-        doctors: doctors.rows,
-        departments: departments.rows,
-      },
-    });
-  } catch (error) {
-    console.error("Universal search error:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to perform search" },
-      { status: 500 }
-    );
-  }
+    return {
+      appointments: appointments.rows,
+      clients: clients?.rows || [],
+      departments: departments.rows,
+    };
 }

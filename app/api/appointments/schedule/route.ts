@@ -1,177 +1,88 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
-import { AppointmentService } from "@/lib/db-services";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getSlotTimeInfo, parseTimeString, type WorkingHours } from "@/lib/slot-time-utils";
+import { MemoryCache } from "@/lib/memory-cache";
+
+const dayNamesLong = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+const months = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const dayNamesShort = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
+function isWorkingDayFromArray(workingDays: string[] | null, date: string): boolean {
+  if (!workingDays || workingDays.length === 0) return false;
+  const dateObj = new Date(date);
+  const dayName = dayNamesShort[dateObj.getDay()];
+  return workingDays.includes(dayName);
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const departmentId = searchParams.get("departmentId");
-    const startDate = searchParams.get("startDate");
+    const departmentIdRaw = searchParams.get("departmentId");
+    const startDateRaw = searchParams.get("startDate");
 
-    if (!departmentId) {
+    if (!departmentIdRaw) {
       return NextResponse.json(
         { success: false, error: "Department ID is required" },
         { status: 400 }
       );
     }
 
-    // Parse start date or use today
-    const start = startDate ? new Date(startDate) : new Date();
-    const schedule = [];
-
-    // Determine how many days to generate based on week type
-    const today = new Date();
-    const isCurrentWeek = Math.abs(start.getTime() - today.getTime()) < 24 * 60 * 60 * 1000; // Within 1 day
-
-    let daysToGenerate = 7; // Default: full week
-
-    if (isCurrentWeek) {
-      // Current week: from today until Saturday (since Sunday starts next week)
-      const todayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-      if (todayOfWeek === 0) {
-        // If today is Sunday, show full week (Sunday to Saturday)
-        daysToGenerate = 7;
-      } else {
-        // Show from today until Saturday
-        daysToGenerate = 7 - todayOfWeek;
-      }
-    }
-
-    // Fetch department info ONCE before the loop (performance optimization)
-    const deptResult = await query(
-      "SELECT slots_per_day, working_days FROM departments WHERE id = $1",
-      [departmentId]
-    );
-    const slotsPerDay = deptResult.rows[0]?.slots_per_day || 10;
-    const workingDays = deptResult.rows[0]?.working_days || [];
-
-    // 🚀 Fetch ALL appointments for the entire week in ONE query
-    const endDate = new Date(start);
-    endDate.setDate(start.getDate() + daysToGenerate - 1);
-
-    const allAppointmentsResult = await query(
-      `
-      SELECT
-        a.id,
-        a.slot_number,
-        a.client_id,
-        DATE(a.appointment_date) as appointment_date,
-        c.x_number as client_x_number
-      FROM appointments a
-      LEFT JOIN clients c ON a.client_id = c.id
-      WHERE a.department_id = $1
-      AND DATE(a.appointment_date) >= DATE($2)
-      AND DATE(a.appointment_date) <= DATE($3)
-      AND a.status != 'cancelled'
-      ORDER BY a.appointment_date, a.slot_number
-    `,
-      [departmentId, start.toISOString().split("T")[0], endDate.toISOString().split("T")[0]]
-    );
-
-    // Group appointments by date for fast lookup
-    const appointmentsByDate = new Map();
-    allAppointmentsResult.rows.forEach((apt: any) => {
-      const dateKey = apt.appointment_date;
-      if (!appointmentsByDate.has(dateKey)) {
-        appointmentsByDate.set(dateKey, new Map());
-      }
-      appointmentsByDate.get(dateKey).set(apt.slot_number, {
-        clientXNumber: apt.client_x_number,
-        clientId: apt.client_id,
-      });
-    });
-
-    // Generate days
-    for (let i = 0; i < daysToGenerate; i++) {
-      const currentDate = new Date(start);
-      currentDate.setDate(start.getDate() + i);
-
-      const dayNames = [
-        "Sunday",
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-      ];
-      const months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-
-      // Only show "Today" if it's actually today
-      const today = new Date();
-      const isToday = currentDate.getFullYear() === today.getFullYear() && 
-                     currentDate.getMonth() === today.getMonth() && 
-                     currentDate.getDate() === today.getDate();
-      const dayName = isToday ? "Today" : dayNames[currentDate.getDay()];
-      const dateString = `${
-        months[currentDate.getMonth()]
-      } ${currentDate.getDate()}`;
-
-      // 🚀 Check if this date is a working day (using cached working_days array)
-      const isWorkingDay = AppointmentService.isWorkingDayFromArray(
-        workingDays,
-        currentDate.toISOString().split("T")[0]
+    const departmentId = parseInt(departmentIdRaw, 10);
+    if (Number.isNaN(departmentId)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid Department ID" },
+        { status: 400 }
       );
-
-      // 🚀 Get booked slots from pre-fetched data (no database query!)
-      const dateKey = currentDate.toISOString().split("T")[0];
-      const bookedSlots = appointmentsByDate.get(dateKey) || new Map();
-
-      // Generate time slots
-      const slots = [];
-      if (isWorkingDay) {
-        for (let slotNum = 1; slotNum <= slotsPerDay; slotNum++) {
-          const isBooked = bookedSlots.has(slotNum);
-          const slotData = isBooked ? bookedSlots.get(slotNum) : null;
-          slots.push({
-            time: `Slot ${slotNum}`,
-            available: !isBooked,
-            clientXNumber: slotData?.clientXNumber,
-            clientId: slotData?.clientId,
-          });
-        }
-      } else {
-        // For non-working days, create slots but mark them as unavailable
-        for (let slotNum = 1; slotNum <= slotsPerDay; slotNum++) {
-          slots.push({
-            time: `Slot ${slotNum}`,
-            available: false,
-            clientXNumber: null,
-            clientId: null,
-            isNonWorkingDay: true,
-          });
-        }
-      }
-
-      schedule.push({
-        date: dateString,
-        fullDate: currentDate.toISOString().split("T")[0], // Add full date in YYYY-MM-DD format
-        dayName,
-        dayNumber: currentDate.getDate(),
-        slots,
-        hasAvailability: isWorkingDay && slots.some((slot) => slot.available),
-        isWorkingDay,
-      });
     }
+
+    // Parse start date or use today
+    const start = startDateRaw ? new Date(startDateRaw) : new Date();
+    const startDate = start.toISOString().split("T")[0];
+
+    // Create cache key for this week's schedule
+    const cacheKey = `week_schedule_${departmentId}_${startDate}`;
+
+    const scheduleData = await MemoryCache.get(
+      cacheKey,
+      async () => {
+        return await generateScheduleForWeek(departmentId, start);
+      },
+      'weekSchedule' // 30 second cache
+    );
 
     return NextResponse.json(
-      {
-        success: true,
-        data: schedule,
-      },
+      scheduleData,
       {
         headers: {
           "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
@@ -185,4 +96,170 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+}
+
+async function generateScheduleForWeek(departmentId: number, start: Date) {
+    const schedule: any[] = [];
+
+    // Determine how many days to generate based on week type
+    const today = new Date();
+    const isCurrentWeek =
+      Math.abs(start.getTime() - today.getTime()) < 24 * 60 * 60 * 1000; // Within 1 day
+
+    let daysToGenerate = 7;
+    if (isCurrentWeek) {
+      const todayOfWeek = today.getDay();
+      if (todayOfWeek === 0) {
+        daysToGenerate = 7;
+      } else {
+        daysToGenerate = 7 - todayOfWeek;
+      }
+    }
+
+    const startDate = start.toISOString().split("T")[0];
+    const endDateObj = new Date(start);
+    endDateObj.setDate(start.getDate() + daysToGenerate - 1);
+    const endDate = endDateObj.toISOString().split("T")[0];
+
+    const supabase = await createServerSupabaseClient();
+
+    // Fetch department config once
+    const { data: dept, error: deptErr } = await supabase
+      .from("departments")
+      .select("slots_per_day,working_days,working_hours,slot_duration_minutes")
+      .eq("id", departmentId)
+      .single();
+
+    if (deptErr || !dept) {
+      return NextResponse.json(
+        { success: false, error: "Department not found" },
+        { status: 404 }
+      );
+    }
+
+    const slotsPerDay = (dept as any).slots_per_day || 10;
+    const workingDays = ((dept as any).working_days || []) as string[];
+    const workingHours = (dept as any).working_hours as WorkingHours | null;
+    const slotDuration = (dept as any).slot_duration_minutes || 30;
+
+    // Calculate actual number of slots that fit within working hours
+    const maxSlotsWithinHours = workingHours 
+      ? Math.floor(
+          ((parseTimeString(workingHours.end).hours * 60 + parseTimeString(workingHours.end).minutes) - 
+           (parseTimeString(workingHours.start).hours * 60 + parseTimeString(workingHours.start).minutes)) / 
+          slotDuration
+        )
+      : slotsPerDay;
+    
+    const actualSlotsPerDay = Math.min(slotsPerDay, maxSlotsWithinHours);
+
+    // Fetch all appointments for the week in one query
+    const { data: appts, error: apptsErr } = await supabase
+      .from("appointments")
+      .select("id,slot_number,client_id,appointment_date,clients(x_number)")
+      .eq("department_id", departmentId)
+      .gte("appointment_date", startDate)
+      .lte("appointment_date", endDate)
+      .neq("status", "cancelled")
+      .order("appointment_date", { ascending: true })
+      .order("slot_number", { ascending: true });
+
+    if (apptsErr) {
+      return NextResponse.json(
+        { success: false, error: "Failed to fetch schedule" },
+        { status: 500 }
+      );
+    }
+
+    // Group appointments by date
+    const appointmentsByDate = new Map<string, Map<number, any>>();
+    (appts || []).forEach((apt: any) => {
+      const dateKey = apt.appointment_date.toString().split("T")[0];
+      if (!appointmentsByDate.has(dateKey)) {
+        appointmentsByDate.set(dateKey, new Map());
+      }
+      appointmentsByDate.get(dateKey)!.set(apt.slot_number, {
+        clientXNumber: apt.clients?.x_number,
+        clientId: apt.client_id,
+      });
+    });
+
+    for (let i = 0; i < daysToGenerate; i++) {
+      const currentDate = new Date(start);
+      currentDate.setDate(start.getDate() + i);
+
+      const today2 = new Date();
+      const isToday =
+        currentDate.getFullYear() === today2.getFullYear() &&
+        currentDate.getMonth() === today2.getMonth() &&
+        currentDate.getDate() === today2.getDate();
+
+      const dayName = isToday ? "Today" : dayNamesLong[currentDate.getDay()];
+      const dateString = `${months[currentDate.getMonth()]} ${currentDate.getDate()}`;
+
+      const fullDate = currentDate.toISOString().split("T")[0];
+      const isWorkingDay = isWorkingDayFromArray(workingDays, fullDate);
+
+      const bookedSlots = appointmentsByDate.get(fullDate) || new Map();
+
+      const slots: any[] = [];
+      if (isWorkingDay) {
+        for (let slotNum = 1; slotNum <= actualSlotsPerDay; slotNum++) {
+          const isBooked = bookedSlots.has(slotNum);
+          const slotData = isBooked ? bookedSlots.get(slotNum) : null;
+
+          // Calculate slot time info
+          const slotTimeInfo = workingHours
+            ? getSlotTimeInfo(workingHours, slotNum, slotDuration)
+            : null;
+
+          slots.push({
+            slotNumber: slotNum,
+            time: slotTimeInfo?.displayTime || `Slot ${slotNum}`,
+            startTime: slotTimeInfo?.startTime || null,
+            endTime: slotTimeInfo?.endTime || null,
+            startTimeFormatted: slotTimeInfo?.startTimeFormatted || null,
+            endTimeFormatted: slotTimeInfo?.endTimeFormatted || null,
+            available: !isBooked,
+            clientXNumber: slotData?.clientXNumber,
+            clientId: slotData?.clientId,
+          });
+        }
+      } else {
+        for (let slotNum = 1; slotNum <= actualSlotsPerDay; slotNum++) {
+          // Calculate slot time info even for non-working days
+          const slotTimeInfo = workingHours
+            ? getSlotTimeInfo(workingHours, slotNum, slotDuration)
+            : null;
+
+          slots.push({
+            slotNumber: slotNum,
+            time: slotTimeInfo?.displayTime || `Slot ${slotNum}`,
+            startTime: slotTimeInfo?.startTime || null,
+            endTime: slotTimeInfo?.endTime || null,
+            startTimeFormatted: slotTimeInfo?.startTimeFormatted || null,
+            endTimeFormatted: slotTimeInfo?.endTimeFormatted || null,
+            available: false,
+            clientXNumber: null,
+            clientId: null,
+            isNonWorkingDay: true,
+          });
+        }
+      }
+
+      schedule.push({
+        date: dateString,
+        fullDate,
+        dayName,
+        dayNumber: currentDate.getDate(),
+        slots,
+        hasAvailability: isWorkingDay && slots.some((slot) => slot.available),
+        isWorkingDay,
+      });
+    }
+
+    return {
+      success: true,
+      data: schedule,
+    };
 }

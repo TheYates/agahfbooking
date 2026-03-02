@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { query } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth-server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 interface SystemSettings {
   maxAdvanceBookingDays: number;
@@ -30,10 +30,7 @@ function validateSettings(settings: SystemSettings): {
   isValid: boolean;
   error?: string;
 } {
-  if (
-    settings.maxAdvanceBookingDays < 1 ||
-    settings.maxAdvanceBookingDays > 365
-  ) {
+  if (settings.maxAdvanceBookingDays < 1 || settings.maxAdvanceBookingDays > 365) {
     return {
       isValid: false,
       error: "Max advance booking days must be between 1 and 365",
@@ -47,10 +44,7 @@ function validateSettings(settings: SystemSettings): {
     };
   }
 
-  if (
-    settings.sessionDurationHours < 1 ||
-    settings.sessionDurationHours > 168
-  ) {
+  if (settings.sessionDurationHours < 1 || settings.sessionDurationHours > 168) {
     return {
       isValid: false,
       error: "Session duration must be between 1 and 168 hours",
@@ -70,9 +64,20 @@ function validateSettings(settings: SystemSettings): {
   return { isValid: true };
 }
 
-export async function GET(request: NextRequest) {
+const SETTINGS_KEYS = {
+  maxAdvanceBookingDays: "max_advance_booking_days",
+  multipleAppointmentsAllowed: "multiple_appointments_allowed",
+  sameDayBookingAllowed: "same_day_booking_allowed",
+  defaultSlotsPerDay: "default_slots_per_day",
+  sessionDurationHours: "session_duration_hours",
+  sessionTimeoutMinutes: "session_timeout_minutes",
+  recurringAppointmentsEnabled: "recurring_appointments_enabled",
+  waitlistEnabled: "waitlist_enabled",
+  emergencySlotsEnabled: "emergency_slots_enabled",
+} as const;
+
+export async function GET(_request: NextRequest) {
   try {
-    // Get current user without redirect (for API routes)
     const user = await getCurrentUser();
 
     if (!user) {
@@ -82,7 +87,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Only admin can access system settings
     if (user.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
@@ -90,57 +94,47 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get system settings from individual rows
-    const result = await query(`
-      SELECT setting_key, setting_value
-      FROM system_settings
-      WHERE setting_key IN (
-        'max_advance_booking_days',
-        'multiple_appointments_allowed',
-        'same_day_booking_allowed',
-        'default_slots_per_day',
-        'session_duration_hours',
-        'session_timeout_minutes',
-        'recurring_appointments_enabled',
-        'waitlist_enabled',
-        'emergency_slots_enabled'
-      )
-    `);
+    const supabase = createAdminSupabaseClient();
 
-    // Convert database rows to settings object
-    let settings = { ...defaultSettings };
+    const { data, error } = await supabase
+      .from("system_settings")
+      .select("setting_key,setting_value")
+      .in("setting_key", Object.values(SETTINGS_KEYS));
 
-    for (const row of result.rows) {
-      const key = row.setting_key;
-      const value = row.setting_value;
+    if (error) throw new Error(error.message);
 
-      // Map database keys to camelCase and convert types
+    const settings: SystemSettings = { ...defaultSettings };
+
+    for (const row of data || []) {
+      const key = row.setting_key as string;
+      const value = (row as any).setting_value as string;
+
       switch (key) {
-        case "max_advance_booking_days":
+        case SETTINGS_KEYS.maxAdvanceBookingDays:
           settings.maxAdvanceBookingDays = parseInt(value);
           break;
-        case "multiple_appointments_allowed":
+        case SETTINGS_KEYS.multipleAppointmentsAllowed:
           settings.multipleAppointmentsAllowed = value === "true";
           break;
-        case "same_day_booking_allowed":
+        case SETTINGS_KEYS.sameDayBookingAllowed:
           settings.sameDayBookingAllowed = value === "true";
           break;
-        case "default_slots_per_day":
+        case SETTINGS_KEYS.defaultSlotsPerDay:
           settings.defaultSlotsPerDay = parseInt(value);
           break;
-        case "session_duration_hours":
+        case SETTINGS_KEYS.sessionDurationHours:
           settings.sessionDurationHours = parseInt(value);
           break;
-        case "session_timeout_minutes":
+        case SETTINGS_KEYS.sessionTimeoutMinutes:
           settings.sessionTimeoutMinutes = parseInt(value);
           break;
-        case "recurring_appointments_enabled":
+        case SETTINGS_KEYS.recurringAppointmentsEnabled:
           settings.recurringAppointmentsEnabled = value === "true";
           break;
-        case "waitlist_enabled":
+        case SETTINGS_KEYS.waitlistEnabled:
           settings.waitlistEnabled = value === "true";
           break;
-        case "emergency_slots_enabled":
+        case SETTINGS_KEYS.emergencySlotsEnabled:
           settings.emergencySlotsEnabled = value === "true";
           break;
       }
@@ -153,7 +147,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("System settings GET error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch settings" },
+      {
+        success: false,
+        error: "Failed to fetch settings",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -161,7 +159,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Get current user without redirect (for API routes)
     const user = await getCurrentUser();
 
     if (!user) {
@@ -171,7 +168,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Only admin can modify system settings
     if (user.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
@@ -181,7 +177,6 @@ export async function POST(request: NextRequest) {
 
     const settings: SystemSettings = await request.json();
 
-    // Validate settings
     const validation = validateSettings(settings);
     if (!validation.isValid) {
       return NextResponse.json(
@@ -190,68 +185,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save each setting as individual row
-    const settingsMap = [
+    const supabase = createAdminSupabaseClient();
+
+    const updatedBy = typeof user.id === "number" ? user.id : null;
+
+    const upserts = [
       {
-        key: "max_advance_booking_days",
-        value: settings.maxAdvanceBookingDays.toString(),
-        desc: "Maximum days in advance clients can book",
+        setting_key: SETTINGS_KEYS.maxAdvanceBookingDays,
+        setting_value: settings.maxAdvanceBookingDays.toString(),
+        description: "Maximum days in advance clients can book",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "multiple_appointments_allowed",
-        value: settings.multipleAppointmentsAllowed.toString(),
-        desc: "Allow clients to have multiple future appointments",
+        setting_key: SETTINGS_KEYS.multipleAppointmentsAllowed,
+        setting_value: settings.multipleAppointmentsAllowed.toString(),
+        description: "Allow clients to have multiple future appointments",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "same_day_booking_allowed",
-        value: settings.sameDayBookingAllowed.toString(),
-        desc: "Allow same-day appointment booking",
+        setting_key: SETTINGS_KEYS.sameDayBookingAllowed,
+        setting_value: settings.sameDayBookingAllowed.toString(),
+        description: "Allow same-day appointment booking",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "default_slots_per_day",
-        value: settings.defaultSlotsPerDay.toString(),
-        desc: "Default number of slots per day",
+        setting_key: SETTINGS_KEYS.defaultSlotsPerDay,
+        setting_value: settings.defaultSlotsPerDay.toString(),
+        description: "Default number of slots per day",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "session_duration_hours",
-        value: settings.sessionDurationHours.toString(),
-        desc: "User session duration in hours",
+        setting_key: SETTINGS_KEYS.sessionDurationHours,
+        setting_value: settings.sessionDurationHours.toString(),
+        description: "User session duration in hours",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "session_timeout_minutes",
-        value: settings.sessionTimeoutMinutes.toString(),
-        desc: "Auto-logout timeout in minutes (5-480)",
+        setting_key: SETTINGS_KEYS.sessionTimeoutMinutes,
+        setting_value: settings.sessionTimeoutMinutes.toString(),
+        description: "Auto-logout timeout in minutes (5-480)",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "recurring_appointments_enabled",
-        value: settings.recurringAppointmentsEnabled.toString(),
-        desc: "Enable recurring appointments feature",
+        setting_key: SETTINGS_KEYS.recurringAppointmentsEnabled,
+        setting_value: settings.recurringAppointmentsEnabled.toString(),
+        description: "Enable recurring appointments feature",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "waitlist_enabled",
-        value: settings.waitlistEnabled.toString(),
-        desc: "Enable waitlist feature",
+        setting_key: SETTINGS_KEYS.waitlistEnabled,
+        setting_value: settings.waitlistEnabled.toString(),
+        description: "Enable waitlist feature",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
       {
-        key: "emergency_slots_enabled",
-        value: settings.emergencySlotsEnabled.toString(),
-        desc: "Enable emergency slots feature",
+        setting_key: SETTINGS_KEYS.emergencySlotsEnabled,
+        setting_value: settings.emergencySlotsEnabled.toString(),
+        description: "Enable emergency slots feature",
+        updated_by: updatedBy,
+        updated_at: new Date().toISOString(),
       },
     ];
 
-    // Update each setting individually
-    for (const setting of settingsMap) {
-      await query(
-        `INSERT INTO system_settings (setting_key, setting_value, description, updated_by)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (setting_key)
-         DO UPDATE SET
-           setting_value = $2,
-           updated_by = $4,
-           updated_at = CURRENT_TIMESTAMP`,
-        [setting.key, setting.value, setting.desc, user.id]
-      );
-    }
+    const { error } = await supabase
+      .from("system_settings")
+      .upsert(upserts as any, { onConflict: "setting_key" });
+
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
@@ -260,7 +268,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("System settings POST error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to save settings" },
+      {
+        success: false,
+        error: "Failed to save settings",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

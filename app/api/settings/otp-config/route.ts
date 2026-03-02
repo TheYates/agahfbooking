@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { otpConfig, OTPMode } from "@/lib/otp-config-service";
 import { cookies } from "next/headers";
+import { getSession } from "@/lib/session-service";
 
 // Helper function to check admin authentication for API routes
 async function checkAdminAuth(): Promise<{ isAdmin: boolean; user?: any }> {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session_token");
+    const sessionId = cookieStore.get("session_id")?.value;
 
-    if (!sessionCookie?.value) {
+    if (!sessionId) {
       return { isAdmin: false };
     }
 
-    const userData = JSON.parse(sessionCookie.value);
-
-    if (userData.role !== "admin") {
+    const session = await getSession(sessionId);
+    if (!session || session.role !== "admin") {
       return { isAdmin: false };
     }
 
-    return { isAdmin: true, user: userData };
+    return { isAdmin: true, user: session };
   } catch (error) {
     return { isAdmin: false };
   }
@@ -85,11 +85,11 @@ export async function POST(request: NextRequest) {
     const { mode, testConnection } = await request.json();
 
     // Validate mode if provided
-    if (mode && mode !== "hubtel" && mode !== "mock") {
+    if (mode && mode !== "hubtel" && mode !== "mock" && mode !== "arkesel") {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid OTP mode. Must be 'hubtel' or 'mock'",
+          error: "Invalid OTP mode. Must be 'hubtel', 'mock', or 'arkesel'",
         },
         { status: 400 }
       );
@@ -108,6 +108,17 @@ export async function POST(request: NextRequest) {
             success: false,
             error:
               "Cannot switch to Hubtel mode. Please check Hubtel configuration (HUBTEL_CLIENT_ID and HUBTEL_CLIENT_SECRET).",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (mode === "arkesel" && !currentStatus.canSwitchToArkesel) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Cannot switch to Arkesel mode. Please check Arkesel configuration (ARKESEL_API_KEY).",
           },
           { status: 400 }
         );

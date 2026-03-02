@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,13 +13,17 @@ import {
 } from "@/components/ui/input-otp";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield } from "lucide-react";
+import { Shield, Clock } from "lucide-react";
 import Link from "next/link";
-import { useConvexAuth } from "@/hooks/use-convex-auth";
+import { authActions } from "@/lib/auth-client";
+import { PrivacyPolicyDialog } from "@/components/dialogs/privacy-policy-dialog";
+import { HelpCenterDialog } from "@/components/dialogs/help-center-dialog";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { sendOTP, verifyOTP } = useConvexAuth();
+  const searchParams = useSearchParams();
+  const sendOTP = authActions.sendOTP;
+  const verifyOTP = authActions.verifyOTP;
   
   const [step, setStep] = useState<"xnumber" | "otp">("xnumber");
   const [xNumber, setXNumber] = useState("");
@@ -28,6 +32,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [mockOtp, setMockOtp] = useState("");
   const [isMockMode, setIsMockMode] = useState(false);
+
+  const timeoutMessage = searchParams.get("reason") === "timeout" 
+    ? "You were logged out due to inactivity. Please log in again to continue."
+    : "";
 
   const handleXNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^0-9]/g, "");
@@ -64,8 +72,7 @@ export default function LoginPage() {
     }
 
     try {
-      // Call Convex OTP function
-      const result = await sendOTP(xNumber, "client");
+      const result = await sendOTP(xNumber);
 
       // Check if we're in development mode (mock OTP)
       if (result.otp) {
@@ -98,43 +105,13 @@ export default function LoginPage() {
     try {
       console.log("Verifying OTP:", { xNumber, otpValue });
       
-      // Call Convex OTP verification
-      const result = await verifyOTP(xNumber, otpValue, "client");
+      const result = await verifyOTP(xNumber, otpValue);
       
       console.log("Verification result:", result);
       console.log("Verification result.user:", JSON.stringify(result.user, null, 2));
 
       if (result.success && result.user) {
-        // User is automatically stored in localStorage by useConvexAuth
-        
-        
-        // Format user data for middleware (expects xNumber not x_number)
-        // Use type assertion to access optional properties safely
-        const userData = result.user as {
-          id: string;
-          name: string;
-          phone: string;
-          xNumber?: string;
-          x_number?: string;
-          category?: string;
-          role: string;
-          convexId?: string;
-        };
-        
-        const sessionData = {
-          id: userData.id,
-          name: userData.name,
-          phone: userData.phone,
-          xNumber: userData.xNumber || userData.x_number, // Middleware expects xNumber
-          category: userData.category,
-          role: userData.role,
-          convexId: userData.convexId || userData.id, // Use convexId if present, otherwise use id
-        };
-
-        
-        // Set session cookie for middleware
-        document.cookie = `session_token=${JSON.stringify(sessionData)}; path=/; max-age=86400`; // 24 hours
-        
+        // Session cookie is set server-side by /api/auth/verify-otp
         router.push("/dashboard");
         router.refresh();
       } else {
@@ -197,16 +174,16 @@ export default function LoginPage() {
               >
                 {/* Header / Logo */}
                 <div className="flex flex-col items-center text-center mt-8 md:mt-0 space-y-2">
-                  <div className="mb-4 md:mb-6 rounded-2xl bg-primary/10 p-3">
+                  <div className="mb-2 md:mb-6 p-3">
                     <img
                       src="/agahflogo.svg"
                       alt="AGAHF Logo"
-                      className="h-12 w-12 md:h-10 md:w-10 object-contain dark:hidden"
+                      className="h-32 w-32 md:h-10 md:w-10 object-contain dark:hidden"
                     />
                     <img
                       src="/agahflogo white.svg"
                       alt="AGAHF Logo"
-                      className="h-12 w-12 md:h-10 md:w-10 object-contain hidden dark:block"
+                      className="h-32 w-32 md:h-10 md:w-10 object-contain hidden dark:block"
                     />
                   </div>
                   <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
@@ -219,8 +196,17 @@ export default function LoginPage() {
                   </p>
                 </div>
 
-                {/* Main Content Area */}
+{/* Main Content Area */}
                 <div className="flex-1 flex flex-col justify-center py-8 space-y-6 max-w-sm mx-auto w-full">
+                  {timeoutMessage && (
+                    <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700 dark:text-amber-400">
+                        {timeoutMessage}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   {error && (
                     <Alert variant="destructive" className="animate-in slide-in-from-top-2">
                       <AlertDescription>{error}</AlertDescription>
@@ -335,12 +321,12 @@ export default function LoginPage() {
                     </Button>
                   )}
                   
-                  <div className="text-center">
-                     <p className="text-xs text-muted-foreground">
-                        Protected by secure OTP verification. <br/>
-                        <a href="#" className="hover:underline text-primary/80">Privacy Policy</a> &bull; <a href="#" className="hover:underline text-primary/80">Help Center</a>
-                     </p>
-                  </div>
+                   <div className="text-center">
+                      <p className="text-xs text-muted-foreground">
+                         Protected by secure OTP verification. <br/>
+                         <PrivacyPolicyDialog triggerClassName="text-xs text-green-600/80 hover:underline" /> &bull; <HelpCenterDialog triggerClassName="text-xs text-green-600/80 hover:underline" />
+                      </p>
+                   </div>
                 </div>
               </form>
             </div>

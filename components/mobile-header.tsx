@@ -10,10 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, Bell } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "@/lib/types";
 import { motion } from "framer-motion";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface MobileHeaderProps {
   user: User;
@@ -23,11 +24,20 @@ export function MobileHeader({ user }: MobileHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const getPageTitle = () => {
+const getPageTitle = () => {
     if (pathname === "/dashboard") return "Overview";
     if (pathname === "/dashboard/my-appointments") return "My Appointments";
-    if (pathname === "/dashboard/calendar") return "Schedule";
-    if (pathname === "/dashboard/profile") return "My Profile";
+    if (pathname === "/dashboard/appointments") return "Appointments";
+    if (pathname === "/dashboard/calendar") return "Calendar";
+    if (pathname === "/dashboard/reviews") return "Reviews";
+    if (pathname === "/dashboard/medicals") return "Medicals";
+    if (pathname === "/dashboard/notifications") return "Notifications";
+    if (pathname === "/dashboard/clients") return "Clients";
+    if (pathname === "/dashboard/departments") return "Departments";
+    if (pathname === "/dashboard/users") return "Users";
+    if (pathname === "/dashboard/reports") return "Reports";
+    if (pathname === "/dashboard/settings") return "Settings";
+    if (pathname.startsWith("/dashboard/settings/")) return "Settings";
     return "Dashboard";
   };
 
@@ -81,22 +91,29 @@ export function MobileHeader({ user }: MobileHeaderProps) {
             />
           </motion.div>
           <div className="flex flex-col">
-            <h1 className="text-lg font-bold tracking-tight leading-none text-foreground">{getPageTitle()}</h1>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">AGA HEALTH FOUNDATION</p>
+            <h1 className="text-lg font-bold tracking-tight leading-none text-foreground">
+              {getPageTitle()}
+            </h1>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+              <span className="md:hidden">AGA HEALTH FOUNDATION</span>
+              <span className="hidden md:inline lg:hidden">AGAHF</span>
+              <span className="hidden lg:inline">AGA HEALTH FOUNDATION</span>
+            </p>
           </div>
         </div>
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
-          {/* Notification Button (Mock) */}
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-full">
-            <Bell className="h-5 w-5" />
-          </Button>
+          {/* Notification Bell */}
+          <NotificationBell />
 
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 ring-2 ring-primary/10">
+              <Button
+                variant="ghost"
+                className="relative h-9 w-9 rounded-full p-0 ring-2 ring-primary/10"
+              >
                 <Avatar className="h-9 w-9">
                   <AvatarFallback className="bg-gradient-to-br from-green-500 to-green-700 text-white text-xs font-bold">
                     {getUserInitials(user.name)}
@@ -126,7 +143,7 @@ export function MobileHeader({ user }: MobileHeaderProps) {
                   className="w-full flex items-center py-2.5"
                 >
                   <Settings className="h-4 w-4 mr-3 text-muted-foreground" />
-                  Account Settings
+                  Profile
                 </button>
               </DropdownMenuItem>
 

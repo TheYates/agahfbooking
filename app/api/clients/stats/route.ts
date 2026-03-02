@@ -1,139 +1,140 @@
-// 🚀 ULTRA-FAST Clients Stats API with Memory Caching
-// Expected performance: 5-15ms (vs 823ms previous) = 55-165x faster!
+// 🚀 Clients Stats API (Supabase) with Memory Caching
 
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 const { MemoryCache } = require("@/lib/memory-cache.js");
 
-// Helper function to map sort columns to database columns
-function getSortColumn(sortBy: string): string {
-  const columnMap: { [key: string]: string } = {
-    name: "c.name",
-    xNumber: "c.x_number", 
-    phone: "c.phone",
-    category: "c.category",
-    joinDate: "c.created_at",
-    totalAppointments: "total_appointments",
-    lastAppointment: "last_appointment",
-    status: "status",
+function getSort(sortBy: string, sortOrder: string) {
+  const order = sortOrder?.toLowerCase() === "desc" ? "desc" : "asc";
+
+  // Map API sort keys -> DB columns.
+  // NOTE: Some keys (totalAppointments, lastAppointment, status) are derived.
+  const columnMap: Record<string, string> = {
+    name: "name",
+    xNumber: "x_number",
+    phone: "phone",
+    category: "category",
+    joinDate: "created_at",
   };
-  return columnMap[sortBy] || "c.name";
+
+  return { column: columnMap[sortBy] || "name", ascending: order !== "desc" };
 }
+
+function toDateOnly(value: string | null | undefined) {
+  if (!value) return null;
+  return value.split("T")[0];
+}
+
+type ClientRow = {
+  id: number;
+  x_number: string;
+  name: string;
+  phone: string;
+  category: string;
+  emergency_contact: string | null;
+  address: string | null;
+  created_at: string;
+  is_active: boolean;
+};
+
+type AppointmentRow = {
+  client_id: number;
+  appointment_date: string; // date or timestamp
+};
 
 export async function GET(request: Request) {
   const requestStart = Date.now();
-  
+
   try {
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search");
-    const category = searchParams.get("category");
-    const status = searchParams.get("status");
-    const clientId = searchParams.get("clientId");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+
+    const search = searchParams.get("search") || undefined;
+    const category = searchParams.get("category") || "all";
+    const status = searchParams.get("status") || "all";
+    const clientIdRaw = searchParams.get("clientId") || undefined;
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10", 10)));
     const sortBy = searchParams.get("sortBy") || "name";
     const sortOrder = searchParams.get("sortOrder") || "asc";
 
-    // 🚀 Smart cache key based on all parameters
-    const cacheKey = `clients_stats_${search || 'all'}_${category || 'all'}_${status || 'all'}_${clientId || 'all'}_${page}_${limit}_${sortBy}_${sortOrder}`;
+    const cacheKey = `clients_stats_${search || "all"}_${category}_${status}_${clientIdRaw || "all"}_${page}_${limit}_${sortBy}_${sortOrder}`;
 
-    const clientsData = await MemoryCache.get(
+    const result = await MemoryCache.get(
       cacheKey,
       async () => {
-        const offset = (page - 1) * limit;
+        const supabase = await createServerSupabaseClient();
 
-        // 🔥 OPTIMIZED: Separate the complex aggregation from the main query
-        // First, get client stats from a cached computation
-        const clientStatsMap = await MemoryCache.get(
-          'all_client_stats',
-          async () => {
-            // Pre-compute all client statistics
-            const statsResult = await query(`
-              SELECT
-                c.id,
-                COUNT(a.id) as total_appointments,
-                MAX(a.appointment_date) as last_appointment,
-                CASE
-                  WHEN MAX(a.appointment_date) >= CURRENT_DATE - INTERVAL '90 days' OR COUNT(a.id) = 0
-                  THEN 'active'
-                  ELSE 'inactive'
-                END as status
-              FROM clients c
-              LEFT JOIN appointments a ON c.id = a.client_id
-              WHERE c.is_active = true
-              GROUP BY c.id
-            `);
-            
-            const statsMap = new Map();
-            statsResult.rows.forEach(row => {
-              statsMap.set(row.id, {
-                totalAppointments: parseInt(row.total_appointments) || 0,
-                lastAppointment: row.last_appointment ? row.last_appointment.toISOString().split("T")[0] : null,
-                status: row.status
-              });
-            });
-            
-            return statsMap;
-          },
-          'recentActivity' // 60-second cache for stats
-        );
+        const { column, ascending } = getSort(sortBy, sortOrder);
 
-        // 🚀 FAST: Simple client query without JOINs
-        let whereConditions = ["c.is_active = true"];
-        const queryParams: any[] = [];
-        let paramCount = 1;
+        let query = supabase
+          .from("clients")
+          .select(
+            "id,x_number,name,phone,category,emergency_contact,address,created_at,is_active",
+            { count: "exact" }
+          )
+          .eq("is_active", true)
+          .order(column, { ascending });
 
-        if (clientId) {
-          whereConditions.push(`c.id = $${paramCount}`);
-          queryParams.push(parseInt(clientId));
-          paramCount++;
+        // Filters
+        if (clientIdRaw) {
+          const clientId = parseInt(clientIdRaw, 10);
+          if (!Number.isNaN(clientId)) query = query.eq("id", clientId);
         }
 
         if (search) {
-          whereConditions.push(
-            `(c.name ILIKE $${paramCount} OR c.x_number ILIKE $${paramCount} OR c.phone ILIKE $${paramCount})`
+          // Search across name, x_number, phone
+          const escaped = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+          query = query.or(
+            `name.ilike.%${escaped}%,x_number.ilike.%${escaped}%,phone.ilike.%${escaped}%`
           );
-          queryParams.push(`%${search}%`);
-          paramCount++;
         }
 
         if (category && category !== "all") {
-          whereConditions.push(`c.category = $${paramCount}`);
-          queryParams.push(category);
-          paramCount++;
+          query = query.eq("category", category);
         }
 
-        // Simple client query
-        const clientsQuery = `
-          SELECT
-            c.id,
-            c.x_number,
-            c.name,
-            c.phone,
-            c.category,
-            c.emergency_contact,
-            c.address,
-            c.medical_notes,
-            c.created_at,
-            COUNT(*) OVER() as total_count
-          FROM clients c
-          WHERE ${whereConditions.join(" AND ")}
-          ORDER BY ${getSortColumn(sortBy)} ${sortOrder.toUpperCase()}
-          LIMIT $${paramCount} OFFSET $${paramCount + 1}
-        `;
+        // Pagination (Supabase uses inclusive range)
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+        query = query.range(from, to);
 
-        queryParams.push(limit, offset);
+        const { data: clientRows, error: clientsError, count } = await query;
+        if (clientsError) throw new Error(clientsError.message);
 
-        const clientsResult = await query(clientsQuery, queryParams);
+        const clients = (clientRows || []) as ClientRow[];
+        const ids = clients.map((c) => c.id);
 
-        // 🔥 Combine client data with cached stats
-        const clients = clientsResult.rows
-          .map((row: any) => {
-            const stats = clientStatsMap.get(row.id) || {
-              totalAppointments: 0,
-              lastAppointment: null,
-              status: 'active'
-            };
+        // Fetch appointment stats only for the current page clients.
+        // We only need date values.
+        let appointmentRows: AppointmentRow[] = [];
+        if (ids.length) {
+          const { data: apts, error: apptError } = await supabase
+            .from("appointments")
+            .select("client_id,appointment_date")
+            .in("client_id", ids);
+          if (apptError) throw new Error(apptError.message);
+          appointmentRows = (apts || []) as AppointmentRow[];
+        }
+
+        const apptByClient = new Map<number, { total: number; last: string | null }>();
+        for (const appt of appointmentRows) {
+          const curr = apptByClient.get(appt.client_id) || { total: 0, last: null };
+          curr.total += 1;
+          const d = toDateOnly(appt.appointment_date);
+          if (d && (!curr.last || d > curr.last)) curr.last = d;
+          apptByClient.set(appt.client_id, curr);
+        }
+
+        // Compute status = active if last appointment within 90 days OR no appointments
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 90);
+        const cutoffStr = cutoff.toISOString().split("T")[0];
+
+        const mapped = clients
+          .map((row) => {
+            const stats = apptByClient.get(row.id) || { total: 0, last: null };
+            const derivedStatus =
+              !stats.last || stats.last >= cutoffStr ? "active" : "inactive";
 
             return {
               id: row.id,
@@ -141,64 +142,63 @@ export async function GET(request: Request) {
               name: row.name,
               phone: row.phone,
               category: row.category,
-              joinDate: row.created_at.toISOString().split("T")[0],
-              totalAppointments: stats.totalAppointments,
-              lastAppointment: stats.lastAppointment,
-              status: stats.status,
+              joinDate: toDateOnly(row.created_at) || row.created_at,
+              totalAppointments: stats.total,
+              lastAppointment: stats.last,
+              status: derivedStatus,
               emergencyContact: row.emergency_contact,
               address: row.address,
-              medicalNotes: row.medical_notes,
             };
           })
-          .filter(client => {
-            // Apply status filter after data combination
-            if (status === "active") return client.status === "active";
-            if (status === "inactive") return client.status === "inactive";
-            return true; // No status filter
+          .filter((c) => {
+            if (status === "active") return c.status === "active";
+            if (status === "inactive") return c.status === "inactive";
+            return true;
           });
 
-        const totalCount = clientsResult.rows[0]?.total_count || 0;
-        const totalPages = Math.ceil(totalCount / limit);
+        const totalCount = count || 0;
+        const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
         return {
-          clients,
+          clients: mapped,
           pagination: {
             currentPage: page,
             totalPages,
-            totalCount: parseInt(totalCount),
-            limit,
-          }
+            totalCount,
+            hasMore: page < totalPages,
+          },
         };
       },
-      // 🎯 Cache strategy: shorter for filtered results, longer for general lists
-      search || category !== 'all' || status !== 'all' ? 'appointments' : 'recentActivity'
+      // Cache strategy
+      search || category !== "all" || status !== "all" ? "appointments" : "recentActivity"
     );
 
     const responseTime = Date.now() - requestStart;
-    console.log(`⚡ Clients Stats API: ${responseTime}ms`);
 
-    return NextResponse.json({
-      success: true,
-      data: clientsData.clients,
-      pagination: clientsData.pagination,
-      meta: {
-        responseTime: `${responseTime}ms`,
-        cached: responseTime < 30, // If under 30ms, likely from cache
-        cacheType: 'memory',
-        filters: { search, category, status, clientId, sortBy, sortOrder }
+    return NextResponse.json(
+      {
+        success: true,
+        data: result.clients,
+        pagination: result.pagination,
+        meta: {
+          responseTime: `${responseTime}ms`,
+          cached: responseTime < 30,
+          cacheType: "memory",
+          filters: { search, category, status, clientId: clientIdRaw, sortBy, sortOrder },
+        },
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+          "X-Response-Time": `${responseTime}ms`,
+          "X-Cache-Type": "memory",
+        },
       }
-    }, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-        'X-Response-Time': `${responseTime}ms`,
-        'X-Cache-Type': 'memory',
-      }
-    });
-
+    );
   } catch (error) {
     const responseTime = Date.now() - requestStart;
     console.error(`❌ Clients Stats API error (${responseTime}ms):`, error);
-    
+
     return NextResponse.json(
       {
         error: "Failed to fetch clients",
@@ -209,14 +209,6 @@ export async function GET(request: Request) {
   }
 }
 
-// 🔄 Cache invalidation helper for when clients change
-export async function invalidateClientsCache() {
-  await MemoryCache.invalidate('clients_stats_');
-  await MemoryCache.invalidate('all_client_stats');
-}
-
-// 🌟 Expected Performance Results (Memory Cache):
-// - First request (cache miss): 10-50ms (vs 823ms previous)
-// - Subsequent requests (cache hit): 2-8ms (vs 823ms previous)
-// - Client stats: Pre-computed and cached for instant access
-// - Overall improvement: 55-165x faster!
+// Note: Next.js Route Handlers must not export arbitrary helpers.
+// If you need cache invalidation from elsewhere, move a helper to a separate
+// module (not inside `route.ts`) or invalidate within handlers.

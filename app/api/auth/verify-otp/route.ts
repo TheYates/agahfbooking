@@ -1,48 +1,54 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { verifyOTP } from "@/lib/auth";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { getClientInfo } from "@/lib/get-client-ip";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { arkeselSMS } from "@/lib/arkesel-sms";
+import { logLoginAttempt } from "@/lib/login-audit";
+import { createSession } from "@/lib/session-service";
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, otp } = await request.json();
+    const { xNumber, otp } = await request.json();
 
-    // Get client information for rate limiting
     const clientInfo = getClientInfo(request);
 
-    if (!token) {
-      // Record failed attempt for missing token
-      rateLimiter.recordAttempt(
-        clientInfo.ip,
-        false,
-        undefined,
-        clientInfo.userAgent
-      );
-
+    if (!xNumber || !otp) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, undefined, clientInfo.userAgent);
+      await logLoginAttempt({
+        userType: "client",
+        identifier: xNumber || null,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: "xNumber and otp are required",
+      });
       return NextResponse.json(
-        { error: "OTP token is required" },
+        { error: "xNumber and otp are required" },
         { status: 400 }
       );
     }
 
-    // Check rate limiting before processing
     const rateLimitResult = rateLimiter.checkRateLimit(
       clientInfo.ip,
-      undefined, // We don't have X-number here, but IP limiting still applies
+      xNumber,
       clientInfo.userAgent
     );
 
     if (!rateLimitResult.allowed) {
-      console.log(
-        `🚫 Rate limit exceeded for ${clientInfo.ip} during OTP verification: ${rateLimitResult.reason}`
-      );
+      await logLoginAttempt({
+        userType: "client",
+        identifier: xNumber,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: rateLimitResult.reason || "Too many attempts. Please try again later.",
+      });
 
       return NextResponse.json(
         {
           error:
-            rateLimitResult.reason ||
-            "Too many attempts. Please try again later.",
+            rateLimitResult.reason || "Too many attempts. Please try again later.",
           rateLimited: true,
           resetTime: rateLimitResult.resetTime,
           blockDuration: rateLimitResult.blockDuration,
@@ -52,68 +58,174 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use BetterAuth verifyOTP function with JWT token
-    const userData = await verifyOTP(token, otp);
+    const supabase = createAdminSupabaseClient();
 
-    console.log("✅ OTP verified successfully. User data:", {
-      id: userData.id,
-      xNumber: userData.xNumber,
-      name: userData.name,
-      convexId: userData.convexId,
-      role: userData.role,
+    const { data: client, error: clientErr } = await supabase
+      .from("clients")
+      .select("id,x_number,name,phone,category,is_active")
+      .eq("x_number", xNumber)
+      .single();
+
+    if (clientErr || !client) {
+      rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+      await logLoginAttempt({
+        userType: "client",
+        identifier: xNumber,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: "Client not found",
+      });
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    if (!(client as any).is_active) {
+      await logLoginAttempt({
+        userType: "client",
+        userId: (client as any).id,
+        identifier: (client as any).x_number,
+        ipAddress: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        success: false,
+        errorMessage: "Client account is inactive",
+      });
+      return NextResponse.json({ error: "Client account is inactive" }, { status: 403 });
+    }
+
+    const otpMode = process.env.OTP_MODE || "mock";
+    let otpValid = false;
+
+    if (otpMode === "arkesel") {
+      console.log(`[Arkesel] Verifying OTP for ${(client as any).phone}`);
+      const verifyResult = await arkeselSMS.verifyOTPViaArkeselAPI(
+        (client as any).phone,
+        otp
+      );
+      
+      if (verifyResult.isValid) {
+        console.log(`OTP verified successfully via Arkesel for ${xNumber}`);
+        otpValid = true;
+      } else {
+        console.log(`OTP verification failed via Arkesel: ${verifyResult.message}`);
+        rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+        await logLoginAttempt({
+          userType: "client",
+          identifier: xNumber,
+          ipAddress: clientInfo.ip,
+          userAgent: clientInfo.userAgent,
+          success: false,
+          errorMessage: verifyResult.message || "Invalid or expired OTP",
+        });
+        return NextResponse.json(
+          { error: verifyResult.message || "Invalid or expired OTP" },
+          { status: 400 }
+        );
+      }
+    } else {
+      const { data: otpRecord, error: otpErr } = await supabase
+        .from("otp_codes")
+        .select("*")
+        .eq("x_number", xNumber)
+        .eq("otp_code", otp)
+        .eq("is_used", false)
+        .gte("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (otpErr || !otpRecord) {
+        rateLimiter.recordAttempt(clientInfo.ip, false, xNumber, clientInfo.userAgent);
+        await logLoginAttempt({
+          userType: "client",
+          identifier: xNumber,
+          ipAddress: clientInfo.ip,
+          userAgent: clientInfo.userAgent,
+          success: false,
+          errorMessage: "Invalid or expired OTP",
+        });
+        return NextResponse.json(
+          { error: "Invalid or expired OTP" },
+          { status: 400 }
+        );
+      }
+
+      await supabase
+        .from("otp_codes")
+        .update({ is_used: true })
+        .eq("id", otpRecord.id);
+      
+      otpValid = true;
+    }
+
+    const session = await createSession({
+      userId: (client as any).id as number,
+      userType: "client",
+      role: "client",
+      xNumber: (client as any).x_number as string,
+      name: (client as any).name as string,
+      phone: (client as any).phone as string,
+      category: (client as any).category as string,
+      ipAddress: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
     });
 
-    // Record successful attempt
-    rateLimiter.recordAttempt(
-      clientInfo.ip,
-      true,
-      userData.xNumber,
-      clientInfo.userAgent
-    );
+    rateLimiter.recordAttempt(clientInfo.ip, true, xNumber, clientInfo.userAgent);
 
-    // Set secure HTTP-only cookie (maintaining compatibility)
+    await logLoginAttempt({
+      userType: "client",
+      userId: (client as any).id,
+      identifier: (client as any).x_number,
+      ipAddress: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
+      success: true,
+    });
+
     const cookieStore = await cookies();
-    cookieStore.set("session_token", JSON.stringify(userData), {
+    cookieStore.set("session_id", session.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 24 * 60 * 60, // 24 hours
+      maxAge: 24 * 60 * 60,
       path: "/",
     });
 
     return NextResponse.json({
       success: true,
-      user: userData,
+      token: session.id, // Return session ID as token for mobile apps
+      session: {
+        user: {
+          id: session.userId,
+          xNumber: session.xNumber,
+          name: session.name,
+          phone: session.phone,
+          category: session.category,
+          role: session.role,
+        },
+      },
+      user: {
+        id: session.userId,
+        xNumber: session.xNumber,
+        name: session.name,
+        phone: session.phone,
+        category: session.category,
+        role: session.role,
+      },
       redirectUrl: "/dashboard",
     });
   } catch (error) {
+    const clientInfo = getClientInfo(request);
+    await logLoginAttempt({
+      userType: "client",
+      ipAddress: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : "Internal server error",
+    });
+
     console.error("Verify OTP error:", error);
-
-    // Record failed attempt for verification errors
-    try {
-      const clientInfo = getClientInfo(request);
-      rateLimiter.recordAttempt(
-        clientInfo.ip,
-        false,
-        undefined,
-        clientInfo.userAgent
-      );
-    } catch (recordError) {
-      console.error("Failed to record rate limit attempt:", recordError);
-    }
-
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
-      {
-        status:
-          error instanceof Error && error.message.includes("Invalid")
-            ? 400
-            : error instanceof Error && error.message.includes("not found")
-            ? 404
-            : 500,
-      }
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
     );
   }
 }

@@ -1,9 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-client'
 import { toast } from 'sonner'
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
+import { useSupabaseRealtime } from './use-supabase-realtime'
 
 // Types (matching your existing interfaces)
 export interface Department {
@@ -101,11 +103,16 @@ export interface DesktopAppointment {
   departmentName: string
   date: string
   slotNumber: number
+  slotStartTime?: string
+  slotEndTime?: string
   status: string
   statusColor: string
   notes?: string
   phone: string
   category: string
+  bookedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
 }
 
 interface PaginatedDesktopAppointments {
@@ -393,34 +400,18 @@ const fetchCalendarAppointments = async (
   }
 }
 
-const fetchDoctors = async (): Promise<Doctor[]> => {
-  const response = await fetch('/api/doctors')
-  if (!response.ok) throw new Error('Failed to fetch doctors')
-
-  const data = await response.json()
-  if (!data.success) throw new Error(data.error || 'Failed to fetch doctors')
-
-  // Transform the data to match the expected interface
-  const transformedDoctors = data.data.map((doctor: any) => ({
-    id: doctor.id,
-    name: doctor.name,
-    specialization: doctor.department_name || 'General',
-    departmentId: doctor.department_id,
-  }))
-
-  return transformedDoctors
-}
-
 // Helper function for status colors (moved from component)
 const getStatusColor = (status: string): string => {
   const statusColors: { [key: string]: string } = {
+    pending_review: '#F59E0B',
     booked: '#3B82F6',
+    confirmed: '#10B981',
     arrived: '#10B981',
     waiting: '#F59E0B',
     completed: '#059669',
     no_show: '#EF4444',
     cancelled: '#6B7280',
-    rescheduled: '#8B5CF6',
+    rescheduled: '#F97316',
   }
   return statusColors[status] || '#6B7280'
 }
@@ -584,6 +575,14 @@ export const useBookAppointment = () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.appointments.byClient(variables.clientId)
       })
+      // Invalidate dashboard stats for the client
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboardStats.byClient(variables.clientId)
+      })
+      // Invalidate staff dashboard stats as well
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboardStats.forStaff()
+      })
 
       toast.success('Booking Successful! 🎉', {
         description: 'Your appointment has been booked successfully.',
@@ -662,17 +661,28 @@ export const useCancelAppointment = () => {
   })
 }
 
-// Dashboard Stats Hook
+// Dashboard Stats Hook with Realtime
 export const useDashboardStats = (clientId: number | undefined, enabled: boolean = true) => {
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.dashboardStats.byClient(clientId!),
     queryFn: () => fetchDashboardStats(clientId!),
     enabled: enabled && !!clientId,
-    staleTime: 30 * 1000, // 30 seconds - stats update frequently
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchInterval: 60 * 1000, // Refresh every minute for real-time stats
-    refetchIntervalInBackground: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes - user stats don't change that often
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: false, // Don't refetch if data is still fresh
   })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    filter: clientId ? `client_id=eq.${clientId}` : undefined,
+    queryKey: queryKeys.dashboardStats.byClient(clientId!) as unknown as any[],
+    enabled: !!clientId,
+    debug: true,
+  })
+
+  return query
 }
 
 // Staff Dashboard Stats Hook
@@ -681,20 +691,80 @@ export const useStaffDashboardStats = (enabled: boolean = true) => {
     queryKey: queryKeys.dashboardStats.forStaff(),
     queryFn: fetchStaffDashboardStats,
     enabled,
-    staleTime: 30 * 1000, // 30 seconds - stats update frequently
-    gcTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes - staff stats are still fairly fresh
+    gcTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 60 * 1000, // Refresh every minute for real-time stats
     refetchIntervalInBackground: true,
+    refetchOnMount: false, // Don't refetch if data is still fresh
   })
 }
 
-// Unified Dashboard Stats Hook (handles both client and staff)
+// Reviewer Dashboard Stats Hook - shows pending review statistics
+async function fetchReviewerDashboardStats() {
+  const response = await fetch('/api/appointments/review?limit=1000')
+  const data = await response.json()
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch reviewer stats')
+  }
+
+  const appointments = data.data || []
+
+  // Calculate stats
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const todayAppointments = appointments.filter((apt: any) => {
+    const aptDate = new Date(apt.appointment_date)
+    aptDate.setHours(0, 0, 0, 0)
+    return aptDate.getTime() === today.getTime()
+  })
+
+  const upcomingAppointments = appointments.filter((apt: any) => {
+    const aptDate = new Date(apt.appointment_date)
+    return aptDate >= today
+  })
+
+  return {
+    upcomingAppointments: upcomingAppointments.length,
+    totalAppointments: appointments.length,
+    completedAppointments: todayAppointments.length, // Using this field for "today's pending"
+    availableSlots: 0,
+    daysUntilNext: null,
+    recentAppointments: appointments.slice(0, 5).map((apt: any) => ({
+      id: apt.id,
+      clientName: apt.clients?.name || 'Unknown',
+      departmentName: apt.departments?.name || 'Unknown',
+      date: apt.appointment_date,
+      slotNumber: apt.slot_number,
+      slotStartTime: apt.slot_start_time,
+      slotEndTime: apt.slot_end_time,
+      status: 'pending_review',
+    })),
+  }
+}
+
+export const useReviewerDashboardStats = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['reviewerDashboardStats'],
+    queryFn: fetchReviewerDashboardStats,
+    enabled,
+    staleTime: 30 * 1000, // 30 seconds - pending reviews should be fresh
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: 30 * 1000, // Refresh every 30 seconds
+    refetchIntervalInBackground: true,
+    refetchOnMount: false,
+  })
+}
+
+// Unified Dashboard Stats Hook (handles client, staff, and reviewer)
 export const useUnifiedDashboardStats = (
-  userRole: 'client' | 'staff' | 'receptionist' | 'admin',
+  userRole: 'client' | 'staff' | 'receptionist' | 'admin' | 'reviewer',
   userId?: number,
   enabled: boolean = true
 ) => {
   const isClient = userRole === 'client'
+  const isReviewer = userRole === 'reviewer'
 
   const clientStats = useDashboardStats(
     isClient ? userId : undefined,
@@ -702,20 +772,26 @@ export const useUnifiedDashboardStats = (
   )
 
   const staffStats = useStaffDashboardStats(
-    enabled && !isClient
+    enabled && !isClient && !isReviewer
   )
 
-  return isClient ? clientStats : staffStats
+  const reviewerStats = useReviewerDashboardStats(
+    enabled && isReviewer
+  )
+
+  if (isClient) return clientStats
+  if (isReviewer) return reviewerStats
+  return staffStats
 }
 
-// Paginated Appointments Hook
+// Paginated Appointments Hook with Realtime
 export const useClientAppointmentsPaginated = (
   clientId: number | undefined,
   page: number = 1,
   limit: number = 10,
   enabled: boolean = true
 ) => {
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.appointments.byClientPaginated(clientId!, page, limit),
     queryFn: () => fetchClientAppointmentsPaginated(clientId!, page, limit),
     enabled: enabled && !!clientId,
@@ -723,6 +799,17 @@ export const useClientAppointmentsPaginated = (
     gcTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: (previousData) => previousData, // Keep previous page data while loading next page
   })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    filter: clientId ? `client_id=eq.${clientId}` : undefined,
+    queryKey: queryKeys.appointments.byClientPaginated(clientId!, page, limit) as unknown as any[],
+    enabled: enabled && !!clientId,
+    debug: true,
+  })
+
+  return query
 }
 
 // Desktop Appointments List Hook (with filters)
@@ -744,17 +831,6 @@ export const useAppointmentsList = (
   })
 }
 
-// Doctors Hook
-export const useDoctors = (enabled: boolean = true) => {
-  return useQuery({
-    queryKey: queryKeys.doctors,
-    queryFn: fetchDoctors,
-    enabled,
-    staleTime: 10 * 60 * 1000, // 10 minutes - doctors don't change frequently
-    gcTime: 30 * 60 * 1000, // 30 minutes
-  })
-}
-
 // Calendar Appointments Hook (with real-time updates)
 export const useCalendarAppointments = (
   userRole: string,
@@ -767,15 +843,25 @@ export const useCalendarAppointments = (
   const isValidUserId = userId !== undefined && userId !== null &&
     (typeof userId === 'string' ? userId.length > 0 && userId !== 'NaN' && userId !== 'undefined' : !isNaN(userId))
 
-  return useQuery({
+  const query = useQuery({
     queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate),
     queryFn: () => fetchCalendarAppointments(userRole, userId, startDate, endDate),
     enabled: enabled && isValidUserId,
-    staleTime: 30 * 1000, // 30 seconds - calendar data changes frequently
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 30 * 1000, // Background refresh every 30 seconds for real-time calendar
-    refetchIntervalInBackground: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes - keep data fresh but reduce refetches
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer for navigation
+    refetchOnWindowFocus: true, // Auto-refresh when user returns to tab
+    refetchOnMount: false, // Don't refetch if cache is still valid
   })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    queryKey: queryKeys.calendar.appointments(userRole, userId, startDate, endDate) as unknown as any[],
+    enabled: enabled && isValidUserId,
+    debug: true,
+  })
+
+  return query
 }
 
 // Calendar Endpoint Hook (cached for session)
@@ -805,6 +891,8 @@ export const useCalendarData = (
   currentDate: Date,
   enabled: boolean = true
 ) => {
+  const queryClient = useQueryClient()
+
   // Calculate date range based on view
   const { startDate, endDate } = useMemo(() => {
     if (view === 'month') {
@@ -830,11 +918,61 @@ export const useCalendarData = (
     }
   }, [view, currentDate])
 
+  // Prefetch adjacent months/weeks for instant navigation
+  useEffect(() => {
+    if (!enabled || !userId || view === 'day') return
+
+    const prefetchAdjacentPeriods = async () => {
+      if (view === 'month') {
+        // Prefetch previous month
+        const prevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+        const prevMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0)
+
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.calendar.appointments(
+            userRole,
+            userId,
+            prevMonth.toISOString().split('T')[0],
+            prevMonthEnd.toISOString().split('T')[0]
+          ),
+          queryFn: () => fetchCalendarAppointments(
+            userRole,
+            userId,
+            prevMonth.toISOString().split('T')[0],
+            prevMonthEnd.toISOString().split('T')[0]
+          ),
+          staleTime: 5 * 60 * 1000,
+        })
+
+        // Prefetch next month
+        const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+        const nextMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0)
+
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.calendar.appointments(
+            userRole,
+            userId,
+            nextMonth.toISOString().split('T')[0],
+            nextMonthEnd.toISOString().split('T')[0]
+          ),
+          queryFn: () => fetchCalendarAppointments(
+            userRole,
+            userId,
+            nextMonth.toISOString().split('T')[0],
+            nextMonthEnd.toISOString().split('T')[0]
+          ),
+          staleTime: 5 * 60 * 1000,
+        })
+      }
+    }
+
+    // Prefetch after a small delay to not block initial render
+    const timer = setTimeout(prefetchAdjacentPeriods, 500)
+    return () => clearTimeout(timer)
+  }, [view, currentDate, userRole, userId, enabled, queryClient])
+
   // Fetch departments (cached)
   const departmentsQuery = useDepartments()
-
-  // Fetch doctors (cached)
-  const doctorsQuery = useDoctors(enabled)
 
   // Fetch appointments (real-time)
   const appointmentsQuery = useCalendarAppointments(
@@ -847,16 +985,14 @@ export const useCalendarData = (
 
   return {
     departments: departmentsQuery.data || [],
-    doctors: doctorsQuery.data || [],
     appointments: appointmentsQuery.data || [],
-    isLoading: departmentsQuery.isLoading || doctorsQuery.isLoading || appointmentsQuery.isLoading,
-    error: departmentsQuery.error || doctorsQuery.error || appointmentsQuery.error,
-    isRefetching: departmentsQuery.isRefetching || doctorsQuery.isRefetching || appointmentsQuery.isRefetching,
+    isLoading: departmentsQuery.isLoading || appointmentsQuery.isLoading,
+    error: departmentsQuery.error || appointmentsQuery.error,
+    isRefetching: departmentsQuery.isRefetching || appointmentsQuery.isRefetching,
     // Refetch function to manually refresh all calendar data
     refetch: async () => {
       await Promise.all([
         departmentsQuery.refetch(),
-        doctorsQuery.refetch(),
         appointmentsQuery.refetch(),
       ])
     }
@@ -1210,8 +1346,11 @@ interface AppointmentDetailed {
   status: string
   statusColor: string
   notes?: string
-  phone: string
   category: string
+  phone: string
+  bookedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
 }
 
 interface AppointmentsListQueryParams {
@@ -1259,6 +1398,14 @@ export const useAppointmentsListManagement = (params: AppointmentsListQueryParam
     queryFn: () => fetchAppointmentsListManagement(params),
     staleTime: 30 * 1000, // 30 seconds
     placeholderData: (previousData) => previousData, // Show previous data while loading
+  })
+
+  // 🔥 Realtime: Subscribe to appointment changes using reusable hook
+  useSupabaseRealtime({
+    table: 'appointments',
+    queryKey: ['appointments', 'list'],
+    enabled: true,
+    debug: true,
   })
 
   // Prefetch next page for instant navigation
@@ -1884,6 +2031,69 @@ export const useTestOTPService = () => {
 }
 
 // ==========================================
+// 📊 DASHBOARD ANALYTICS HOOKS
+// ==========================================
+
+export const usePendingReviewsCount = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['dashboard', 'pendingReviewsCount'],
+    queryFn: async () => {
+      const response = await fetch('/api/appointments/review?limit=1000')
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error || 'Failed to fetch pending reviews')
+      return data.data?.length || 0
+    },
+    enabled,
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchInterval: 60 * 1000,
+  })
+}
+
+export const useWeeklyAppointmentsTrend = (enabled: boolean = true) => {
+  return useQuery({
+    queryKey: ['dashboard', 'weeklyTrend'],
+    queryFn: async () => {
+      const today = new Date()
+      const days = []
+      
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today)
+        date.setDate(date.getDate() - i)
+        days.push(date.toISOString().split('T')[0])
+      }
+      
+      const response = await fetch(`/api/appointments/list?dateFilter=week&limit=1000`)
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error || 'Failed to fetch appointments')
+      
+      const appointments = data.data || []
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      
+      const trendData = days.map(dateStr => {
+        const date = new Date(dateStr)
+        const dayAppointments = appointments.filter((apt: any) => {
+          const aptDate = apt.date?.split('T')[0] || apt.appointment_date?.split('T')[0]
+          return aptDate === dateStr
+        })
+        
+        return {
+          day: dayNames[date.getDay()],
+          appointments: dayAppointments.length,
+          completed: dayAppointments.filter((apt: any) => apt.status === 'completed').length,
+        }
+      })
+      
+      return trendData
+    },
+    enabled,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  })
+}
+
+// ==========================================
 // 🏥 DEPARTMENTS & DOCTORS MANAGEMENT HOOKS
 // ==========================================
 
@@ -1896,6 +2106,9 @@ interface DepartmentDetailed {
   working_hours: { start: string; end: string }
   color: string
   is_active: boolean
+  slot_duration_minutes?: number
+  require_review?: boolean
+  auto_confirm_staff_bookings?: boolean
 }
 
 interface DepartmentFormData {
@@ -1905,6 +2118,9 @@ interface DepartmentFormData {
   working_days: string[]
   working_hours: { start: string; end: string }
   color: string
+  slot_duration_minutes?: number
+  require_review?: boolean
+  auto_confirm_staff_bookings?: boolean
 }
 
 interface DoctorDetailed {
@@ -1941,23 +2157,11 @@ export const useAllDepartments = () => {
   })
 }
 
-// Fetch All Doctors
-const fetchAllDoctors = async (): Promise<DoctorDetailed[]> => {
-  const response = await fetch('/api/doctors')
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to fetch doctors')
-  }
-
-  const data = await response.json()
-  return data.success ? data.data : []
-}
-
-// useAllDoctors Hook
+// useAllDoctors Hook (DEPRECATED - doctors removed)
 export const useAllDoctors = () => {
   return useQuery({
     queryKey: ['doctors', 'all'],
-    queryFn: fetchAllDoctors,
+    queryFn: async () => [],
     staleTime: 60 * 1000, // 1 minute
     gcTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -2116,124 +2320,6 @@ export const useDeleteDepartment = () => {
       toast.success('Department Deleted! ✅', {
         description: 'The department has been successfully deleted.',
         duration: 4000,
-      })
-    },
-  })
-}
-
-// Add Doctor Mutation
-const addDoctor = async (doctorData: DoctorFormData) => {
-  const response = await fetch('/api/doctors', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(doctorData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to add doctor')
-  }
-
-  const data = await response.json()
-  if (!data.success) throw new Error(data.error || 'Failed to add doctor')
-  return data
-}
-
-export const useAddDoctor = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: addDoctor,
-    onSuccess: () => {
-      // Invalidate doctors queries
-      queryClient.invalidateQueries({ queryKey: ['doctors'] })
-
-      toast.success('Doctor Added! ✅', {
-        description: 'The doctor has been successfully added.',
-        duration: 4000,
-      })
-    },
-    onError: (err: Error) => {
-      toast.error('Add Failed', {
-        description: err.message || 'Failed to add doctor. Please try again.',
-      })
-    },
-  })
-}
-
-// Update Doctor Mutation
-const updateDoctor = async ({ id, data }: { id: number; data: DoctorFormData }) => {
-  const response = await fetch(`/api/doctors/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to update doctor')
-  }
-
-  const responseData = await response.json()
-  if (!responseData.success) throw new Error(responseData.error || 'Failed to update doctor')
-  return responseData
-}
-
-export const useUpdateDoctor = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: updateDoctor,
-    onSuccess: () => {
-      // Invalidate doctors queries
-      queryClient.invalidateQueries({ queryKey: ['doctors'] })
-
-      toast.success('Doctor Updated! ✅', {
-        description: 'The doctor has been successfully updated.',
-        duration: 4000,
-      })
-    },
-    onError: (err: Error) => {
-      toast.error('Update Failed', {
-        description: err.message || 'Failed to update doctor. Please try again.',
-      })
-    },
-  })
-}
-
-// Delete Doctor Mutation
-const deleteDoctor = async (id: number) => {
-  const response = await fetch(`/api/doctors/${id}`, {
-    method: 'DELETE',
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || 'Failed to delete doctor')
-  }
-
-  const data = await response.json()
-  if (!data.success) throw new Error(data.error || 'Failed to delete doctor')
-  return data
-}
-
-export const useDeleteDoctor = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: deleteDoctor,
-    onSuccess: () => {
-      // Invalidate doctors queries
-      queryClient.invalidateQueries({ queryKey: ['doctors'] })
-
-      toast.success('Doctor Deleted! ✅', {
-        description: 'The doctor has been successfully deleted.',
-        duration: 4000,
-      })
-    },
-    onError: (err: Error) => {
-      toast.error('Delete Failed', {
-        description: err.message || 'Failed to delete doctor. Please try again.',
       })
     },
   })

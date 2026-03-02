@@ -229,5 +229,4 @@ export const mockOTPService = new MockOTPService();
 // Export class for testing
 export { MockOTPService };
 
-// Export types
-export type { MockOTPResponse, MockSendSMSParams };
+// Types are exported via their declarations above; avoid duplicate re-exports.

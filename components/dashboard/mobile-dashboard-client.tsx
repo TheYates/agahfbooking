@@ -13,6 +13,7 @@ import {
   Baby,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types";
 import {
@@ -329,8 +330,22 @@ export function MobileDashboardClient({
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="flex flex-col gap-4 px-1">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-6 rounded-3xl border bg-card space-y-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-12 w-12 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-48" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-9 flex-1 rounded-xl" />
+                  <Skeleton className="h-9 flex-1 rounded-xl" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="text-center py-8 text-destructive">
@@ -338,66 +353,56 @@ export function MobileDashboardClient({
           </div>
         ) : (
           <div className="relative">
-            {/* Horizontal scrolling container */}
-            <div className="flex gap-4 overflow-x-auto pb-2 px-1 hide-scrollbar">
+            {/* Vertical scrolling container */}
+            <div className="flex flex-col gap-4 px-1">
               {departments.map((department, index) => (
                 <motion.div
                   key={department.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 + index * 0.1 }}
-                  className="flex-shrink-0"
+                  className="w-full"
                 >
                   <button
                     onClick={() => handleDepartmentClick(department.id)}
                     className={cn(
-                      "w-[260px] h-[280px] p-5 rounded-2xl transition-all duration-200",
-                      "touch-target flex flex-col justify-between",
+                      "w-full p-4 rounded-2xl transition-all duration-200",
+                      "touch-target flex items-center gap-4",
                       "hover:scale-[1.02] active:scale-[0.98]",
                       "bg-card border border-border",
                       "hover:border-primary/30 hover:shadow-lg"
                     )}
                   >
-                    {/* Top section with icon and arrow */}
-                    <div className="flex items-start justify-between w-full">
-                      <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                        {getDepartmentIcon(department.name)}
-                      </div>
-                      <div className="flex-shrink-0">
-                        <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                      </div>
+                    {/* Icon */}
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      {getDepartmentIcon(department.name)}
                     </div>
 
-                    {/* Bottom section with text content */}
-                    <div className="flex-1 text-left mt-6">
-                      <h3 className="font-semibold text-lg text-foreground mb-2 leading-tight">
-                        {department.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                    {/* Content */}
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-semibold text-base text-foreground leading-tight truncate pr-2">
+                          {department.name}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-1 mb-1.5">
                         {department.description}
                       </p>
                       {department.available_slots !== undefined && (
-                        <p className="text-xs text-primary font-medium bg-primary/10 px-3 py-1.5 rounded-full inline-block">
+                        <p className="text-[10px] text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full inline-block">
                           {department.available_slots} slots available
                         </p>
                       )}
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="flex-shrink-0">
+                      <ArrowRight className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </button>
                 </motion.div>
               ))}
             </div>
-
-            {/* Scroll indicator dots */}
-            {departments.length > 1 && (
-              <div className="flex justify-center mt-6 space-x-2">
-                {departments.map((_, index) => (
-                  <div
-                    key={index}
-                    className="w-2 h-2 rounded-full bg-muted-foreground/40"
-                  />
-                ))}
-              </div>
-            )}
           </div>
         )}
       </motion.div>
