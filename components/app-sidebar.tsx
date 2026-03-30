@@ -43,7 +43,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const router = useRouter();
   const { state } = useSidebar();
 
-const clientMenuItems = [
+  const clientMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home },
     {
       title: "Appointments",
@@ -78,7 +78,7 @@ const clientMenuItems = [
     { title: "Clients", url: "/admin/clients", icon: Users },
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
     { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
-    { title: "Users", url: "/admin/users", icon: UserCog },
+    { title: "Users", url: "/dashboard/users", icon: UserCog },
     { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
@@ -174,10 +174,7 @@ const clientMenuItems = [
       <SidebarFooter className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={handleLogout}
-              tooltip="Logout"
-            >
+            <SidebarMenuButton onClick={handleLogout} tooltip="Logout">
               <LogOut className="h-4 w-4" />
               <span>Logout</span>
             </SidebarMenuButton>
