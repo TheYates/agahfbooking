@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserService } from "@/lib/db-services";
 import { requireAdminAuth } from "@/lib/auth-server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import bcrypt from "bcryptjs";
 
 // GET /api/users/[id] - Get specific user
@@ -18,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
     }
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -64,7 +64,7 @@ export async function PUT(
       );
     }
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     // Build update object
     const updateObj: any = {
@@ -146,7 +146,7 @@ export async function DELETE(
       `Delete user ${userId}, cascade: ${cascadeDelete}, URL: ${request.url}`
     );
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     // If cascade delete, first delete all appointments
     if (cascadeDelete) {

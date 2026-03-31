@@ -78,7 +78,7 @@ const clientMenuItems = [
     { title: "Clients", url: "/admin/clients", icon: Users },
     { title: "Departments", url: "/dashboard/departments", icon: Building2 },
     { title: "Medicals", url: "/dashboard/medicals", icon: Stethoscope },
-    { title: "Users", url: "/admin/users", icon: UserCog },
+    { title: "Users", url: "/dashboard/users", icon: UserCog },
     { title: "Test SMS", url: "/dashboard/test-sms", icon: MessageSquare },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },

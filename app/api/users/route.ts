@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/auth-server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import bcrypt from "bcryptjs";
 import { MemoryCache } from "@/lib/memory-cache";
 
@@ -19,12 +19,11 @@ export async function GET(request: NextRequest) {
     const users = await MemoryCache.get(
       cacheKey,
       async () => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createAdminSupabaseClient();
 
         let query = supabase
           .from("users")
           .select("id,name,phone,role,username,is_active,created_at")
-          .eq("is_active", true)
           .order("name", { ascending: true });
 
         if (search) {
@@ -77,7 +76,7 @@ export async function POST(request: NextRequest) {
     // Hash password if provided
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     // Create user
     const { data: newUser, error } = await supabase
